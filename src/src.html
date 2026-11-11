@@ -1,0 +1,1480 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f3a2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Jaktkartan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>/*LEAFLET_CSS*/</style>
+<style>
+/* Layout: helskärmskarta, panel till vänster på dator och som dragbar bottenlåda på mobil. */
+:root{
+  --bg:#e9eee7; --surface:#fbfcfa; --surface-2:#eef2ec; --line:#d3dccf; --fg:#16231c; --muted:#5a6a61;
+  --accent:#d9520e; --accent-fg:#ffffff; --accent-soft:#fbe3d5; --spruce:#1f3a2e; --danger:#b42318; --ok:#2f7d4f;
+  --scrim:rgba(12,22,17,.45); --shadow:0 8px 28px rgba(18,32,25,.22);
+  --font-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --font-body:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --panel-w:380px; --sheet-h:120px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e1612; --surface:#15201a; --surface-2:#1c2a22; --line:#2b3b32; --fg:#e3ebe5; --muted:#98aa9e;
+  --accent:#ff7b35; --accent-fg:#1b0c03; --accent-soft:#3b2417; --spruce:#cfe4d6; --danger:#ff6b5e; --ok:#6fcf97;
+  --scrim:rgba(0,0,0,.55); --shadow:0 8px 28px rgba(0,0,0,.5); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1612; --surface:#15201a; --surface-2:#1c2a22; --line:#2b3b32; --fg:#e3ebe5; --muted:#98aa9e;
+  --accent:#ff7b35; --accent-fg:#1b0c03; --accent-soft:#3b2417; --spruce:#cfe4d6; --danger:#ff6b5e; --ok:#6fcf97;
+  --scrim:rgba(0,0,0,.55); --shadow:0 8px 28px rgba(0,0,0,.5); color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--font-body);overflow:hidden;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+a{color:var(--accent)}
+
+#map{position:fixed;inset:0;background:var(--surface-2);z-index:1}
+@media (min-width:860px){#map{left:var(--panel-w)}}
+
+/* Leaflet i temat */
+.leaflet-container{font-family:var(--font-body);background:var(--surface-2)}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--surface);color:var(--fg);box-shadow:var(--shadow)}
+.leaflet-popup-content-wrapper{border-radius:12px}
+.leaflet-popup-content{margin:12px 14px 12px;font:14px/1.4 var(--font-body);min-width:200px}
+.leaflet-container a.leaflet-popup-close-button{color:var(--muted);top:4px;right:4px}
+.leaflet-control-attribution{background:color-mix(in srgb,var(--surface) 80%,transparent)!important;color:var(--muted)}
+.leaflet-control-attribution a{color:var(--muted)}
+.pin-icon{background:none;border:0}
+.pin-icon svg{display:block;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35))}
+.me-dot{background:#1a73e8;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 2px rgba(26,115,232,.35)}
+
+/* Kontroller på kartan */
+.ctrls{position:fixed;z-index:900;top:calc(12px + env(safe-area-inset-top,0px));right:calc(12px + env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:8px}
+.ctrl{width:44px;height:44px;border-radius:12px;background:var(--surface);color:var(--fg);border:1px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.18);display:grid;place-items:center;padding:0}
+.ctrl svg{width:22px;height:22px}
+.ctrl[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.ctrl-gap{height:4px}
+.mode-chip{position:fixed;z-index:900;top:calc(12px + env(safe-area-inset-top,0px));left:calc(12px + env(safe-area-inset-left,0px));background:var(--accent);color:var(--accent-fg);font:700 13px/1 var(--font-display);letter-spacing:.08em;text-transform:uppercase;padding:9px 12px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.2);border:0;display:flex;gap:6px;align-items:center}
+@media (min-width:860px){.mode-chip{left:calc(var(--panel-w) + 12px)}}
+.fab{position:fixed;z-index:950;right:calc(14px + env(safe-area-inset-right,0px));bottom:calc(var(--sheet-h) + 14px);width:56px;height:56px;border-radius:18px;border:0;background:var(--accent);color:var(--accent-fg);box-shadow:0 6px 18px rgba(0,0,0,.3);display:grid;place-items:center;transition:bottom .25s ease}
+.fab svg{width:28px;height:28px}
+@media (min-width:860px){.fab{bottom:28px}}
+
+.layer-pop{position:fixed;z-index:1200;top:calc(64px + env(safe-area-inset-top,0px));right:calc(64px + env(safe-area-inset-right,0px));width:min(290px,calc(100vw - 88px));background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:10px}
+.layer-pop h3{margin:4px 6px 8px}
+.base-opt{display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;cursor:pointer}
+.base-opt:hover{background:var(--surface-2)}
+.base-opt input{accent-color:var(--accent);width:18px;height:18px;margin:0}
+.base-opt small{display:block;color:var(--muted);font-size:12px}
+.pop-sep{height:1px;background:var(--line);margin:8px 4px}
+
+/* Placering */
+.crosshair{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;z-index:800;pointer-events:none;color:var(--accent)}
+.crosshair svg{width:100%;height:100%;filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 1px #fff)}
+.placebar{position:fixed;z-index:1100;left:50%;transform:translateX(-50%);bottom:calc(var(--sheet-h) + 14px);width:min(440px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:12px;display:grid;gap:10px}
+@media (min-width:860px){.placebar{left:calc(var(--panel-w) + (100vw - var(--panel-w))/2);bottom:28px}}
+.placebar p{margin:0;font-size:14px;color:var(--muted)}
+.placebar .coords{font:500 13px/1.3 var(--font-mono);color:var(--fg)}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+.btnrow > *{flex:1 1 auto}
+
+/* Panel / bottenlåda */
+#panel{position:fixed;z-index:1000;left:0;right:0;bottom:0;height:var(--sheet-h);background:var(--surface);border-radius:18px 18px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.18);display:flex;flex-direction:column;transition:height .25s ease;padding-bottom:env(safe-area-inset-bottom,0px)}
+#panel.dragging{transition:none}
+#panel.peek:not(.dragging) .p-body{visibility:hidden}
+.handle{flex:none;height:22px;display:grid;place-items:center;touch-action:none;cursor:grab;border:0;background:none;width:100%;padding:0}
+.handle span{width:42px;height:5px;border-radius:3px;background:var(--line)}
+.p-head{flex:none;display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:0 max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px));touch-action:none}
+.brand{font:700 22px/1.1 var(--font-display);letter-spacing:.02em;margin:0;color:var(--spruce)}
+.brand b{color:var(--accent)}
+.p-stat{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tabs{flex:none;display:flex;gap:2px;padding:6px max(10px,env(safe-area-inset-right,0px)) 0 max(10px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--line)}
+.tab{flex:1;border:0;background:none;padding:10px 2px 9px;font:600 14px/1 var(--font-display);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-1px}
+.tab[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+.p-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:14px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px))}
+@media (min-width:860px){
+  #panel{top:0;right:auto;width:var(--panel-w);height:auto;border-radius:0;box-shadow:none;border-right:1px solid var(--line);padding-top:env(safe-area-inset-top,0px)}
+  .handle{display:none}
+  .p-head{padding-top:16px}
+}
+
+/* Gemensamma element */
+h3.sec{font:700 14px/1.2 var(--font-display);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:22px 0 8px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+h3.sec:first-child{margin-top:2px}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.note{font-size:13px;color:var(--muted);margin:8px 0 0;line-height:1.45}
+.btn{border:1px solid var(--line);background:var(--surface-2);color:var(--fg);border-radius:10px;padding:10px 14px;font-weight:600;font-size:15px;min-height:42px;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.danger{color:var(--danger)}
+.btn.danger.armed{background:var(--danger);color:#fff;border-color:var(--danger)}
+.btn.sm{min-height:34px;padding:6px 10px;font-size:14px;border-radius:9px}
+.btn.ghost{background:none}
+.btn:disabled{opacity:.5;cursor:default}
+.btn svg{width:18px;height:18px}
+.linkbtn{border:0;background:none;color:var(--accent);font-weight:600;font-size:13px;padding:4px 2px;letter-spacing:0;text-transform:none;font-family:var(--font-body)}
+.field{display:grid;gap:5px;margin-bottom:12px}
+.field > span{font-size:13px;font-weight:600;color:var(--muted)}
+.input,select.input,textarea.input{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 12px;font-size:16px;min-height:44px}
+textarea.input{min-height:84px;resize:vertical}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:380px){.row2{grid-template-columns:1fr}}
+
+/* Brytare */
+.sw-toggle{position:relative;width:44px;height:26px;flex:none;appearance:none;-webkit-appearance:none;background:var(--line);border-radius:999px;margin:0;cursor:pointer;transition:background .15s}
+.sw-toggle::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:transform .15s}
+.sw-toggle:checked{background:var(--accent)}
+.sw-toggle:checked::after{transform:translateX(18px)}
+.sw-toggle:disabled{opacity:.45;cursor:default}
+
+/* Symbol-bricka */
+.swatch{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;flex:none}
+.swatch svg{width:17px;height:17px}
+.swatch.sm{width:22px;height:22px}.swatch.sm svg{width:13px;height:13px}
+.swatch .txt{font:700 11px/1 var(--font-body)}
+.dot{width:12px;height:12px;border-radius:50%;flex:none;display:inline-block;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.25)}
+
+/* Nållista */
+.listbar{display:flex;gap:8px;margin-bottom:10px}
+.listbar .input{min-height:40px;padding:8px 10px}
+.listbar select.input{width:auto;flex:none}
+.group{margin-bottom:6px}
+.group-h{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;padding:10px 0 6px;text-align:left}
+.group-h .gname{font:700 15px/1.1 var(--font-display);letter-spacing:.06em;text-transform:uppercase;flex:1;min-width:0}
+.group-h .gcount{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.group-h .chev{width:16px;height:16px;color:var(--muted);transition:transform .15s}
+.group.closed .chev{transform:rotate(-90deg)}
+.group.closed .rows{display:none}
+.rows{display:grid;gap:2px}
+.pin-row{display:flex;align-items:center;gap:10px;padding:8px 6px 8px 8px;border-radius:10px;background:var(--surface-2)}
+.pin-row .main{flex:1;min-width:0;border:0;background:none;text-align:left;padding:2px 0;display:flex;align-items:center;gap:10px}
+.pin-row .txt{min-width:0}
+.pin-row .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pin-row .meta{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.navbtn{flex:none;display:inline-flex;align-items:center;gap:5px;text-decoration:none;font-weight:600;font-size:14px;color:var(--accent-fg);background:var(--accent);border-radius:9px;padding:8px 10px;min-height:38px}
+.navbtn svg{width:16px;height:16px}
+.empty{padding:18px 12px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);text-align:center;font-size:14px}
+.banner{display:flex;gap:10px;align-items:center;justify-content:space-between;background:var(--accent-soft);border-radius:10px;padding:8px 10px;font-size:13px;margin-bottom:10px}
+
+/* Filterlistor */
+.frow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.frow:last-child{border-bottom:0}
+.frow .fname{flex:1;min-width:0;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.frow .fcount{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.tag{font:600 11px/1 var(--font-body);letter-spacing:.04em;text-transform:uppercase;padding:4px 6px;border-radius:6px;background:var(--accent-soft);color:var(--fg)}
+.iconbtn{border:0;background:none;width:36px;height:36px;border-radius:9px;display:grid;place-items:center;color:var(--muted);flex:none;padding:0}
+.iconbtn:hover{background:var(--surface-2);color:var(--fg)}
+.iconbtn.armed{background:var(--danger);color:#fff}
+.iconbtn svg{width:18px;height:18px}
+.addrow{display:flex;gap:8px;margin-top:10px}
+.addrow .input{min-height:40px;padding:8px 10px}
+
+/* Jakt och vilt */
+.card{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;background:var(--surface-2)}
+.card.dim{opacity:.65}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px}
+.card-h strong{font:700 18px/1.15 var(--font-display);letter-spacing:.02em;min-width:0;overflow-wrap:anywhere}
+.tag.on{background:var(--ok);color:#fff}
+.lbl{font:700 12px/1.2 var(--font-body);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:12px 0 5px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:13px;font-weight:600;padding:4px 9px;border-radius:999px;background:var(--surface);border:1px solid var(--line)}
+.codebox{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:8px 10px}
+.codebox b{font:500 17px/1 var(--font-mono);letter-spacing:.08em;margin-left:6px}
+.gst{display:inline-flex;align-items:center;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:2px 4px 2px 9px;margin:0 4px 4px 0}
+.gst .x{border:0;background:none;color:var(--muted);font-size:18px;line-height:1;width:24px;height:24px;border-radius:50%;padding:0}
+.userrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.userrow .grow{flex:1;min-width:0;overflow-wrap:anywhere}
+.rolesel{width:auto;flex:none;min-height:38px;padding:6px 8px;font-size:14px}
+.steps{margin:8px 0 12px;padding-left:20px;font-size:14px;display:grid;gap:4px}
+.pos-icon{background:none;border:0;overflow:visible}
+.pos-dot{width:32px;height:32px;border-radius:50%;background:#1a73e8;color:#fff;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4);display:grid;place-items:center;font:700 12px/1 var(--font-body);flex:none}
+.pos-name{position:absolute;top:34px;left:50%;transform:translateX(-50%);white-space:nowrap;font:600 11px/1.2 var(--font-body);background:var(--surface);color:var(--fg);padding:1px 5px;border-radius:5px;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.vitem{padding:9px 0;border-bottom:1px solid var(--line)}
+.vname{font-weight:600;color:var(--fg);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.vrow{display:flex;flex-wrap:wrap;gap:2px 10px;font-size:13px;margin-top:3px}
+.vper{font-variant-numeric:tabular-nums;font-weight:500}
+.vcls{color:var(--muted)}
+.vnote{color:var(--accent);flex-basis:100%}
+.vmore{margin-top:18px}
+.vmore summary{cursor:pointer;font:700 14px/1.2 var(--font-display);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);padding:6px 0}
+/* Svamp */
+.bigtoggle{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line)}
+.bigtoggle strong{font:700 18px/1.1 var(--font-display);letter-spacing:.04em;text-transform:uppercase}
+.species{display:grid;gap:2px}
+.sp-row{display:flex;align-items:center;gap:10px;padding:7px 2px;cursor:pointer}
+.sp-row input{accent-color:var(--accent);width:18px;height:18px;margin:0}
+.sp-row .spn{flex:1;min-width:0}
+.sp-row .spn i{color:var(--muted);font-size:12px;margin-left:4px}
+.sp-row .spc{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+.status{font-size:13px;color:var(--muted);margin-top:8px;min-height:1.2em}
+.status.err{color:var(--danger)}
+
+/* Modal */
+.modal-back{position:fixed;inset:0;background:var(--scrim);z-index:2000;display:flex;align-items:flex-end;justify-content:center}
+.modal{background:var(--surface);width:100%;max-width:520px;max-height:92dvh;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:18px max(16px,env(safe-area-inset-right,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));box-shadow:var(--shadow)}
+@supports (max-height:92dvh){.modal{max-height:92dvh}}
+@media (min-width:600px){.modal-back{align-items:center}.modal{border-radius:18px;padding:22px}}
+.modal h2{font:700 24px/1.1 var(--font-display);letter-spacing:.02em;margin:0 0 14px;text-wrap:balance}
+.modal .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.modal .actions .grow{flex:1}
+.coordbox{font:400 13px/1.55 var(--font-mono);background:var(--surface-2);border-radius:10px;padding:10px 12px;font-variant-numeric:tabular-nums}
+.coordbox b{font-family:var(--font-body);font-weight:600;font-size:12px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;display:inline-block;width:108px}
+.icon-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(46px,1fr));gap:6px}
+.icon-opt{aspect-ratio:1;max-width:100%;border:1px solid var(--line);background:var(--surface);border-radius:10px;display:grid;place-items:center;padding:0;color:var(--fg)}
+.icon-opt svg{width:22px;height:22px}
+.icon-opt[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent);background:var(--accent-soft)}
+.icon-opt .aa{font:700 15px/1 var(--font-body)}
+.colors{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.color-opt{width:32px;height:32px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--line);padding:0}
+.color-opt[aria-pressed="true"]{box-shadow:0 0 0 2px var(--fg)}
+input[type=color].color-opt{background:none;-webkit-appearance:none;appearance:none;cursor:pointer}
+input[type=color].color-opt::-webkit-color-swatch-wrapper{padding:0}
+input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
+.preview{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;background:var(--surface-2);margin-bottom:14px}
+.checkline{display:flex;gap:10px;align-items:flex-start;margin:6px 0 2px}
+.checkline input{accent-color:var(--accent);width:18px;height:18px;margin:2px 0 0;flex:none}
+.radio-card{display:block;border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+.radio-card > label{display:flex;gap:10px;align-items:center;font-weight:600;margin-bottom:8px}
+.radio-card input[type=radio]{accent-color:var(--accent);width:18px;height:18px;margin:0}
+
+/* Popup-innehåll */
+.pp h4{margin:0 0 4px;font:700 18px/1.15 var(--font-display);letter-spacing:.02em}
+.pp .ptype{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);margin-bottom:6px}
+.pp .pnote{margin:6px 0;white-space:pre-wrap}
+.pp .pc{font:400 12px/1.5 var(--font-mono);color:var(--muted);margin:6px 0 8px}
+.pp .pbtns{display:flex;gap:6px;flex-wrap:wrap}
+.pp .pbtns > *{flex:1 1 auto}
+.pp .src{font-size:12px;color:var(--muted)}
+
+.toast{position:fixed;z-index:3000;left:50%;transform:translateX(-50%);bottom:calc(var(--sheet-h) + 84px);background:var(--fg);color:var(--bg);padding:10px 14px;border-radius:12px;box-shadow:var(--shadow);font-size:14px;max-width:min(460px,calc(100vw - 32px));transition:opacity .2s}
+@media (min-width:860px){.toast{left:calc(var(--panel-w) + (100vw - var(--panel-w))/2);bottom:28px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div id="map" aria-label="Karta"></div>
+
+<button class="mode-chip" id="modeChip" hidden type="button" title="Stäng svampkartan">
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 11.5C3.5 6.8 7.3 3.5 12 3.5s8.5 3.3 8.5 8z" fill="currentColor"/><path d="M9.5 11.5 9 19a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2l-.5-7.5"/></svg>
+  Svampkarta
+</button>
+
+<div class="ctrls" role="toolbar" aria-label="Kartverktyg">
+  <button class="ctrl" id="btnLayers" type="button" title="Bakgrund och svampkarta" aria-label="Bakgrund och svampkarta" aria-expanded="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2.5 8 12 13l9.5-5Z"/><path d="m2.5 12.5 9.5 5 9.5-5"/><path d="m2.5 17 9.5 5 9.5-5"/></svg>
+  </button>
+  <button class="ctrl" id="btnFit" type="button" title="Visa alla synliga nålar" aria-label="Visa alla synliga nålar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5v-5h5M15.5 3.5h5v5M20.5 15.5v5h-5M8.5 20.5h-5v-5"/><circle cx="12" cy="12" r="2.5"/></svg>
+  </button>
+  <button class="ctrl" id="btnLocate" type="button" title="Min position" aria-label="Min position">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+  </button>
+  <div class="ctrl-gap"></div>
+  <button class="ctrl" id="btnZoomIn" type="button" title="Zooma in" aria-label="Zooma in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+  <button class="ctrl" id="btnZoomOut" type="button" title="Zooma ut" aria-label="Zooma ut"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+</div>
+
+<div class="layer-pop" id="layerPop" hidden role="dialog" aria-label="Kartlager">
+  <h3 class="sec">Bakgrund</h3>
+  <div id="baseOpts"></div>
+  <label class="base-opt" id="satLabelsRow"><input type="checkbox" id="satLabels"><span>Ortnamn och gränser på satellit</span></label>
+  <div class="pop-sep"></div>
+  <label class="base-opt"><input type="checkbox" id="popRoads"><span><strong>Skogsvägar och stigar</strong><small id="roadNote">Från OpenStreetMap, syns när du zoomat in</small></span></label>
+  <a class="base-opt" href="https://minkarta.lantmateriet.se/" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><span style="width:18px"></span><span><strong>Fastighetsgränser</strong><small>Öppnas i Lantmäteriets Min karta</small></span></a>
+  <label class="base-opt"><input type="checkbox" id="popSvamp"><span><strong>Svampkarta</strong><small>Dina svampställen och andras fynd</small></span></label>
+</div>
+
+<button class="fab" id="btnAdd" type="button" title="Ny kartnål" aria-label="Ny kartnål">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+</button>
+
+<div class="placebar" id="drawbar" hidden>
+  <p id="drawText"></p>
+  <div class="btnrow">
+    <button class="btn primary" id="drawOk" type="button">Klar</button>
+    <button class="btn" id="drawUndo" type="button">Ångra punkt</button>
+    <button class="btn" id="drawGps" type="button">Punkt där jag står</button>
+    <button class="btn ghost" id="drawCancel" type="button">Avbryt</button>
+  </div>
+</div>
+<input type="file" id="fileBorder" accept=".json,.geojson,.kml,.gpx" hidden>
+
+<div class="placebar" id="placebar" hidden>
+  <p id="placeText">Flytta kartan så att korset hamnar där nålen ska sitta.</p>
+  <div class="coords" id="placeCoords"></div>
+  <div class="btnrow">
+    <button class="btn primary" id="placeOk" type="button">Lägg nålen här</button>
+    <button class="btn" id="placeGps" type="button">Min position</button>
+    <button class="btn ghost" id="placeCancel" type="button">Avbryt</button>
+  </div>
+</div>
+
+<aside id="panel" aria-label="Kartnålar och inställningar">
+  <button class="handle" id="handle" type="button" aria-label="Dra upp eller ned panelen"><span></span></button>
+  <div class="p-head" id="pHead">
+    <h1 class="brand">Jakt<b>kartan</b></h1>
+    <span class="p-stat" id="pStat"></span>
+  </div>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="list" aria-selected="true" id="tab-list">Nålar</button>
+    <button class="tab" role="tab" data-tab="filter" aria-selected="false" id="tab-filter">Filter</button>
+    <button class="tab" role="tab" data-tab="jakt" aria-selected="false" id="tab-jakt">Jakt</button>
+    <button class="tab" role="tab" data-tab="vilt" aria-selected="false" id="tab-vilt">Vilt</button>
+    <button class="tab" role="tab" data-tab="svamp" aria-selected="false" id="tab-svamp">Svamp</button>
+    <button class="tab" role="tab" data-tab="data" aria-selected="false" id="tab-data">Data</button>
+  </div>
+  <div class="p-body" id="pBody">
+    <section data-pane="list" id="paneList"></section>
+    <section data-pane="filter" id="paneFilter" hidden></section>
+    <section data-pane="jakt" id="paneJakt" hidden></section>
+    <section data-pane="vilt" id="paneVilt" hidden></section>
+    <section data-pane="svamp" id="paneSvamp" hidden></section>
+    <section data-pane="data" id="paneData" hidden></section>
+  </div>
+</aside>
+
+<input type="file" id="fileImport" accept=".json,.geojson,.kml,.gpx,.csv,.txt,application/json,application/vnd.google-earth.kml+xml,application/gpx+xml,text/csv" hidden>
+<div class="toast" id="toast" hidden role="status" aria-live="polite"></div>
+
+<script>/*LEAFLET_JS*/</script>
+<script>
+(function(){
+'use strict';
+
+/* ---------- Hjälpfunktioner ---------- */
+const STORE = 'faltkartan.v1';
+const DEG = Math.PI / 180;
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
+const isDesktop = () => window.matchMedia('(min-width: 860px)').matches;
+const fmtInt = n => Math.round(n).toLocaleString('sv-SE');
+
+/* ---------- Symboler (24×24, linjeritade) ---------- */
+const ICONS = {
+  tower:     {label:'Jakttorn',   svg:'<path d="M5.5 7.5 12 3.5l6.5 4"/><rect x="7" y="7.5" width="10" height="5" rx=".6"/><path d="M8.5 12.5 6.5 21M15.5 12.5l2 8.5M7.7 17h8.6"/>'},
+  crosshair: {label:'Pass',       svg:'<circle cx="12" cy="12" r="7"/><path d="M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>'},
+  hoof:      {label:'Vilt/spår',  svg:'<path d="M8.6 3.8c-2 2.4-3.1 5.4-3.1 8.4 0 2.6 1.2 4.2 2.8 4.2s2.3-1.6 2.3-4.4c0-3-.6-5.8-2-8.2Z"/><path d="M15.4 3.8c2 2.4 3.1 5.4 3.1 8.4 0 2.6-1.2 4.2-2.8 4.2s-2.3-1.6-2.3-4.4c0-3 .6-5.8 2-8.2Z"/><circle cx="7.2" cy="20" r="1" fill="currentColor"/><circle cx="16.8" cy="20" r="1" fill="currentColor"/>'},
+  camera:    {label:'Viltkamera', svg:'<rect x="3.5" y="7" width="17" height="12" rx="2"/><path d="M8.5 7 10 4.5h4L15.5 7"/><circle cx="12" cy="13" r="3.2"/>'},
+  feed:      {label:'Åtel/foder', svg:'<path d="M4 9.5h16l-2 10.5H6Z"/><path d="M7 9.5a5 5 0 0 1 10 0"/>'},
+  mushroom:  {label:'Svamp',      svg:'<path d="M3.5 11.5C3.5 6.8 7.3 3.5 12 3.5s8.5 3.3 8.5 8Z" fill="currentColor"/><path d="M9.5 11.5 9 19a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2l-.5-7.5"/>'},
+  chanterelle:{label:'Kantarell', svg:'<path d="M3.5 5.5q4.25 2.2 8.5 0t8.5 0L14 12.5V20.5h-4v-8Z"/>'},
+  berries:   {label:'Bär',        svg:'<circle cx="8.3" cy="15.2" r="3.3"/><circle cx="15.7" cy="15.2" r="3.3"/><circle cx="12" cy="9.3" r="3.3"/><path d="M12 6c0-1.5.8-2.7 2.6-3.2"/>'},
+  tree:      {label:'Träd',       svg:'<path d="M12 2.8 7 9.8h3l-4 6.5h12l-4-6.5h3Z"/><path d="M12 16.3v4.9"/>'},
+  house:     {label:'Hus/stuga',  svg:'<path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5h4v5"/>'},
+  tent:      {label:'Tält/vindskydd', svg:'<path d="M2.5 20.5h19"/><path d="M4 20.5 12 5l8 15.5"/><path d="M9.5 20.5 12 14.5l2.5 6"/>'},
+  fire:      {label:'Eldplats',   svg:'<path d="M12 21c-3.6 0-6-2.4-6-5.7 0-3.1 2.4-5 3.4-7.9.6 1.4 1.5 2.3 2.4 2.8.6-2.6 1.6-5.2 3.8-7.2-.2 3 2.4 5 2.4 9.3 0 4.3-2.4 8.7-6 8.7Z"/>'},
+  fish:      {label:'Fiske',      svg:'<path d="M6 12c2.6-3.8 5.6-5.5 9-5.5 2.8 0 4.8 2 6 5.5-1.2 3.5-3.2 5.5-6 5.5-3.4 0-6.4-1.7-9-5.5Z"/><path d="M6 12 2.5 8.5v7Z"/><circle cx="16.5" cy="11" r=".9" fill="currentColor"/>'},
+  drop:      {label:'Vatten/källa', svg:'<path d="M12 3.5c3.5 4.3 6 7.6 6 10.8a6 6 0 0 1-12 0c0-3.2 2.5-6.5 6-10.8Z"/>'},
+  parking:   {label:'Parkering',  svg:'<rect x="4" y="3.5" width="16" height="17" rx="3"/><path d="M9.5 16.5v-9h3.25a2.75 2.75 0 0 1 0 5.5H9.5"/>'},
+  car:       {label:'Bil/väg',    svg:'<path d="M5 16V12l1.8-4.5h10.4L19 12v4Z"/><path d="M5 12h14"/><path d="M6.5 16v2.5M17.5 16v2.5"/>'},
+  flag:      {label:'Flagga',     svg:'<path d="M5.5 21V3.5"/><path d="M5.5 4.5h12l-2.5 4 2.5 4h-12"/>'},
+  star:      {label:'Favorit',    svg:'<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8-4.3-4.1 5.9-.9Z"/>'},
+  warning:   {label:'Varning',    svg:'<path d="M12 4 21 19.5H3Z"/><path d="M12 10v4.5"/><circle cx="12" cy="17" r=".9" fill="currentColor"/>'},
+  dot:       {label:'Punkt',      svg:'<circle cx="12" cy="12" r="4.5" fill="currentColor"/>'},
+};
+const COLOR_PRESETS = ['#d9520e','#c81e1e','#b45309','#f2a900','#8b4a1f','#6b6a2e','#2f7d4f','#0f766e','#1d4ed8','#0f4c81','#7e22ce','#475569'];
+
+function luminance(hex){
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if(!m) return 0;
+  const n = parseInt(m[1],16), ch = [(n>>16)&255,(n>>8)&255,n&255].map(v=>{v/=255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4);});
+  return 0.2126*ch[0]+0.7152*ch[1]+0.0722*ch[2];
+}
+const iconInk = color => luminance(color) > 0.42 ? '#1b1b1b' : '#ffffff';
+
+function glyph(type, size){
+  const ink = iconInk(type.color);
+  if(type.icon === 'text'){
+    const t = esc((type.text || '?').slice(0,2));
+    return `<span class="txt" style="color:${ink}">${t}</span>`;
+  }
+  const ic = ICONS[type.icon] || ICONS.dot;
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="${ink}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:${ink}">${ic.svg}</svg>`;
+}
+function swatch(type, cls){
+  return `<span class="swatch ${cls||''}" style="background:${esc(type.color)}">${glyph(type)}</span>`;
+}
+function pinSvg(type){
+  const ink = iconInk(type.color);
+  let inner;
+  if(type.icon === 'text'){
+    inner = `<text x="15" y="18.6" text-anchor="middle" font-family="Barlow,system-ui,sans-serif" font-size="11" font-weight="700" fill="${ink}">${esc((type.text||'?').slice(0,2))}</text>`;
+  } else {
+    const ic = ICONS[type.icon] || ICONS.dot;
+    inner = `<g transform="translate(7 6.5) scale(.6667)" fill="none" stroke="${ink}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color:${ink}">${ic.svg}</g>`;
+  }
+  return `<svg viewBox="0 0 30 40" width="30" height="40" aria-hidden="true"><path d="M15 39S3 24.6 3 14.5a12 12 0 0 1 24 0C27 24.6 15 39 15 39Z" fill="${esc(type.color)}" stroke="rgba(0,0,0,.38)" stroke-width="1"/>${inner}</svg>`;
+}
+
+/* ---------- SWEREF 99 TM (Gauss–Krüger, Lantmäteriets formler) ---------- */
+function toSweref99TM(lat, lon){
+  const a = 6378137, f = 1/298.257222101, k0 = 0.9996, lon0 = 15*DEG, FN = 0, FE = 500000;
+  const e2 = f*(2-f), n = f/(2-f);
+  const aRoof = a/(1+n)*(1 + n*n/4 + Math.pow(n,4)/64);
+  const A = e2, B = (5*e2*e2 - Math.pow(e2,3))/6, C = (104*Math.pow(e2,3) - 45*Math.pow(e2,4))/120, D = (1237*Math.pow(e2,4))/1260;
+  const b1 = n/2 - 2*n*n/3 + 5*Math.pow(n,3)/16 + 41*Math.pow(n,4)/180;
+  const b2 = 13*n*n/48 - 3*Math.pow(n,3)/5 + 557*Math.pow(n,4)/1440;
+  const b3 = 61*Math.pow(n,3)/240 - 103*Math.pow(n,4)/140;
+  const b4 = 49561*Math.pow(n,4)/161280;
+  const phi = lat*DEG, lam = lon*DEG, s = Math.sin(phi);
+  const phiStar = phi - s*Math.cos(phi)*(A + B*s*s + C*Math.pow(s,4) + D*Math.pow(s,6));
+  const dl = lam - lon0;
+  const xi = Math.atan(Math.tan(phiStar)/Math.cos(dl));
+  const eta = Math.atanh(Math.cos(phiStar)*Math.sin(dl));
+  const N = k0*aRoof*(xi + b1*Math.sin(2*xi)*Math.cosh(2*eta) + b2*Math.sin(4*xi)*Math.cosh(4*eta) + b3*Math.sin(6*xi)*Math.cosh(6*eta) + b4*Math.sin(8*xi)*Math.cosh(8*eta)) + FN;
+  const E = k0*aRoof*(eta + b1*Math.cos(2*xi)*Math.sinh(2*eta) + b2*Math.cos(4*xi)*Math.sinh(4*eta) + b3*Math.cos(6*xi)*Math.sinh(6*eta) + b4*Math.cos(8*xi)*Math.sinh(8*eta)) + FE;
+  return {N, E};
+}
+const fmtLatLng = (lat,lng) => `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+function fmtSweref(lat,lng){ const s = toSweref99TM(lat,lng); return `N ${fmtInt(s.N)}  E ${fmtInt(s.E)}`; }
+function distM(a,b){
+  const R = 6371008.8, dLat = (b.lat-a.lat)*DEG, dLng = (b.lng-a.lng)*DEG;
+  const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*DEG)*Math.cos(b.lat*DEG)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+const fmtDist = m => m < 1000 ? `${Math.round(m/10)*10} m` : `${(m/1000).toLocaleString('sv-SE',{maximumFractionDigits: m<10000?1:0})} km`;
+const navUrl = (lat,lng) => `https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(6)},${lng.toFixed(6)}`;
+
+/* ---------- Svamparter (Artportalen via GBIF) ---------- */
+const SPECIES = [
+  {id:'kantarell',      name:'Kantarell',          sci:'Cantharellus cibarius',     color:'#f0a000'},
+  {id:'trattkantarell', name:'Trattkantarell',     sci:'Craterellus tubaeformis',   color:'#7a6236'},
+  {id:'gultrumpet',     name:'Gul trumpetsvamp',   sci:'Craterellus lutescens',     color:'#c9b030'},
+  {id:'svarttrumpet',   name:'Svart trumpetsvamp', sci:'Craterellus cornucopioides',color:'#2f2f2f'},
+  {id:'karljohan',      name:'Karljohan',          sci:'Boletus edulis',            color:'#9a4f22'},
+  {id:'blodriska',      name:'Blodriska',          sci:'Lactarius deliciosus',      color:'#e0442a'},
+  {id:'farticka',       name:'Fårticka',           sci:'Albatrellus ovinus',        color:'#8c7a5b'},
+  {id:'taggsvamp',      name:'Blek taggsvamp',     sci:'Hydnum repandum',           color:'#d08a3a'},
+];
+const speciesById = id => SPECIES.find(s => s.id === id);
+
+/* ---------- Tillstånd ---------- */
+function defaultState(){
+  const T = (id,name,color,icon,svamp) => ({id,name,color,icon,text:'',svamp:!!svamp,visible:true});
+  const types = [
+    T('t-torn','Jakttorn','#b45309','tower'),
+    T('t-pass','Pass','#c81e1e','crosshair'),
+    T('t-kamera','Viltkamera','#475569','camera'),
+    T('t-atel','Åtel','#6b4f2a','feed'),
+    T('t-kantarell','Kantarell','#f2a900','chanterelle',true),
+    T('t-karljohan','Karljohan','#8b4a1f','mushroom',true),
+    T('t-tratt','Trattkantarell','#6b6a2e','chanterelle',true),
+    T('t-bar','Bär','#7e22ce','berries'),
+    T('t-hus','Hus/stuga','#1d4ed8','house'),
+    T('t-p','Parkering','#0f4c81','parking'),
+  ];
+  const exJ = 'a-' + uid(), exS = 'a-' + uid();
+  const areas = [
+    {id:exJ, name:'Exempel: Jaktmarken', visible:true, example:true},
+    {id:exS, name:'Exempel: Svampskogen', visible:true, example:true},
+  ];
+  const now = Date.now();
+  const P = (name,typeId,areaId,lat,lng,note) => ({id:uid(),name,typeId,areaId,lat,lng,note:note||'',created:now,updated:now,example:true});
+  const pins = [
+    P('Tornet vid mossen','t-torn',exJ,58.7221,14.6052,'Bra utsikt mot mossen. Vind från väst är bäst.'),
+    P('Pass 3 – kalhygget','t-pass',exJ,58.7183,14.6210,''),
+    P('Kamera vid vägen','t-kamera',exJ,58.7205,14.6128,'Byt batteri i oktober.'),
+    P('Bommen','t-p',exJ,58.7262,14.5903,'Nyckel hos jaktledaren.'),
+    P('Jaktstugan','t-hus',exJ,58.7281,14.5964,''),
+    P('Mossig granbacke','t-kantarell',exS,58.7112,14.6121,'Bäst i augusti efter regn.'),
+    P('Björkbrynet','t-karljohan',exS,58.7075,14.6302,''),
+    P('Blöta sänkan','t-tratt',exS,58.7091,14.6185,'Sent i september.'),
+  ];
+  return {
+    version: 1, types, areas, pins, external: [],
+    settings: {base:'osm', roads:false, satLabels:true, svampMode:false, noAreaVisible:true, sort:'type', view:null, closedGroups:{},
+      gbif:{species:['kantarell','trattkantarell','karljohan'], fromYear:2000, density:true, keys:{}}}
+  };
+}
+function normalize(s){
+  const d = defaultState();
+  const out = {
+    version: 1,
+    types: Array.isArray(s.types) && s.types.length ? s.types : d.types,
+    areas: Array.isArray(s.areas) ? s.areas : [],
+    pins: Array.isArray(s.pins) ? s.pins : [],
+    external: Array.isArray(s.external) ? s.external : [],
+    settings: Object.assign({}, d.settings, s.settings || {})
+  };
+  out.settings.gbif = Object.assign({}, d.settings.gbif, (s.settings && s.settings.gbif) || {});
+  out.settings.closedGroups = out.settings.closedGroups || {};
+  out.types.forEach(t => { if(t.visible === undefined) t.visible = true; if(!t.color) t.color = '#475569'; if(!t.icon) t.icon = 'dot'; });
+  out.areas.forEach(a => { if(a.visible === undefined) a.visible = true; });
+  out.pins = out.pins.filter(p => isFinite(p.lat) && isFinite(p.lng));
+  return out;
+}
+let state;
+try { const raw = localStorage.getItem(STORE); state = raw ? normalize(JSON.parse(raw)) : defaultState(); }
+catch(e){ state = defaultState(); }
+
+let saveTimer = null, storageWarned = false;
+function save(){
+  const hid = state.settings.hiddenAreas || (state.settings.hiddenAreas = {});
+  for(const a of state.areas){ if(!a.gid) continue; if(a.visible === false) hid[a.id] = true; else delete hid[a.id]; }
+  cloudSync();
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      const cloudAreas = new Set(state.areas.filter(a => a.gid).map(a => a.id));
+      localStorage.setItem(STORE, JSON.stringify(Object.assign({}, state, {areas:state.areas.filter(a => !a.gid), pins:state.pins.filter(p => !cloudAreas.has(p.areaId)), types:state.types.filter(t => !t.ghost)})));
+    }
+    catch(e){ if(!storageWarned){ storageWarned = true; toast('Kunde inte spara i webbläsaren. Exportera en säkerhetskopia under Data.'); } }
+  }, 200);
+}
+const typeById = id => state.types.find(t => t.id === id);
+const areaById = id => state.areas.find(a => a.id === id);
+const pinById = id => state.pins.find(p => p.id === id);
+
+function pinVisible(p){
+  const t = typeById(p.typeId); if(!t) return false;
+  const areaOn = p.areaId && areaById(p.areaId) ? areaById(p.areaId).visible !== false : state.settings.noAreaVisible !== false;
+  if(!areaOn) return false;
+  if(state.settings.svampMode) return !!t.svamp;
+  return t.visible !== false;
+}
+
+/* ---------- Karta ---------- */
+const map = L.map('map', {zoomControl:false, attributionControl:true, worldCopyJump:true, tapHold:true});
+map.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>');
+map.createPane('labels'); map.getPane('labels').style.zIndex = 350; map.getPane('labels').style.pointerEvents = 'none';
+map.createPane('density'); map.getPane('density').style.zIndex = 360; map.getPane('density').style.pointerEvents = 'none';
+const canvasR = L.canvas({padding:0.5});
+
+const BASES = {
+  osm:  {label:'Karta', sub:'OpenStreetMap', make:() => L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,maxNativeZoom:19,attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bidragsgivare'})},
+  topo: {label:'Terräng', sub:'OpenTopoMap, höjdkurvor', make:() => L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{subdomains:'abc',maxZoom:20,maxNativeZoom:17,attribution:'Kartdata © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, SRTM · Kartstil © <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)'})},
+  sat:  {label:'Satellit', sub:'Esri World Imagery', make:() => L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:18,attribution:'Bilder © Esri, Maxar, Earthstar Geographics m.fl.'})},
+};
+const satLabelLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:18,pane:'labels'});
+let baseLayer = null;
+let tileStat = {ok:0, err:0, warned:false};
+function setBase(key){
+  if(!BASES[key]) key = 'osm';
+  state.settings.base = key; save();
+  if(baseLayer) map.removeLayer(baseLayer);
+  baseLayer = BASES[key].make();
+  tileStat = {ok:0, err:0, warned:false};
+  baseLayer.on('tileload', () => { tileStat.ok++; });
+  baseLayer.on('tileerror', () => {
+    tileStat.err++;
+    if(!tileStat.warned && tileStat.err >= 4 && tileStat.ok === 0){
+      tileStat.warned = true;
+      toast(location.protocol === 'file:' && key === 'osm'
+        ? 'OpenStreetMap laddas inte när filen öppnas lokalt. Välj Terräng eller Satellit, eller lägg filen på en webbadress.'
+        : 'Kartbilderna laddas inte. Öppna sidan i Chrome eller Safari – förhandsvisningar i appar blockerar kartbilder. Annars: kontrollera nätverket.', 9000);
+    }
+  });
+  baseLayer.addTo(map);
+  if(key === 'sat' && state.settings.satLabels){ satLabelLayer.addTo(map); } else { map.removeLayer(satLabelLayer); }
+  renderLayerPop();
+}
+
+const pinLayer = L.layerGroup().addTo(map);
+const extLayer = L.layerGroup().addTo(map);
+const gbifLayer = L.layerGroup().addTo(map);
+const densityLayer = L.layerGroup().addTo(map);
+let meMarker = null, meCircle = null, myPos = null;
+
+function renderMarkers(){
+  pinLayer.clearLayers();
+  for(const p of state.pins){
+    if(!pinVisible(p)) continue;
+    const t = typeById(p.typeId);
+    const m = L.marker([p.lat,p.lng], {
+      icon: L.divIcon({className:'pin-icon', html:pinSvg(t), iconSize:[30,40], iconAnchor:[15,39], popupAnchor:[0,-34]}),
+      title: p.name || t.name, riseOnHover:true
+    });
+    m.pinId = p.id;
+    m.bindPopup(() => pinPopup(p.id), {maxWidth:290, autoPanPaddingTopLeft:[20,70], autoPanPaddingBottomRight:[20, bottomPad()+20]});
+    m.addTo(pinLayer);
+  }
+}
+function findMarker(id){ let f = null; pinLayer.eachLayer(l => { if(l.pinId === id) f = l; }); return f; }
+
+function pinPopup(id){
+  const p = pinById(id); const t = typeById(p.typeId); const a = p.areaId ? areaById(p.areaId) : null;
+  const el = h(`<div class="pp">
+    <h4>${esc(p.name || t.name)}</h4>
+    <div class="ptype">${swatch(t,'sm')}<span>${esc(t.name)}${a ? ' · ' + esc(a.name) : ''}</span></div>
+    ${p.note ? `<div class="pnote">${esc(p.note)}</div>` : ''}
+    <div class="pc">${fmtLatLng(p.lat,p.lng)}<br>SWEREF 99 TM ${fmtSweref(p.lat,p.lng)}${myPos ? '<br>' + fmtDist(distM(myPos,p)) + ' bort' : ''}</div>
+    <div class="pbtns">
+      <a class="navbtn" href="${navUrl(p.lat,p.lng)}" target="_blank" rel="noopener">${ICON_NAV}Navigera</a>
+      ${canEditPin(p) ? '<button class="btn sm" type="button" data-act="edit">Redigera</button>' : ''}
+    </div></div>`);
+  const eb = el.querySelector('[data-act=edit]'); if(eb) eb.addEventListener('click', () => { map.closePopup(); openPinForm({id}); });
+  return el;
+}
+const ICON_NAV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 11 20.5 3.5 13 20.5l-2-7.5Z"/></svg>';
+const ICON_EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16Z"/><path d="m13.5 6.5 4 4"/></svg>';
+const ICON_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg>';
+const ICON_CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+
+/* Externa källor (importerade filer) */
+function renderExternal(){
+  extLayer.clearLayers();
+  if(!state.settings.svampMode) return;
+  for(const src of state.external){
+    if(src.visible === false) continue;
+    for(const pt of src.points){
+      const c = L.circleMarker([pt.lat,pt.lng], {renderer:canvasR, radius:7, color:src.color, weight:3, fillColor:'#ffffff', fillOpacity:.9});
+      c.bindPopup(() => extPopup(src, pt), {maxWidth:280});
+      c.addTo(extLayer);
+    }
+  }
+}
+function extPopup(src, pt){
+  const el = h(`<div class="pp"><h4>${esc(pt.name || 'Svampställe')}</h4>
+    <div class="ptype"><span class="dot" style="background:${esc(src.color)}"></span><span>${esc(src.name)}</span></div>
+    ${pt.note ? `<div class="pnote">${esc(pt.note)}</div>` : ''}
+    <div class="pc">${fmtLatLng(pt.lat,pt.lng)}${myPos ? '<br>' + fmtDist(distM(myPos,pt)) + ' bort' : ''}</div>
+    <div class="pbtns"><a class="navbtn" href="${navUrl(pt.lat,pt.lng)}" target="_blank" rel="noopener">${ICON_NAV}Navigera</a>
+    <button class="btn sm" type="button" data-act="copy">Spara som egen</button></div></div>`);
+  el.querySelector('[data-act=copy]').addEventListener('click', () => { map.closePopup(); openPinForm({lat:pt.lat, lng:pt.lng, name:pt.name || '', note:(pt.note ? pt.note + '\n' : '') + 'Från ' + src.name, typeId:guessSvampType(pt.name)}); });
+  return el;
+}
+function guessSvampType(name){
+  const n = (name || '').toLowerCase();
+  const svamp = state.types.filter(t => t.svamp);
+  return (svamp.find(t => n && n.includes(t.name.toLowerCase())) || svamp[0] || state.types[0]).id;
+}
+
+/* ---------- GBIF / Artportalen ---------- */
+const gbif = {results:{}, busy:false, status:'', err:false};
+async function fetchJson(url){
+  const r = await fetch(url, {headers:{'Accept':'application/json'}});
+  if(!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+async function resolveKey(sp){
+  const keys = state.settings.gbif.keys, cached = keys[sp.sci];
+  if(cached && cached.key && Date.now() - cached.t < 30*864e5) return cached.key;
+  let key = null;
+  try {
+    const d = await fetchJson('https://api.gbif.org/v1/species/match?kingdom=Fungi&name=' + encodeURIComponent(sp.sci));
+    if(d && d.matchType !== 'NONE') key = d.acceptedUsageKey || d.usageKey || null;
+  } catch(e){}
+  if(!key){
+    try {
+      const d = await fetchJson('https://api.gbif.org/v2/species/match?kingdom=Fungi&scientificName=' + encodeURIComponent(sp.sci));
+      key = (d && ((d.acceptedUsage && d.acceptedUsage.key) || (d.usage && d.usage.key))) || null;
+    } catch(e){}
+  }
+  if(key){ keys[sp.sci] = {key, t:Date.now()}; save(); }
+  return key;
+}
+async function fetchSpecies(sp, b){
+  const key = await resolveKey(sp);
+  const p = new URLSearchParams({hasCoordinate:'true', hasGeospatialIssue:'false', occurrenceStatus:'PRESENT',
+    decimalLatitude:`${b.s.toFixed(4)},${b.n.toFixed(4)}`, decimalLongitude:`${b.w.toFixed(4)},${b.e.toFixed(4)}`, limit:'300'});
+  if(key) p.set('taxonKey', key); else p.set('scientificName', sp.sci);
+  const from = +state.settings.gbif.fromYear;
+  if(from) p.set('year', `${from},${new Date().getFullYear()}`);
+  const out = [], seen = new Set(); let count = 0, offset = 0;
+  for(let page = 0; page < 3; page++){
+    p.set('offset', String(offset));
+    const d = await fetchJson('https://api.gbif.org/v1/occurrence/search?' + p.toString());
+    count = d.count || 0;
+    for(const o of (d.results || [])){
+      if(o.decimalLatitude == null || o.decimalLongitude == null || seen.has(o.key)) continue;
+      seen.add(o.key);
+      out.push({key:o.key, lat:o.decimalLatitude, lng:o.decimalLongitude,
+        date:(o.eventDate ? String(o.eventDate).slice(0,10) : (o.year ? String(o.year) : '')),
+        unc:o.coordinateUncertaintyInMeters || null, loc:o.locality || '', ds:o.datasetName || ''});
+    }
+    offset += 300;
+    if(d.endOfRecords || offset >= count) break;
+  }
+  return {key, count, points:out};
+}
+async function loadGbifInView(){
+  if(gbif.busy) return;
+  const sel = state.settings.gbif.species.map(speciesById).filter(Boolean);
+  if(!sel.length){ setGbifStatus('Välj minst en art.', true); return; }
+  if(map.getZoom() < 9){ setGbifStatus('Zooma in mer först (ungefär kommunnivå) så att sökningen blir hanterbar.', true); return; }
+  if(!state.settings.svampMode){ setSvampMode(true); }
+  const bb = map.getBounds(), b = {s:bb.getSouth(), n:bb.getNorth(), w:bb.getWest(), e:bb.getEast()};
+  gbif.busy = true; setGbifStatus('Hämtar fynd från Artportalen via GBIF …'); renderSvampPane();
+  let errors = 0;
+  await Promise.all(sel.map(async sp => {
+    try { gbif.results[sp.id] = await fetchSpecies(sp, b); }
+    catch(e){ errors++; gbif.results[sp.id] = {error:true, count:0, points:[]}; }
+  }));
+  gbif.busy = false;
+  const shown = sel.reduce((n,sp) => n + (gbif.results[sp.id].points || []).length, 0);
+  const total = sel.reduce((n,sp) => n + (gbif.results[sp.id].count || 0), 0);
+  if(errors === sel.length) setGbifStatus('Kunde inte nå GBIF. Kontrollera nätverket och försök igen.', true);
+  else setGbifStatus(`${fmtInt(shown)} fynd visas${total > shown ? ` av ${fmtInt(total)} – zooma in för att se alla` : ''}.${errors ? ' Vissa arter kunde inte hämtas.' : ''}`);
+  renderGbif(); renderDensity(); renderSvampPane();
+}
+function setGbifStatus(msg, err){ gbif.status = msg; gbif.err = !!err; const s = $('#gbifStatus'); if(s){ s.textContent = msg; s.classList.toggle('err', !!err); } }
+function renderGbif(){
+  gbifLayer.clearLayers();
+  if(!state.settings.svampMode) return;
+  for(const id of state.settings.gbif.species){
+    const sp = speciesById(id), r = gbif.results[id]; if(!sp || !r) continue;
+    for(const pt of r.points){
+      const c = L.circleMarker([pt.lat,pt.lng], {renderer:canvasR, radius:6, color:'#ffffff', weight:1.5, fillColor:sp.color, fillOpacity:.9});
+      c.bindPopup(() => gbifPopup(sp, pt), {maxWidth:280});
+      c.addTo(gbifLayer);
+    }
+  }
+}
+function gbifPopup(sp, pt){
+  const el = h(`<div class="pp"><h4>${esc(sp.name)}</h4>
+    <div class="ptype"><span class="dot" style="background:${sp.color}"></span><span><i>${esc(sp.sci)}</i></span></div>
+    <div class="pnote">${pt.date ? 'Fynddatum ' + esc(pt.date) : 'Datum saknas'}${pt.unc ? ` · osäkerhet ±${fmtInt(pt.unc)} m` : ''}${pt.loc ? '<br>' + esc(pt.loc) : ''}</div>
+    <div class="pc">${fmtLatLng(pt.lat,pt.lng)}${myPos ? '<br>' + fmtDist(distM(myPos,pt)) + ' bort' : ''}</div>
+    <div class="pbtns"><a class="navbtn" href="${navUrl(pt.lat,pt.lng)}" target="_blank" rel="noopener">${ICON_NAV}Navigera</a>
+    <button class="btn sm" type="button" data-act="copy">Spara som egen</button></div>
+    <div class="src" style="margin-top:8px">${esc(pt.ds || 'Artportalen')} via <a href="https://www.gbif.org/occurrence/${encodeURIComponent(pt.key)}" target="_blank" rel="noopener">GBIF</a></div></div>`);
+  el.querySelector('[data-act=copy]').addEventListener('click', () => { map.closePopup(); openPinForm({lat:pt.lat, lng:pt.lng, name:sp.name, note:`Fynd i Artportalen${pt.date ? ' ' + pt.date : ''}${pt.unc ? `, ±${fmtInt(pt.unc)} m` : ''}`, typeId:guessSvampType(sp.name)}); });
+  return el;
+}
+let densityReq = 0;
+async function renderDensity(){
+  const req = ++densityReq;
+  densityLayer.clearLayers();
+  if(!state.settings.svampMode || !state.settings.gbif.density) return;
+  for(const id of state.settings.gbif.species){
+    const sp = speciesById(id); if(!sp) continue;
+    const key = await resolveKey(sp);
+    if(req !== densityReq) return;
+    if(!key) continue;
+    L.tileLayer(`https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@1x.png?style=scaled.circles&taxonKey=${encodeURIComponent(key)}`,
+      {pane:'density', maxZoom:20, maxNativeZoom:14, opacity:.8, attribution:'Fynd: <a href="https://www.artportalen.se">Artportalen</a> via <a href="https://www.gbif.org">GBIF</a>'}).addTo(densityLayer);
+  }
+}
+
+/* ---------- Läge: svampkarta ---------- */
+function setSvampMode(on){
+  state.settings.svampMode = !!on; save();
+  renderAll();
+  renderGbif(); renderDensity();
+}
+
+/* ---------- Panel / bottenlåda ---------- */
+let sheet = 'peek';
+function peekH(){ return $('#handle').offsetHeight + $('#pHead').offsetHeight + $('.tabs').offsetHeight; }
+function sheetHeight(s){
+  const vh = window.innerHeight;
+  if(s === 'full') return Math.round(vh - 64);
+  if(s === 'half') return Math.round(Math.min(vh*0.52, vh - 120));
+  return peekH();
+}
+function setSheet(s, noAnim){
+  sheet = s;
+  $('#panel').classList.toggle('peek', s === 'peek' && !isDesktop());
+  if(isDesktop()){ document.documentElement.style.setProperty('--sheet-h','0px'); $('#panel').style.height = ''; return; }
+  const px = sheetHeight(s);
+  const panel = $('#panel');
+  if(noAnim) panel.classList.add('dragging');
+  document.documentElement.style.setProperty('--sheet-h', px + 'px');
+  panel.style.height = `calc(${px}px + env(safe-area-inset-bottom, 0px))`;
+  if(noAnim) requestAnimationFrame(() => panel.classList.remove('dragging'));
+}
+function bottomPad(){ return isDesktop() ? 0 : (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-h')) || 0); }
+(function sheetDrag(){
+  const panel = $('#panel'); let startY = 0, startH = 0, moved = false, active = false;
+  const down = e => { if(isDesktop()) return; active = true; moved = false; startY = e.clientY; startH = panel.getBoundingClientRect().height; panel.classList.add('dragging'); e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId); };
+  const move = e => { if(!active) return; const dy = startY - e.clientY; if(Math.abs(dy) > 6) moved = true; if(!moved) return;
+    const hpx = Math.max(peekH(), Math.min(window.innerHeight - 40, startH + dy)); panel.style.height = hpx + 'px'; document.documentElement.style.setProperty('--sheet-h', hpx + 'px'); };
+  const up = e => { if(!active) return; active = false; panel.classList.remove('dragging');
+    if(!moved){ if(e.currentTarget.id === 'handle') setSheet(sheet === 'peek' ? 'half' : sheet === 'half' ? 'full' : 'peek'); else setSheet(sheet); return; }
+    const hpx = panel.getBoundingClientRect().height, opts = ['peek','half','full'];
+    let best = 'peek', bd = Infinity; for(const o of opts){ const d = Math.abs(sheetHeight(o) - hpx); if(d < bd){ bd = d; best = o; } }
+    setSheet(best); };
+  for(const el of [$('#handle'), $('#pHead')]){
+    el.addEventListener('pointerdown', down); el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  }
+})();
+function setTab(tab){
+  $$('.tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+  $$('[data-pane]').forEach(p => { p.hidden = p.dataset.pane !== tab; });
+  $('#pBody').scrollTop = 0;
+  if(sheet === 'peek' && !isDesktop()) setSheet('half');
+}
+$$('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+
+/* ---------- Nållista ---------- */
+let listQuery = '';
+function ensureListShell(){
+  const pane = $('#paneList');
+  if($('#listSearch')) return;
+  pane.innerHTML = `<div id="listBanner"></div><div class="listbar"><input class="input" id="listSearch" type="search" placeholder="Sök nål" aria-label="Sök nål" autocomplete="off">
+    <select class="input" id="listSort" aria-label="Sortering">
+      <option value="type">Typ</option><option value="area">Område</option><option value="name">Namn</option><option value="dist">Avstånd</option>
+    </select></div><div id="listItems"></div>`;
+  $('#listSearch').addEventListener('input', e => { listQuery = e.target.value; renderList(); });
+  $('#listSort').addEventListener('change', e => { state.settings.sort = e.target.value; save(); if(e.target.value === 'dist' && !myPos) locate(false); renderList(); });
+}
+function renderList(){
+  ensureListShell();
+  const visible = state.pins.filter(pinVisible);
+  const q = listQuery.trim().toLowerCase();
+  const items = visible.filter(p => !q || (p.name||'').toLowerCase().includes(q) || (p.note||'').toLowerCase().includes(q) || (typeById(p.typeId).name || '').toLowerCase().includes(q));
+  const sort = state.settings.sort;
+  $('#listSort').value = sort;
+  const hasExample = state.pins.some(p => p.example) || state.areas.some(a => a.example);
+  $('#listBanner').innerHTML = hasExample ? `<div class="banner"><span>Exempelnålar visas så att du ser hur det ser ut.</span><button class="linkbtn" type="button" data-act="clear-ex">Rensa exempel</button></div>` : '';
+  let html = '';
+  const hiddenCount = state.pins.length - visible.length;
+  if(!state.pins.length){
+    html += `<div class="empty">Inga nålar ännu. Tryck på <b>+</b> och placera korset, eller håll fingret på kartan.</div>`;
+  } else if(!items.length){
+    html += `<div class="empty">${q ? 'Inga nålar matchar sökningen.' : 'Alla nålar är dolda av filtret.'}</div>`;
+  } else {
+    const byName = (a,b) => (a.name||'').localeCompare(b.name||'', 'sv');
+    const row = p => {
+      const t = typeById(p.typeId), a = p.areaId ? areaById(p.areaId) : null;
+      const meta = [sort !== 'type' ? t.name : null, sort !== 'area' && a ? a.name : null, myPos ? fmtDist(distM(myPos,p)) : null].filter(Boolean).join(' · ');
+      return `<div class="pin-row"><button class="main" type="button" data-act="goto" data-id="${p.id}">${swatch(t)}<span class="txt"><div class="nm">${esc(p.name || t.name)}</div>${meta ? `<div class="meta">${esc(meta)}</div>` : ''}</span></button>
+        <a class="navbtn" href="${navUrl(p.lat,p.lng)}" target="_blank" rel="noopener" aria-label="Navigera till ${esc(p.name || t.name)} med Google Maps">${ICON_NAV}Navigera</a></div>`;
+    };
+    const group = (key, headInner, list) => {
+      const closed = !!state.settings.closedGroups[key];
+      return `<div class="group${closed ? ' closed' : ''}"><button class="group-h" type="button" data-act="group" data-key="${esc(key)}" aria-expanded="${!closed}">${headInner}<span class="gcount">${list.length}</span>${ICON_CHEV}</button><div class="rows">${list.map(row).join('')}</div></div>`;
+    };
+    if(sort === 'type'){
+      for(const t of state.types){
+        const list = items.filter(p => p.typeId === t.id).sort(byName);
+        if(list.length) html += group('t:' + t.id, `${swatch(t,'sm')}<span class="gname">${esc(t.name)}</span>`, list);
+      }
+    } else if(sort === 'area'){
+      const groups = state.areas.map(a => ({key:'a:' + a.id, name:a.name, list:items.filter(p => p.areaId === a.id)}));
+      groups.push({key:'a:none', name:'Utan område', list:items.filter(p => !p.areaId || !areaById(p.areaId))});
+      for(const g of groups){ if(g.list.length) html += group(g.key, `<span class="gname">${esc(g.name)}</span>`, g.list.sort(byName)); }
+    } else {
+      const list = items.slice().sort(sort === 'dist' && myPos ? (a,b) => distM(myPos,a) - distM(myPos,b) : byName);
+      html += `<div class="rows">${list.map(row).join('')}</div>`;
+      if(sort === 'dist' && !myPos) html += `<p class="note">Tryck på positionsknappen för att sortera efter avstånd.</p>`;
+    }
+  }
+  if(hiddenCount > 0) html += `<p class="note">${hiddenCount} ${hiddenCount === 1 ? 'nål är dold' : 'nålar är dolda'} av ${state.settings.svampMode ? 'svampkartan' : 'filtret'}.</p>`;
+  html += `<p class="note">Håll fingret på kartan (högerklicka på dator) för att lägga en nål direkt där.</p>`;
+  $('#listItems').innerHTML = html;
+}
+function gotoPin(id){
+  const p = pinById(id); if(!p) return;
+  if(!isDesktop()) setSheet('peek');
+  const z = Math.max(map.getZoom(), 15);
+  map.setView([p.lat,p.lng], z, {animate:true});
+  setTimeout(() => { const m = findMarker(id); if(m) m.openPopup(); }, 350);
+}
+
+/* ---------- Filter: områden och typer ---------- */
+function renderFilter(){
+  const pane = $('#paneFilter');
+  const cnt = (fn) => state.pins.filter(fn).length;
+  const sm = state.settings.svampMode;
+  let html = `<h3 class="sec">Områden <span><button class="linkbtn" type="button" data-act="areas-all">Visa alla</button> · <button class="linkbtn" type="button" data-act="areas-none">Dölj alla</button></span></h3><div>`;
+  for(const a of state.areas){
+    html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ar-${a.id}" data-act="area-toggle" data-id="${a.id}" ${a.visible !== false ? 'checked' : ''} aria-label="Visa ${esc(a.name)}">
+      <label class="fname" for="ar-${a.id}">${esc(a.name)}</label>${a.gid ? `<span class="tag" title="Delas med ${esc(gname(cloud.groups[a.gid]))}">Delat</span>` : ''}<span class="fcount">${cnt(p => p.areaId === a.id)}</span>
+      ${canEditArea(a) ? `<button class="iconbtn" type="button" data-act="area-edit" data-id="${a.id}" aria-label="Ändra ${esc(a.name)}">${ICON_EDIT}</button>` : '<span style="width:36px"></span>'}
+      ${!a.gid || (cloud.groups[a.gid] && isAdminGroup(cloud.groups[a.gid])) ? `<button class="iconbtn" type="button" data-act="area-del" data-id="${a.id}" aria-label="Ta bort ${esc(a.name)}">${ICON_TRASH}</button>` : '<span style="width:36px"></span>'}</div>`;
+  }
+  html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ar-none" data-act="noarea-toggle" ${state.settings.noAreaVisible !== false ? 'checked' : ''} aria-label="Visa nålar utan område">
+    <label class="fname muted" for="ar-none">Utan område</label><span class="fcount">${cnt(p => !p.areaId || !areaById(p.areaId))}</span><span style="width:76px"></span></div></div>
+    <form class="addrow" id="areaAdd"><input class="input" id="areaName" placeholder="Nytt område, t.ex. Hemmaskogen" maxlength="60" aria-label="Namn på nytt område"><button class="btn sm" type="submit">Lägg till</button></form>`;
+  html += `<h3 class="sec">Typer <button class="linkbtn" type="button" data-act="type-new">+ Ny typ</button></h3>`;
+  if(sm) html += `<p class="note" style="margin:0 0 6px">Svampkartan är på: alla svamptyper visas och övriga döljs. Områdesfiltret gäller fortfarande.</p>`;
+  html += '<div>';
+  for(const t of state.types){
+    const on = sm ? t.svamp : t.visible !== false;
+    html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ty-${t.id}" data-act="type-toggle" data-id="${t.id}" ${on ? 'checked' : ''} ${sm ? 'disabled' : ''} aria-label="Visa ${esc(t.name)}">
+      ${swatch(t)}<label class="fname" for="ty-${t.id}">${esc(t.name)}</label>${t.svamp ? '<span class="tag">Svamp</span>' : ''}<span class="fcount">${cnt(p => p.typeId === t.id)}</span>
+      <button class="iconbtn" type="button" data-act="type-edit" data-id="${t.id}" aria-label="Ändra ${esc(t.name)}">${ICON_EDIT}</button></div>`;
+  }
+  html += '</div>';
+  pane.innerHTML = html;
+  $('#areaAdd').addEventListener('submit', e => { e.preventDefault(); const v = $('#areaName').value.trim(); if(!v) return; state.areas.push({id:uid(), name:v, visible:true}); save(); renderAll(); toast(`Området ”${v}” lades till`); });
+}
+
+/* ---------- Svamp-fliken ---------- */
+function renderSvampPane(){
+  const pane = $('#paneSvamp'); const g = state.settings.gbif; const sm = state.settings.svampMode;
+  const ownSvamp = state.pins.filter(p => (typeById(p.typeId)||{}).svamp).length;
+  const years = [[0,'Alla år'],[2020,'Från 2020'],[2015,'Från 2015'],[2010,'Från 2010'],[2000,'Från 2000'],[1990,'Från 1990']];
+  let html = `<label class="bigtoggle" for="svampToggle"><span><strong>Svampkarta</strong><br><span class="small muted">${ownSvamp} egna svampställen</span></span><input class="sw-toggle" type="checkbox" id="svampToggle" ${sm ? 'checked' : ''}></label>
+  <p class="note">Visar dina nålar av svamptyp, importerade svampkällor och rapporterade fynd från Artportalen. Det är samma källa som svampkarta.se bygger på.</p>
+  <h3 class="sec">Fynd från Artportalen</h3><div class="species">`;
+  for(const sp of SPECIES){
+    const r = gbif.results[sp.id];
+    const c = r ? (r.error ? 'fel' : (r.count > r.points.length ? `${fmtInt(r.points.length)} av ${fmtInt(r.count)}` : fmtInt(r.points.length))) : '';
+    html += `<label class="sp-row"><input type="checkbox" data-act="sp" data-id="${sp.id}" ${g.species.includes(sp.id) ? 'checked' : ''}><span class="dot" style="background:${sp.color}"></span><span class="spn">${esc(sp.name)}<i>${esc(sp.sci)}</i></span><span class="spc">${c}</span></label>`;
+  }
+  html += `</div>
+  <div class="row2" style="margin-top:10px"><label class="field"><span>Tidsperiod</span><select class="input" id="gbifYear">${years.map(([v,l]) => `<option value="${v}"${+g.fromYear === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+  <label class="field"><span>Översikt, alla år</span><span style="display:flex;align-items:center;gap:10px;min-height:44px"><input class="sw-toggle" type="checkbox" id="gbifDensity" ${g.density ? 'checked' : ''}><span class="small muted">Prickar per ruta</span></span></label></div>
+  <div class="btnrow"><button class="btn primary" type="button" id="gbifLoad" ${gbif.busy ? 'disabled' : ''}>${gbif.busy ? 'Hämtar …' : 'Hämta fynd i kartvyn'}</button>${Object.keys(gbif.results).length ? '<button class="btn" type="button" id="gbifClear">Rensa fynd</button>' : ''}</div>
+  <div class="status${gbif.err ? ' err' : ''}" id="gbifStatus">${esc(gbif.status)}</div>
+  <p class="note">Positionerna är rapporter och kan vara osäkra (ofta ±25–1 000 m). Ett fynd visar att arten hittats där någon gång, inte att den växer där i år.</p>
+  <h3 class="sec">Importerade svampkällor <button class="linkbtn" type="button" data-act="import-ext">+ Importera fil</button></h3>`;
+  if(!state.external.length) html += `<p class="note" style="margin-top:0">Inga importerade källor. Importera GeoJSON, KML, GPX eller CSV, till exempel en export från Artportalen eller en kompis svampställen.</p>`;
+  for(const src of state.external){
+    html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ex-${src.id}" data-act="ext-toggle" data-id="${src.id}" ${src.visible !== false ? 'checked' : ''} aria-label="Visa ${esc(src.name)}">
+      <span class="dot" style="background:#fff;border-color:${esc(src.color)};box-shadow:0 0 0 1px ${esc(src.color)}"></span><label class="fname" for="ex-${src.id}">${esc(src.name)}</label><span class="fcount">${src.points.length}</span>
+      <button class="iconbtn" type="button" data-act="ext-del" data-id="${src.id}" aria-label="Ta bort ${esc(src.name)}">${ICON_TRASH}</button></div>`;
+  }
+  html += `<h3 class="sec">Jämför med</h3><div class="btnrow">
+    <a class="btn sm" href="https://svampkartan.se/" target="_blank" rel="noopener">svampkartan.se</a>
+    <a class="btn sm" href="https://svampkarta.se/" target="_blank" rel="noopener">svampkarta.se</a>
+    <a class="btn sm" href="https://www.artportalen.se/" target="_blank" rel="noopener">Artportalen</a></div>`;
+  pane.innerHTML = html;
+  $('#svampToggle').addEventListener('change', e => setSvampMode(e.target.checked));
+  $('#gbifYear').addEventListener('change', e => { g.fromYear = +e.target.value; save(); gbif.results = {}; renderGbif(); setGbifStatus('Tidsperioden ändrades. Hämta fynden igen.'); renderSvampPane(); });
+  $('#gbifDensity').addEventListener('change', e => { g.density = e.target.checked; save(); renderDensity(); });
+  $('#gbifLoad').addEventListener('click', loadGbifInView);
+  const gc = $('#gbifClear'); if(gc) gc.addEventListener('click', () => { gbif.results = {}; gbif.status = ''; renderGbif(); renderSvampPane(); });
+}
+
+/* ---------- Data-fliken ---------- */
+function renderData(){
+  const pane = $('#paneData');
+  const hasExample = state.pins.some(p => p.example) || state.areas.some(a => a.example);
+  pane.innerHTML = `<h3 class="sec">Säkerhetskopia</h3>
+    <p class="note" style="margin-top:0">Nålarna sparas bara i den här webbläsaren på den här enheten. Exportera en kopia ibland, och importera den för att flytta nålarna mellan mobil och dator.</p>
+    <div class="btnrow" style="margin-top:10px"><button class="btn" type="button" data-act="export-json">Exportera allt</button><button class="btn" type="button" data-act="import">Importera fil</button></div>
+    <h3 class="sec">GPS och andra kartor</h3>
+    <div class="btnrow"><button class="btn" type="button" data-act="export-gpx">Synliga nålar som GPX</button><button class="btn" type="button" data-act="export-geojson">Som GeoJSON</button></div>
+    <p class="note">GPX fungerar i Garmin, jakt-appar och de flesta kartprogram. Importera tar emot JSON-kopior, GeoJSON, KML (Google My Maps, Google Earth), GPX och CSV med latitud/longitud.</p>
+    ${hasExample ? `<h3 class="sec">Exempeldata</h3><div class="btnrow"><button class="btn" type="button" data-act="clear-ex">Rensa exempelnålar och -områden</button></div>` : ''}
+    <h3 class="sec">Börja om</h3>
+    <div class="btnrow"><button class="btn danger" type="button" data-act="wipe">Radera mina privata nålar, områden och importer</button></div>
+    <p class="note">Typerna, inställningarna och det som delas med jaktlag behålls. Kan inte ångras, så exportera först.</p>`;
+}
+
+/* ---------- Statusrad och lagerpanel ---------- */
+function renderStatus(){
+  const vis = state.pins.filter(pinVisible).length;
+  $('#pStat').textContent = vis === state.pins.length ? `${vis} ${vis === 1 ? 'nål' : 'nålar'}` : `${vis} av ${state.pins.length} nålar`;
+  $('#modeChip').hidden = !state.settings.svampMode;
+}
+function renderLayerPop(){
+  $('#baseOpts').innerHTML = Object.entries(BASES).map(([k,b]) => `<label class="base-opt"><input type="radio" name="base" value="${k}" ${state.settings.base === k ? 'checked' : ''}><span>${b.label}<small>${b.sub}</small></span></label>`).join('');
+  $('#satLabels').checked = !!state.settings.satLabels;
+  $('#satLabelsRow').hidden = state.settings.base !== 'sat';
+  $('#popSvamp').checked = !!state.settings.svampMode;
+  $('#popRoads').checked = !!state.settings.roads;
+}
+function renderAll(){
+  renderMarkers(); renderExternal(); renderList(); renderFilter(); renderSvampPane(); renderData(); renderStatus(); renderLayerPop(); renderJakt(); renderVilt(); renderBorders();
+}
+
+/* ---------- Händelser i panelen ---------- */
+const armed = new WeakMap();
+function confirmClick(btn, label, fn){
+  if(armed.get(btn)){ armed.delete(btn); fn(); return; }
+  const old = btn.innerHTML; btn.classList.add('armed');
+  if(!btn.classList.contains('iconbtn')) btn.textContent = label;
+  btn.setAttribute('aria-label', label);
+  armed.set(btn, true);
+  setTimeout(() => { if(armed.get(btn)){ armed.delete(btn); btn.classList.remove('armed'); btn.innerHTML = old; } }, 3500);
+}
+$('#panel').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if(!b) return;
+  const act = b.dataset.act, id = b.dataset.id;
+  if(act === 'goto') gotoPin(id);
+  else if(act === 'group'){ const k = b.dataset.key; state.settings.closedGroups[k] = !state.settings.closedGroups[k]; save(); b.parentElement.classList.toggle('closed'); b.setAttribute('aria-expanded', String(!state.settings.closedGroups[k])); }
+  else if(act === 'clear-ex'){ clearExamples(); }
+  else if(act === 'areas-all' || act === 'areas-none'){ const v = act === 'areas-all'; state.areas.forEach(a => a.visible = v); state.settings.noAreaVisible = v; save(); renderAll(); }
+  else if(act === 'area-edit') openAreaForm(id);
+  else if(act === 'area-del'){ const a = areaById(id); confirmClick(b, 'Bekräfta', () => { state.pins.forEach(p => { if(p.areaId === id) p.areaId = null; }); state.areas = state.areas.filter(x => x.id !== id); save(); renderAll(); toast(a.gid ? `”${a.name}” togs bort för hela laget. Nålarna ligger nu privat hos dig under Utan område.` : `”${a.name}” togs bort. Nålarna ligger nu under Utan område.`, 5000); }); }
+  else if(act === 'type-new') openTypeForm(null);
+  else if(act === 'type-edit') openTypeForm(id);
+  else if(act === 'import-ext'){ importTarget = 'ext'; $('#fileImport').click(); }
+  else if(act === 'import'){ importTarget = null; $('#fileImport').click(); }
+  else if(act === 'ext-del'){ confirmClick(b, 'Bekräfta', () => { state.external = state.external.filter(x => x.id !== id); save(); renderAll(); }); }
+  else if(act === 'export-json') exportJson();
+  else if(act === 'export-gpx') exportGpx();
+  else if(act === 'export-geojson') exportGeojson();
+  else if(act === 'wipe') confirmClick(b, 'Tryck igen för att radera allt', () => { const keep = new Set(state.areas.filter(a => a.gid).map(a => a.id)); state.pins = state.pins.filter(p => keep.has(p.areaId)); state.areas = state.areas.filter(a => a.gid); state.external = []; gbif.results = {}; save(); renderAll(); renderGbif(); toast(keep.size ? 'Dina privata nålar är raderade. Delade områden finns kvar.' : 'Allt raderat'); });
+});
+$('#panel').addEventListener('change', e => {
+  const b = e.target.closest('[data-act]'); if(!b) return;
+  const act = b.dataset.act, id = b.dataset.id;
+  if(act === 'area-toggle'){ areaById(id).visible = b.checked; }
+  else if(act === 'noarea-toggle'){ state.settings.noAreaVisible = b.checked; }
+  else if(act === 'type-toggle'){ typeById(id).visible = b.checked; }
+  else if(act === 'ext-toggle'){ const s = state.external.find(x => x.id === id); s.visible = b.checked; save(); renderExternal(); return; }
+  else if(act === 'sp'){ const g = state.settings.gbif; g.species = b.checked ? Array.from(new Set(g.species.concat(id))) : g.species.filter(x => x !== id); save(); renderGbif(); renderDensity(); return; }
+  else return;
+  save(); renderMarkers(); renderList(); renderStatus(); renderBorders();
+});
+function clearExamples(){
+  const exAreas = new Set(state.areas.filter(a => a.example).map(a => a.id));
+  state.pins = state.pins.filter(p => !p.example);
+  state.pins.forEach(p => { if(exAreas.has(p.areaId)) p.areaId = null; });
+  state.areas = state.areas.filter(a => !a.example);
+  save(); renderAll(); toast('Exemplen är borttagna');
+}
+
+/* ---------- Modal ---------- */
+let modalEl = null, lastFocus = null;
+function openModal(html, onReady){
+  closeModal();
+  lastFocus = document.activeElement;
+  modalEl = h(`<div class="modal-back"><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`);
+  modalEl.addEventListener('click', e => { if(e.target === modalEl) closeModal(); });
+  document.body.appendChild(modalEl);
+  if(onReady) onReady(modalEl.querySelector('.modal'));
+  const f = modalEl.querySelector('input:not([type=hidden]):not([type=radio]):not([type=checkbox]),select,textarea');
+  if(f && isDesktop()) f.focus();
+}
+function closeModal(){ if(modalEl){ modalEl.remove(); modalEl = null; if(lastFocus && lastFocus.focus) try{ lastFocus.focus(); }catch(e){} } }
+document.addEventListener('keydown', e => { if(e.key === 'Escape'){ if(modalEl) closeModal(); else if(!$('#layerPop').hidden) toggleLayerPop(false); else if(placing) endPlacing(); } });
+
+function areaOptions(sel){
+  return `<option value="">Utan område (privat)</option>${state.areas.filter(canEditArea).map(a => `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.gid ? ' · delat' : ''}</option>`).join('')}<option value="__new">+ Nytt område …</option>`;
+}
+function typeOptions(sel){ return state.types.map(t => `<option value="${t.id}"${t.id === sel ? ' selected' : ''}>${esc(t.name)}${t.svamp ? ' (svamp)' : ''}</option>`).join(''); }
+function wireNewArea(m, selId, inputId){
+  const sel = m.querySelector('#' + selId), inp = m.querySelector('#' + inputId);
+  sel.addEventListener('change', () => { inp.hidden = sel.value !== '__new'; if(!inp.hidden) inp.focus(); });
+}
+function resolveArea(m, selId, inputId){
+  const sel = m.querySelector('#' + selId).value;
+  if(sel !== '__new') return sel || null;
+  const name = m.querySelector('#' + inputId).value.trim(); if(!name) return null;
+  const ex = state.areas.find(a => a.name.toLowerCase() === name.toLowerCase()); if(ex) return ex.id;
+  const a = {id:uid(), name, visible:true}; state.areas.push(a); return a.id;
+}
+
+/* Nålformulär. opts: {id} för att redigera, annars {lat,lng,name,note,typeId,areaId} */
+let lastTypeId = null, lastAreaId = null;
+function openPinForm(opts){
+  const editing = !!opts.id; const p = editing ? pinById(opts.id) : null;
+  if(editing && !p) return;
+  if(editing && !canEditPin(p)){ toast('Du har inte rättighet att ändra nålar i det området.'); return; }
+  const fromPin = editing && !opts.draft;
+  const lat = editing ? p.lat : opts.lat, lng = editing ? p.lng : opts.lng;
+  let typeId = opts.typeId || (editing ? p.typeId : null) || (state.settings.svampMode ? (state.types.find(t => t.svamp) || {}).id : null) || lastTypeId || state.types[0].id;
+  if(!typeById(typeId)) typeId = state.types[0].id;
+  let areaId = fromPin ? p.areaId : (opts.areaId !== undefined ? opts.areaId : lastAreaId);
+  if(areaId && !areaById(areaId)) areaId = null;
+  const nameVal = fromPin ? p.name : (opts.name || ''), noteVal = fromPin ? p.note : (opts.note || '');
+  openModal(`<h2>${editing ? 'Ändra nål' : 'Ny nål'}</h2>
+    <form id="pinForm">
+      <label class="field"><span>Namn</span><input class="input" id="pfName" maxlength="80" value="${esc(nameVal)}" placeholder="t.ex. Tornet vid mossen"></label>
+      <div class="row2">
+        <label class="field"><span>Typ</span><select class="input" id="pfType">${typeOptions(typeId)}<option value="__new">+ Ny typ …</option></select></label>
+        <label class="field"><span>Område</span><select class="input" id="pfArea">${areaOptions(areaId)}</select><input class="input" id="pfAreaNew" placeholder="Namn på nytt område" hidden maxlength="60"></label>
+      </div>
+      <label class="field"><span>Anteckning</span><textarea class="input" id="pfNote" maxlength="2000" placeholder="Vindriktning, bästa tid, nyckel …">${esc(noteVal)}</textarea></label>
+      <div class="coordbox"><b>WGS 84</b>${fmtLatLng(lat,lng)}<br><b>SWEREF 99 TM</b>${fmtSweref(lat,lng)}</div>
+      <div class="actions">
+        <button class="btn primary grow" type="submit">Spara</button>
+        ${editing ? `<button class="btn" type="button" id="pfMove">Flytta</button><a class="btn" href="${navUrl(lat,lng)}" target="_blank" rel="noopener">${ICON_NAV}Navigera</a><button class="btn danger" type="button" id="pfDel">Ta bort</button>` : ''}
+        <button class="btn ghost" type="button" id="pfCancel">Avbryt</button>
+      </div>
+    </form>`, m => {
+    wireNewArea(m, 'pfArea', 'pfAreaNew');
+    const collect = () => ({lat, lng, name:m.querySelector('#pfName').value.trim(), note:m.querySelector('#pfNote').value, typeId:typeId, areaId:m.querySelector('#pfArea').value === '__new' ? areaId : (m.querySelector('#pfArea').value || null)});
+    m.querySelector('#pfType').addEventListener('change', e => {
+      if(e.target.value !== '__new'){ typeId = e.target.value; return; }
+      const draft = collect(); closeModal();
+      openTypeForm(null, newType => openPinForm(Object.assign(editing ? {id:opts.id, draft:true} : {}, draft, {typeId:newType ? newType.id : draft.typeId})));
+    });
+    m.querySelector('#pfCancel').addEventListener('click', closeModal);
+    m.querySelector('#pinForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const tId = m.querySelector('#pfType').value; if(!typeById(tId)) return;
+      const aId = resolveArea(m, 'pfArea', 'pfAreaNew');
+      const name = m.querySelector('#pfName').value.trim(), note = m.querySelector('#pfNote').value.trim();
+      let pin;
+      if(editing){ pin = pinById(opts.id); if(!pin){ closeModal(); toast('Nålen finns inte längre.'); return; } Object.assign(pin, {name, note, typeId:tId, areaId:aId, updated:Date.now()}); delete pin.example; }
+      else { pin = {id:uid(), name, note, typeId:tId, areaId:aId, lat, lng, created:Date.now(), updated:Date.now()}; state.pins.push(pin); }
+      lastTypeId = tId; lastAreaId = aId;
+      const t = typeById(tId); const a = aId ? areaById(aId) : null;
+      if(!editing){
+        if(t.visible === false && !state.settings.svampMode) t.visible = true;
+        if(a && a.visible === false) a.visible = true;
+        if(!a) state.settings.noAreaVisible = true;
+      }
+      save(); closeModal(); renderAll();
+      if(!pinVisible(pin)) toast('Sparad, men nålen döljs av svampkartan. Stäng svampkartan för att se den.');
+      else { toast(editing ? 'Nålen uppdaterad' : 'Nålen sparad'); }
+    });
+    if(editing){
+      m.querySelector('#pfMove').addEventListener('click', () => { closeModal(); startPlacing({mode:'move', id:p.id}); });
+      const del = m.querySelector('#pfDel');
+      del.addEventListener('click', () => confirmClick(del, 'Bekräfta borttagning', () => { state.pins = state.pins.filter(x => x.id !== p.id); save(); closeModal(); renderAll(); toast('Nålen togs bort'); }));
+    }
+  });
+}
+
+function openAreaForm(id){
+  const a = areaById(id); if(!a) return;
+  const mine = Object.values(cloud.groups).filter(g => g.kind === 'member' && canEditGroup(g));
+  const canMove = !a.gid || (cloud.groups[a.gid] && isAdminGroup(cloud.groups[a.gid]));
+  const n = state.pins.filter(p => p.areaId === id).length;
+  openModal(`<h2>Ändra område</h2><form id="afForm"><label class="field"><span>Namn</span><input class="input" id="afName" maxlength="60" value="${esc(a.name)}"></label>
+    ${mine.length || a.gid ? `<label class="field"><span>Delas med</span><select class="input" id="afShare" ${canMove ? '' : 'disabled'}><option value="">Bara jag (privat)</option>${mine.map(g => `<option value="${g.id}"${a.gid === g.id ? ' selected' : ''}>${esc(gname(g))}</option>`).join('')}</select></label>
+    <p class="note" style="margin:-4px 0 0">${canMove ? `Delar du området ser alla i jaktlaget dess ${n} ${n === 1 ? 'nål' : 'nålar'}, och medlemmar kan ändra dem.` : 'Bara en admin kan sluta dela området.'}</p>` : '<p class="note" style="margin:-4px 0 0">Logga in under Jakt och skapa ett jaktlag för att kunna dela området.</p>'}
+    <div class="field" style="margin-top:14px"><span>Gräns</span><div class="small">${parseBorder(a.border).length >= 3 ? `${parseBorder(a.border).length} punkter · ${fmtHa(areaHa(parseBorder(a.border)))}` : 'Ingen gräns är ritad.'}</div>
+      <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afDraw">${a.border ? 'Ändra gräns' : 'Rita gräns'}</button><button class="btn sm" type="button" id="afImport">Importera från fil</button>${a.border ? '<button class="btn sm danger" type="button" id="afBorderDel">Ta bort gräns</button>' : ''}</div></div>
+    <div class="actions"><button class="btn primary grow" type="submit">Spara</button><button class="btn ghost" type="button" id="afCancel">Avbryt</button></div></form>`, m => {
+    m.querySelector('#afCancel').addEventListener('click', closeModal);
+    m.querySelector('#afDraw').addEventListener('click', () => startDrawing(id));
+    m.querySelector('#afImport').addEventListener('click', () => { borderTarget = id; $('#fileBorder').click(); });
+    const bd = m.querySelector('#afBorderDel'); if(bd) bd.addEventListener('click', () => confirmClick(bd, 'Bekräfta', () => { const cur = areaById(id); if(cur){ delete cur.border; cur.updated = Date.now(); save(); } closeModal(); renderAll(); toast('Gränsen är borttagen'); }));
+    m.querySelector('#afForm').addEventListener('submit', e => { e.preventDefault(); const v = m.querySelector('#afName').value.trim(); if(!v) return; const cur = areaById(id); if(!cur){ closeModal(); return; }
+      cur.name = v; cur.updated = Date.now(); delete cur.example;
+      const sh = m.querySelector('#afShare');
+      if(sh && !sh.disabled){ const was = cur.gid || ''; if(sh.value !== was){ if(sh.value) cur.gid = sh.value; else delete cur.gid; toast(sh.value ? `Området delas nu med ${gname(cloud.groups[sh.value])}` : 'Området är privat igen'); } }
+      save(); closeModal(); renderAll(); });
+  });
+}
+
+function openTypeForm(id, after){
+  const editing = !!id; const t = editing ? typeById(id) : {name:'', color:COLOR_PRESETS[0], icon:'flag', text:'', svamp:state.settings.svampMode};
+  const draft = Object.assign({}, t, {text:t.text || ''});
+  const used = editing ? state.pins.filter(p => p.typeId === id).length : 0;
+  openModal(`<h2>${editing ? 'Ändra typ' : 'Ny typ'}</h2>
+    <form id="tfForm">
+      <div class="preview" id="tfPrev"></div>
+      <label class="field"><span>Namn</span><input class="input" id="tfName" maxlength="40" value="${esc(t.name)}" placeholder="t.ex. Saltsten" required></label>
+      <div class="field"><span>Färg</span><div class="colors" id="tfColors">${COLOR_PRESETS.map(c => `<button type="button" class="color-opt" data-c="${c}" style="background:${c}" aria-label="Färg ${c}" aria-pressed="${c.toLowerCase() === (t.color||'').toLowerCase()}"></button>`).join('')}<input type="color" class="color-opt" id="tfColor" value="${esc(t.color)}" aria-label="Egen färg"></div></div>
+      <div class="field"><span>Symbol</span><div class="icon-grid" id="tfIcons">${Object.entries(ICONS).map(([k,ic]) => `<button type="button" class="icon-opt" data-i="${k}" aria-pressed="${t.icon === k}" title="${esc(ic.label)}" aria-label="${esc(ic.label)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ic.svg}</svg></button>`).join('')}<button type="button" class="icon-opt" data-i="text" aria-pressed="${t.icon === 'text'}" title="Egen text" aria-label="Egen text"><span class="aa">Aa</span></button></div>
+        <input class="input" id="tfText" maxlength="2" placeholder="1–2 tecken, t.ex. S eller 7" value="${esc(t.text || '')}" ${t.icon === 'text' ? '' : 'hidden'} style="margin-top:8px"></div>
+      <label class="checkline"><input type="checkbox" id="tfSvamp" ${t.svamp ? 'checked' : ''}><span><b>Svamptyp</b><br><span class="small muted">Visas i svampkartan</span></span></label>
+      <div class="actions"><button class="btn primary grow" type="submit">Spara</button>
+        ${editing ? `<button class="btn danger" type="button" id="tfDel">Ta bort</button>` : ''}
+        <button class="btn ghost" type="button" id="tfCancel">Avbryt</button></div>
+      ${editing && used ? `<p class="note">${used} ${used === 1 ? 'nål använder' : 'nålar använder'} typen. Tar du bort den får nålarna en annan typ som du väljer.</p>` : ''}
+    </form>`, m => {
+    const prev = () => { draft.name = m.querySelector('#tfName').value.trim() || 'Ny typ'; m.querySelector('#tfPrev').innerHTML = `${pinSvg(draft)}${swatch(draft)}<strong>${esc(draft.name)}</strong>`; };
+    const setColor = c => { draft.color = c; m.querySelector('#tfColor').value = c; $$('.color-opt[data-c]', m).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.c.toLowerCase() === c.toLowerCase()))); prev(); };
+    $$('.color-opt[data-c]', m).forEach(b => b.addEventListener('click', () => setColor(b.dataset.c)));
+    m.querySelector('#tfColor').addEventListener('input', e => setColor(e.target.value));
+    $$('.icon-opt', m).forEach(b => b.addEventListener('click', () => { draft.icon = b.dataset.i; $$('.icon-opt', m).forEach(x => x.setAttribute('aria-pressed', String(x === b))); m.querySelector('#tfText').hidden = draft.icon !== 'text'; if(draft.icon === 'text') m.querySelector('#tfText').focus(); prev(); }));
+    m.querySelector('#tfText').addEventListener('input', e => { draft.text = e.target.value; prev(); });
+    m.querySelector('#tfName').addEventListener('input', prev);
+    prev();
+    m.querySelector('#tfCancel').addEventListener('click', () => { closeModal(); if(after) after(null); });
+    m.querySelector('#tfForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const name = m.querySelector('#tfName').value.trim(); if(!name) return;
+      if(draft.icon === 'text' && !draft.text.trim()) draft.text = name.slice(0,1).toUpperCase();
+      const data = {name, color:draft.color, icon:draft.icon, text:(draft.text || '').trim(), svamp:m.querySelector('#tfSvamp').checked, updated:Date.now()};
+      let res;
+      if(editing){ res = typeById(id) || t; Object.assign(res, data); delete res.ghost; } else { res = Object.assign({id:uid(), visible:true}, data); state.types.push(res); }
+      save(); closeModal(); renderAll(); renderDensity();
+      if(after) after(res); else toast(editing ? 'Typen uppdaterad' : `Typen ”${name}” skapades`);
+    });
+    if(editing){
+      const del = m.querySelector('#tfDel');
+      del.addEventListener('click', () => {
+        if(state.types.length <= 1){ toast('Det måste finnas minst en typ.'); return; }
+        if(!used){ confirmClick(del, 'Bekräfta', () => { state.types = state.types.filter(x => x.id !== id); save(); closeModal(); renderAll(); }); return; }
+        const others = state.types.filter(x => x.id !== id);
+        openModal(`<h2>Ta bort ”${esc(t.name)}”</h2><p>${used} ${used === 1 ? 'nål' : 'nålar'} får en ny typ:</p>
+          <label class="field"><span>Ny typ för nålarna</span><select class="input" id="tdTo">${others.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select></label>
+          <div class="actions"><button class="btn danger grow" type="button" id="tdOk">Ta bort typen</button><button class="btn ghost" type="button" id="tdCancel">Avbryt</button></div>`, m2 => {
+          m2.querySelector('#tdCancel').addEventListener('click', closeModal);
+          m2.querySelector('#tdOk').addEventListener('click', () => { const to = m2.querySelector('#tdTo').value; state.pins.forEach(p => { if(p.typeId === id) p.typeId = to; }); state.types = state.types.filter(x => x.id !== id); save(); closeModal(); renderAll(); toast('Typen togs bort'); });
+        });
+      });
+    }
+  });
+}
+
+/* ---------- Placera nål ---------- */
+let placing = null; let crossEl = null;
+function startPlacing(opts){
+  placing = opts;
+  if(!crossEl){ crossEl = h(`<div class="crosshair" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="24" cy="24" r="9"/><path d="M24 3v11M24 34v11M3 24h11M34 24h11"/></svg></div>`); map.getContainer().appendChild(crossEl); }
+  crossEl.hidden = false;
+  $('#placebar').hidden = false; $('#btnAdd').hidden = true;
+  $('#placeText').textContent = opts.mode === 'move' ? 'Flytta kartan så att korset hamnar på den nya platsen.' : 'Flytta kartan så att korset hamnar där nålen ska sitta.';
+  $('#placeOk').textContent = opts.mode === 'move' ? 'Flytta hit' : 'Lägg nålen här';
+  if(!isDesktop()) setSheet('peek');
+  if(opts.mode === 'move'){ const p = pinById(opts.id); map.setView([p.lat,p.lng], Math.max(map.getZoom(), 16)); }
+  map.closePopup();
+  updatePlaceCoords();
+  setTimeout(() => { map.invalidateSize(); updatePlaceCoords(); }, 300);
+}
+function endPlacing(){ placing = null; if(crossEl) crossEl.hidden = true; $('#placebar').hidden = true; $('#btnAdd').hidden = false; }
+function updatePlaceCoords(){ if(!placing) return; const c = map.getCenter(); $('#placeCoords').textContent = `${fmtLatLng(c.lat,c.lng)} · SWEREF ${fmtSweref(c.lat,c.lng)}`; }
+map.on('move', updatePlaceCoords);
+map.on('click', e => { if(placing && !drawing) map.panTo(e.latlng); });
+$('#placeOk').addEventListener('click', () => {
+  const c = map.getCenter(); const opts = placing; endPlacing();
+  if(opts.mode === 'move'){ const p = pinById(opts.id); if(!p) return; p.lat = c.lat; p.lng = c.lng; p.updated = Date.now(); save(); renderAll(); toast('Nålen flyttades'); setTimeout(() => { const m = findMarker(p.id); if(m) m.openPopup(); }, 200); }
+  else openPinForm({lat:c.lat, lng:c.lng});
+});
+$('#placeCancel').addEventListener('click', endPlacing);
+$('#placeGps').addEventListener('click', () => locate(true));
+$('#btnAdd').addEventListener('click', () => { if(!drawing) startPlacing({mode:'new'}); });
+map.on('contextmenu', e => { if(placing || drawing) return; openPinForm({lat:e.latlng.lat, lng:e.latlng.lng}); });
+
+/* ---------- Position ---------- */
+function showMe(lat, lng, acc){
+  myPos = {lat, lng, acc};
+  if(!meMarker){ meMarker = L.marker([lat,lng], {icon:L.divIcon({className:'me-dot', iconSize:[18,18]}), interactive:false, keyboard:false, zIndexOffset:1000}).addTo(map);
+    meCircle = L.circle([lat,lng], {radius:acc, color:'#1a73e8', weight:1, fillOpacity:.1, interactive:false}).addTo(map); }
+  else { meMarker.setLatLng([lat,lng]); meCircle.setLatLng([lat,lng]).setRadius(acc); }
+  $('#btnLocate').setAttribute('aria-pressed','true');
+}
+function locate(fly){
+  if(!('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); return; }
+  $('#btnLocate').setAttribute('aria-pressed','true');
+  navigator.geolocation.getCurrentPosition(pos => {
+    showMe(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0);
+    if(fly) map.setView([myPos.lat,myPos.lng], Math.max(map.getZoom(), 15));
+    renderList();
+  }, err => {
+    $('#btnLocate').setAttribute('aria-pressed','false');
+    toast(err.code === 1 ? 'Positionen är blockerad. Tillåt plats för sidan i webbläsarens inställningar.' : 'Kunde inte hitta din position just nu.');
+  }, {enableHighAccuracy:true, timeout:15000, maximumAge:30000});
+}
+$('#btnLocate').addEventListener('click', () => locate(true));
+
+/* ---------- Visa alla ---------- */
+function fitAll(){
+  const pts = state.pins.filter(pinVisible).map(p => [p.lat,p.lng]);
+  if(state.settings.svampMode) state.external.forEach(s => { if(s.visible !== false) s.points.forEach(pt => pts.push([pt.lat,pt.lng])); });
+  state.areas.forEach(a => { if(a.visible !== false) parseBorder(a.border).forEach(pt => pts.push(pt)); });
+  if(!pts.length){ toast('Inga nålar visas just nu.'); return; }
+  map.closePopup();
+  if(pts.length === 1){ map.setView(pts[0], 15); return; }
+  const pad = bottomPad();
+  map.fitBounds(L.latLngBounds(pts), {paddingTopLeft:[40,70], paddingBottomRight:[70, pad + 50], maxZoom:16});
+}
+$('#btnFit').addEventListener('click', fitAll);
+$('#btnZoomIn').addEventListener('click', () => map.zoomIn());
+$('#btnZoomOut').addEventListener('click', () => map.zoomOut());
+
+/* ---------- Lagerpanel ---------- */
+function toggleLayerPop(show){
+  const pop = $('#layerPop'); const on = show === undefined ? pop.hidden : show;
+  pop.hidden = !on; $('#btnLayers').setAttribute('aria-expanded', String(on)); $('#btnLayers').setAttribute('aria-pressed', String(on));
+  if(on) renderLayerPop();
+}
+$('#btnLayers').addEventListener('click', e => { e.stopPropagation(); toggleLayerPop(); });
+document.addEventListener('pointerdown', e => { const pop = $('#layerPop'); if(!pop.hidden && !pop.contains(e.target) && !$('#btnLayers').contains(e.target)) toggleLayerPop(false); });
+$('#layerPop').addEventListener('change', e => {
+  if(e.target.name === 'base') setBase(e.target.value);
+  else if(e.target.id === 'satLabels'){ state.settings.satLabels = e.target.checked; save(); setBase(state.settings.base); }
+  else if(e.target.id === 'popSvamp') setSvampMode(e.target.checked);
+  else if(e.target.id === 'popRoads'){ state.settings.roads = e.target.checked; save(); roadsUpdate(); }
+});
+$('#modeChip').addEventListener('click', () => setSvampMode(false));
+
+/* ---------- Export ---------- */
+function download(name, text, mime){
+  const blob = new Blob([text], {type:mime}); const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);
+}
+const stamp = () => new Date().toISOString().slice(0,10);
+function exportJson(){
+  const data = {app:'Jaktkartan', version:1, exported:new Date().toISOString(), types:state.types.filter(t => !t.ghost), areas:state.areas.map(a => { const c = Object.assign({}, a); delete c.gid; return c; }), pins:state.pins, external:state.external};
+  download(`jaktkartan-${stamp()}.json`, JSON.stringify(data, null, 1), 'application/json');
+  toast('Säkerhetskopian sparas som fil');
+}
+const xmlEsc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
+function exportGpx(){
+  const pins = state.pins.filter(pinVisible);
+  if(!pins.length){ toast('Inga synliga nålar att exportera.'); return; }
+  const wpts = pins.map(p => { const t = typeById(p.typeId), a = p.areaId ? areaById(p.areaId) : null;
+    return `  <wpt lat="${p.lat.toFixed(7)}" lon="${p.lng.toFixed(7)}">\n    <name>${xmlEsc(p.name || t.name)}</name>\n    <desc>${xmlEsc([t.name, a ? a.name : '', p.note].filter(Boolean).join(' – '))}</desc>\n    <type>${xmlEsc(t.name)}</type>\n  </wpt>`; }).join('\n');
+  download(`jaktkartan-${stamp()}.gpx`, `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Jaktkartan" xmlns="http://www.topografix.com/GPX/1/1">\n${wpts}\n</gpx>\n`, 'application/gpx+xml');
+  toast(`${pins.length} nålar exporteras som GPX`);
+}
+function exportGeojson(){
+  const pins = state.pins.filter(pinVisible);
+  if(!pins.length){ toast('Inga synliga nålar att exportera.'); return; }
+  const fc = {type:'FeatureCollection', features:pins.map(p => { const t = typeById(p.typeId), a = p.areaId ? areaById(p.areaId) : null;
+    return {type:'Feature', geometry:{type:'Point', coordinates:[+p.lng.toFixed(7), +p.lat.toFixed(7)]}, properties:{name:p.name || t.name, typ:t.name, omrade:a ? a.name : null, anteckning:p.note || null, farg:t.color}}; })};
+  download(`jaktkartan-${stamp()}.geojson`, JSON.stringify(fc, null, 1), 'application/geo+json');
+  toast(`${pins.length} nålar exporteras som GeoJSON`);
+}
+
+/* ---------- Import ---------- */
+let importTarget = null;
+const numOk = v => typeof v === 'number' && isFinite(v);
+function parseNum(s){ if(typeof s === 'number') return s; if(s == null) return NaN; return parseFloat(String(s).trim().replace(/\s/g,'').replace(',', '.')); }
+function validLL(lat,lng){ return numOk(lat) && numOk(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180; }
+function parseGeoJSON(obj){
+  const out = [];
+  const feats = obj.type === 'FeatureCollection' ? obj.features : obj.type === 'Feature' ? [obj] : [];
+  for(const f of feats || []){
+    const g = f && f.geometry; if(!g) continue; const pr = f.properties || {};
+    const name = pr.name || pr.namn || pr.title || pr.Name || pr.vernacularName || pr.species || '';
+    const note = pr.description || pr.desc || pr.anteckning || pr.note || '';
+    const coords = g.type === 'Point' ? [g.coordinates] : g.type === 'MultiPoint' ? g.coordinates : [];
+    for(const c of coords){ const lng = +c[0], lat = +c[1]; if(validLL(lat,lng)) out.push({lat,lng,name:String(name),note:typeof note === 'string' ? note : ''}); }
+  }
+  return out;
+}
+function stripHtml(s){ const d = document.createElement('div'); d.innerHTML = s || ''; return (d.textContent || '').trim(); }
+function parseKML(text){
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if(doc.getElementsByTagName('parsererror').length) throw new Error('Ogiltig KML');
+  const out = [];
+  for(const pm of Array.from(doc.getElementsByTagNameNS('*','Placemark'))){
+    const nm = pm.getElementsByTagNameNS('*','name')[0], ds = pm.getElementsByTagNameNS('*','description')[0];
+    for(const pt of Array.from(pm.getElementsByTagNameNS('*','Point'))){
+      const c = pt.getElementsByTagNameNS('*','coordinates')[0]; if(!c) continue;
+      const parts = c.textContent.trim().split(/[\s]+/)[0].split(',');
+      const lng = parseFloat(parts[0]), lat = parseFloat(parts[1]);
+      if(validLL(lat,lng)) out.push({lat,lng,name:nm ? nm.textContent.trim() : '', note:ds ? stripHtml(ds.textContent) : ''});
+    }
+  }
+  return out;
+}
+function parseGPX(text){
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if(doc.getElementsByTagName('parsererror').length) throw new Error('Ogiltig GPX');
+  const out = [];
+  for(const w of Array.from(doc.getElementsByTagNameNS('*','wpt'))){
+    const lat = parseFloat(w.getAttribute('lat')), lng = parseFloat(w.getAttribute('lon'));
+    const nm = w.getElementsByTagNameNS('*','name')[0], ds = w.getElementsByTagNameNS('*','desc')[0] || w.getElementsByTagNameNS('*','cmt')[0];
+    if(validLL(lat,lng)) out.push({lat,lng,name:nm ? nm.textContent.trim() : '', note:ds ? ds.textContent.trim() : ''});
+  }
+  return out;
+}
+function splitCsvLine(line, d){
+  const out = []; let cur = '', q = false;
+  for(let i = 0; i < line.length; i++){
+    const c = line[i];
+    if(q){ if(c === '"'){ if(line[i+1] === '"'){ cur += '"'; i++; } else q = false; } else cur += c; }
+    else if(c === '"') q = true; else if(c === d){ out.push(cur); cur = ''; } else cur += c;
+  }
+  out.push(cur); return out.map(s => s.trim());
+}
+function parseCSV(text){
+  const lines = text.replace(/^﻿/,'').split(/\r?\n/).filter(l => l.trim());
+  if(lines.length < 2) return [];
+  const first = lines[0];
+  const d = first.includes('\t') ? '\t' : (first.split(';').length > first.split(',').length ? ';' : ',');
+  const head = splitCsvLine(first, d).map(s => s.toLowerCase().replace(/^"|"$/g,''));
+  const find = names => head.findIndex(h => names.includes(h));
+  const iLat = find(['lat','latitude','latitud','decimallatitude','y','breddgrad']);
+  const iLng = find(['lon','lng','long','longitude','longitud','decimallongitude','x','längdgrad']);
+  const iName = find(['name','namn','title','titel','art','species','vernacularname','svenskt namn','artnamn']);
+  const iNote = find(['note','notes','anteckning','description','beskrivning','lokal','locality','datum','date','eventdate']);
+  if(iLat < 0 || iLng < 0) throw new Error('Hittade inga kolumner för latitud och longitud');
+  const out = [];
+  for(const l of lines.slice(1)){
+    const c = splitCsvLine(l, d); const lat = parseNum(c[iLat]), lng = parseNum(c[iLng]);
+    if(validLL(lat,lng)) out.push({lat,lng,name:iName >= 0 ? c[iName] : '', note:iNote >= 0 ? c[iNote] : ''});
+  }
+  return out;
+}
+$('#fileImport').addEventListener('change', async e => {
+  const file = e.target.files && e.target.files[0]; e.target.value = '';
+  if(!file) return;
+  let text;
+  try { text = await file.text(); } catch(err){ toast('Kunde inte läsa filen.'); return; }
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  try {
+    if(ext === 'json' || ext === 'geojson' || /^\s*[{[]/.test(text)){
+      const obj = JSON.parse(text);
+      if(obj && Array.isArray(obj.pins) && Array.isArray(obj.types)) return openBackupImport(obj, file.name);
+      const pts = parseGeoJSON(obj); return openPointImport(pts, file.name);
+    }
+    if(ext === 'kml' || /<kml[\s>]/i.test(text)) return openPointImport(parseKML(text), file.name);
+    if(ext === 'gpx' || /<gpx[\s>]/i.test(text)) return openPointImport(parseGPX(text), file.name);
+    return openPointImport(parseCSV(text), file.name);
+  } catch(err){ toast('Filen kunde inte läsas: ' + (err.message || 'okänt format')); }
+});
+function openBackupImport(obj, fname){
+  const n = obj.pins.length;
+  openModal(`<h2>Importera säkerhetskopia</h2><p>${esc(fname)} innehåller ${n} ${n === 1 ? 'nål' : 'nålar'}, ${obj.types.length} typer och ${(obj.areas||[]).length} områden.</p>
+    <div class="radio-card"><label><input type="radio" name="bm" value="merge" checked>Slå ihop med det jag har</label><span class="small muted">Nålar som redan finns uppdateras, nya läggs till.</span></div>
+    <div class="radio-card"><label><input type="radio" name="bm" value="replace">Ersätt allt</label><span class="small muted">Det som finns nu raderas.</span></div>
+    <div class="actions"><button class="btn primary grow" type="button" id="biOk">Importera</button><button class="btn ghost" type="button" id="biCancel">Avbryt</button></div>`, m => {
+    m.querySelector('#biCancel').addEventListener('click', closeModal);
+    m.querySelector('#biOk').addEventListener('click', () => {
+      const mode = m.querySelector('input[name=bm]:checked').value;
+      const inc = normalize(obj);
+      const cg = {}; state.areas.forEach(a => { if(a.gid) cg[a.id] = a.gid; });
+      const keepAreas = state.areas.filter(a => a.gid), keepPins = state.pins.filter(p => cg[p.areaId]);
+      inc.areas = inc.areas.filter(a => !cg[a.id]); inc.pins = inc.pins.filter(p => !cg[p.areaId] && !keepPins.some(k => k.id === p.id));
+      inc.areas.forEach(a => { delete a.gid; });
+      if(mode === 'replace'){ state.types = inc.types; state.areas = inc.areas.concat(keepAreas); state.pins = inc.pins.concat(keepPins); state.external = inc.external; }
+      else {
+        const mergeBy = (cur, add) => { for(const x of add){ const i = cur.findIndex(c => c.id === x.id); if(i >= 0) cur[i] = x; else cur.push(x); } };
+        mergeBy(state.types, inc.types); mergeBy(state.areas, inc.areas); mergeBy(state.pins, inc.pins); mergeBy(state.external, inc.external);
+      }
+      state.pins = state.pins.filter(p => typeById(p.typeId));
+      save(); closeModal(); renderAll(); fitAll(); toast('Säkerhetskopian är importerad');
+    });
+  });
+}
+function openPointImport(pts, fname){
+  if(!pts.length){ toast('Hittade inga punkter i filen.'); return; }
+  const baseName = fname.replace(/\.[^.]+$/, '');
+  const svType = state.types.find(t => t.svamp) || state.types[0];
+  const asExt = importTarget === 'ext';
+  openModal(`<h2>Importera ${pts.length} ${pts.length === 1 ? 'punkt' : 'punkter'}</h2><p class="small muted" style="margin-top:-6px">${esc(fname)}</p>
+    <div class="radio-card"><label><input type="radio" name="im" value="ext" ${asExt ? 'checked' : ''}>Som svampkälla</label><span class="small muted">Visas som ringar när svampkartan är på. Du kan spara enskilda ställen som egna nålar.</span>
+      <div class="row2" style="margin-top:10px"><label class="field"><span>Namn på källan</span><input class="input" id="imSrc" value="${esc(baseName)}" maxlength="60"></label><label class="field"><span>Färg</span><input type="color" class="input" id="imColor" value="#0f766e" style="padding:4px;height:44px"></label></div></div>
+    <div class="radio-card"><label><input type="radio" name="im" value="pins" ${asExt ? '' : 'checked'}>Som egna nålar</label>
+      <div class="row2"><label class="field"><span>Typ</span><select class="input" id="imType">${typeOptions(asExt ? svType.id : state.types[0].id)}</select></label>
+      <label class="field"><span>Område</span><select class="input" id="imArea">${areaOptions(null)}</select><input class="input" id="imAreaNew" placeholder="Namn på nytt område" value="${esc(baseName)}" hidden maxlength="60"></label></div></div>
+    <div class="actions"><button class="btn primary grow" type="button" id="imOk">Importera</button><button class="btn ghost" type="button" id="imCancel">Avbryt</button></div>`, m => {
+    wireNewArea(m, 'imArea', 'imAreaNew');
+    m.querySelector('#imCancel').addEventListener('click', closeModal);
+    m.querySelector('#imOk').addEventListener('click', () => {
+      const mode = m.querySelector('input[name=im]:checked').value;
+      if(mode === 'ext'){
+        state.external.push({id:uid(), name:m.querySelector('#imSrc').value.trim() || baseName, color:m.querySelector('#imColor').value, visible:true, points:pts.map(p => ({lat:+p.lat.toFixed(7), lng:+p.lng.toFixed(7), name:(p.name||'').slice(0,120), note:(p.note||'').slice(0,500)}))});
+        save(); closeModal();
+        if(!state.settings.svampMode) setSvampMode(true); else renderAll();
+        fitAll(); toast(`${pts.length} svampställen importerades`);
+      } else {
+        const tId = m.querySelector('#imType').value, aId = resolveArea(m, 'imArea', 'imAreaNew');
+        const now = Date.now();
+        for(const p of pts) state.pins.push({id:uid(), name:(p.name||'').slice(0,80), note:(p.note||'').slice(0,2000), typeId:tId, areaId:aId, lat:p.lat, lng:p.lng, created:now, updated:now});
+        const t = typeById(tId); if(!state.settings.svampMode) t.visible = true; if(aId) areaById(aId).visible = true; else state.settings.noAreaVisible = true;
+        save(); closeModal(); renderAll(); fitAll(); toast(`${pts.length} nålar importerades`);
+      }
+      importTarget = null;
+    });
+  });
+}
+
+/* ---------- Toast ---------- */
+let toastTimer = null;
+function toast(msg, ms){ const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, ms || 3200); }
+
+/*INJECT*/
+
+/* ---------- Start ---------- */
+map.on('moveend', () => { const c = map.getCenter(); state.settings.view = {lat:+c.lat.toFixed(5), lng:+c.lng.toFixed(5), z:map.getZoom()}; save(); });
+const v = state.settings.view;
+if(v && isFinite(v.lat)) map.setView([v.lat, v.lng], v.z || 12);
+else map.setView([62.5, 16.5], 5);
+setBase(state.settings.base);
+setSheet('peek', true);
+readHash();
+renderAll(); roadsUpdate(); renderGbif(); renderDensity();
+if(cloud.pending) setTab('jakt');
+cloudInit();
+if(!v && state.pins.length) setTimeout(fitAll, 50);
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(() => setSheet(sheet, true));
+let rz = null;
+window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
+
+/* Testkrok */
+window.__fk = {areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+})();
+</script>
+</body>
+</html>
