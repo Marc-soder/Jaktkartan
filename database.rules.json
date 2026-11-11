@@ -1,0 +1,102 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "owner": {
+      ".read": "auth != null",
+      ".write": "auth != null && !data.exists() && newData.val() === auth.uid && auth.token.firebase.sign_in_provider !== 'anonymous'"
+    },
+    "creators": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('owner').val() === auth.uid)",
+        ".write": "auth != null && root.child('owner').val() === auth.uid",
+        ".validate": "newData.isBoolean()"
+      }
+    },
+    "userGroups": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "invites": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((!data.exists() && root.child('groups/'+newData.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin') || (data.exists() && !newData.exists() && root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin'))",
+        ".validate": "$code.length >= 8 && newData.hasChildren(['gid','role','expires']) && newData.child('expires').isNumber() && (newData.child('role').val() === 'leader' || newData.child('role').val() === 'editor' || newData.child('role').val() === 'viewer')"
+      }
+    },
+    "huntCodes": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((!data.exists() && (root.child('groups/'+newData.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin' || root.child('groups/'+newData.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'leader')) || (data.exists() && !newData.exists() && (root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin' || root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'leader')))",
+        ".validate": "$code.length >= 6 && newData.hasChildren(['gid','hid','expires']) && newData.child('expires').isNumber()"
+      }
+    },
+    "groups": {
+      "$gid": {
+        ".write": "auth != null && data.child('meta/owner').val() === auth.uid && !newData.exists()",
+        "meta": {
+          ".read": "(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now)",
+          ".write": "auth != null && ((!data.exists() && newData.child('owner').val() === auth.uid && (root.child('owner').val() === auth.uid || root.child('creators/'+auth.uid).val() === true)) || ((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin') && newData.child('owner').val() === data.child('owner').val()))",
+          ".validate": "newData.hasChildren(['name','owner']) && newData.child('name').isString() && newData.child('name').val().length <= 80"
+        },
+        "members": {
+          ".read": "(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())",
+          "$uid": {
+            ".write": "auth != null && (((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin') && ($uid !== data.parent().parent().child('meta/owner').val() || newData.child('role').val() === 'admin')) || ($uid === auth.uid && !data.exists() && !data.parent().parent().child('meta').exists() && newData.parent().parent().child('meta/owner').val() === auth.uid && newData.child('role').val() === 'admin') || ($uid === auth.uid && !data.exists() && newData.exists() && root.child('invites/'+newData.child('code').val()).child('gid').val() === $gid && root.child('invites/'+newData.child('code').val()).child('expires').val() > now && newData.child('role').val() === root.child('invites/'+newData.child('code').val()).child('role').val()) || ($uid === auth.uid && data.exists() && $uid !== data.parent().parent().child('meta/owner').val() && (!newData.exists() || newData.child('role').val() === data.child('role').val())) || ($uid === auth.uid && data.exists() && $uid === data.parent().parent().child('meta/owner').val() && newData.child('role').val() === 'admin'))",
+            ".validate": "newData.hasChildren(['role','name']) && newData.child('name').isString() && newData.child('name').val().length <= 60 && (newData.child('role').val() === 'admin' || newData.child('role').val() === 'leader' || newData.child('role').val() === 'editor' || newData.child('role').val() === 'viewer')"
+          }
+        },
+        "areas": {
+          ".read": "(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())",
+          "$aid": {
+            ".read": "((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/hunts/'+root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val()+'/areas/'+$aid).val() === true)",
+            ".write": "(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'editor'))",
+            ".validate": "newData.child('name').isString() && newData.child('name').val().length <= 80"
+          }
+        },
+        "pins": {
+          ".read": "(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())",
+          "$aid": {
+            ".read": "((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/hunts/'+root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val()+'/areas/'+$aid).val() === true)",
+            ".write": "(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'editor'))",
+            "$pid": {
+              ".validate": "newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('typeId').isString()"
+            }
+          }
+        },
+        "types": {
+          ".read": "(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now)",
+          "$tid": {
+            ".write": "(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'editor'))",
+            ".validate": "newData.child('name').isString() && newData.child('color').isString()"
+          }
+        },
+        "hunts": {
+          ".read": "(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())",
+          "$hid": {
+            ".read": "(auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid",
+            ".write": "(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))",
+            ".validate": "newData.hasChildren(['name','expires','code']) && newData.child('expires').isNumber()"
+          }
+        },
+        "guests": {
+          ".read": "(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())",
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) || (auth != null && $uid === auth.uid && (!newData.exists() || (root.child('huntCodes/'+newData.child('code').val()).child('gid').val() === $gid && root.child('huntCodes/'+newData.child('code').val()).child('hid').val() === newData.child('hid').val() && root.child('huntCodes/'+newData.child('code').val()).child('expires').val() > now && newData.child('expires').val() === root.child('huntCodes/'+newData.child('code').val()).child('expires').val())))",
+            ".validate": "newData.hasChildren(['hid','code','name','expires']) && newData.child('name').isString() && newData.child('name').val().length <= 60"
+          }
+        },
+        "positions": {
+          ".read": "(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now)",
+          "$uid": {
+            ".write": "auth != null && $uid === auth.uid && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now)",
+            ".validate": "newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber()"
+          }
+        }
+      }
+    }
+  }
+}
