@@ -1,6 +1,9 @@
-import json, os
+import json, os, sys
 from playwright.sync_api import sync_playwright
-B=os.path.dirname(os.path.abspath(__file__)); APP='file:///home/claude/jaktkartan.html'
+from offline import offline
+B=os.path.dirname(os.path.abspath(__file__)); APP='file://'+os.path.join(os.path.dirname(B),'index.html')
+CHROME=os.environ.get('CHROME_PATH') or None
+os.makedirs(os.path.join(B,'shots'),exist_ok=True)
 tile=open(os.path.join(B,'tile_osm.png'),'rb').read(); fails=[]; over=[]
 def check(c,m):
     print(('PASS ' if c else 'FAIL ')+m); (None if c else fails.append(m))
@@ -13,10 +16,10 @@ def route(r):
           {'type':'way','id':1,'tags':{'highway':'track'},'geometry':[{'lat':58.72,'lon':14.60},{'lat':58.721,'lon':14.61}]},
           {'type':'way','id':2,'tags':{'highway':'path'},'geometry':[{'lat':58.71,'lon':14.60},{'lat':58.711,'lon':14.61},{'lat':58.712,'lon':14.62}]},
           {'type':'node','id':3,'lat':59,'lon':17}]}))
-    if 'gstatic' in u or 'fonts.' in u: return r.abort()
+    if offline(r): return
     return r.fulfill(status=200,body=tile,content_type='image/png')
 with sync_playwright() as p:
-    br=p.chromium.launch(executable_path='/usr/bin/google-chrome')
+    br=p.chromium.launch(executable_path=CHROME)
     for name,vp in (('desktop',dict(viewport={'width':1280,'height':820})),('mobil',dict(viewport={'width':390,'height':844},is_mobile=True,has_touch=True,device_scale_factor=2))):
         ctx=br.new_context(**vp); ctx.route('**/*',route); pg=ctx.new_page(); errs=[]; pg.on('pageerror',lambda e:errs.append(str(e)))
         pg.goto(APP); pg.wait_for_timeout(1200)
@@ -83,3 +86,4 @@ with sync_playwright() as p:
     for x,y in ((80,160),(300,150),(310,380),(120,420)): pg.touchscreen.tap(x,y); pg.wait_for_timeout(300)
     pg.screenshot(path=os.path.join(B,'shots/m_draw.png')); br.close()
 print('\n'+('ALLA OK' if not fails else f'{len(fails)} FEL: '+'; '.join(fails)))
+sys.exit(1 if fails else 0)

@@ -1,9 +1,12 @@
 // Flera användare mot en låtsas-Firebase där varje läsning och skrivning prövas mot de riktiga reglerna (targaryen).
 const { chromium } = require('playwright');
 const targaryen = require('targaryen');
-const rules = require('./rules.js');
-const fs = require('fs'), path = require('path');
+const rules = require('../src/rules.js');
+const fs = require('fs'), path = require('path'), http = require('http');
 const APP = 'http://localhost:8765/jaktkartan.html';
+const HTML = fs.readFileSync(path.join(__dirname, '..', 'index.html'));
+const SHOTS = path.join(__dirname, 'shots'); fs.mkdirSync(SHOTS, {recursive:true});
+const shot = n => path.join(SHOTS, n);
 const tile = fs.readFileSync(path.join(__dirname, 'tile_osm.png'));
 let data = {}, clock = () => Date.now();
 const subs = []; // {page, id, path, uid, last}
@@ -72,7 +75,9 @@ const st = p => p.evaluate(() => __fk.state());
 const gids = () => Object.keys(data.groups || {});
 
 (async () => {
-  const browser = await chromium.launch();
+  const server = http.createServer((q, r) => { r.writeHead(200, {'Content-Type':'text/html; charset=utf-8'}); r.end(HTML); });
+  await new Promise(ok => server.listen(8765, ok));
+  const browser = await chromium.launch({executablePath: process.env.CHROME_PATH || undefined});
   // ---- Alice skapar lag och delar ett område ----
   const A = await mkPage(browser, 'alice');
   await A.click('#tab-jakt'); await W(A);
@@ -230,7 +235,7 @@ const gids = () => Object.keys(data.groups || {});
   check(/rådjur/.test(vt.split('licens eller')[0]) && /älg/.test(vt.split('licens eller')[1].split('inte lovligt')[0]) && !/järpe/.test(vt), 'Vilt-fliken: rådjur lovligt, älg under licens, järpe saknas i Södermanland');
   check(await V.locator('#paneVilt .vname').first().getAttribute('href') === 'https://jagareforbundet.se/jakt/jakttider/jakttid-for-enskilt-djur/?animalId=565', 'artnamn länkar till Jägareförbundets tabell');
   check(viltTxt.includes('Älg') && !viltTxt.includes('Bläsgås') && !viltTxt.includes('Järpe'), 'Ny jakt: bara vilt som är lovligt den dagen kan väljas');
-  await V.screenshot({path:'shots/v_vilt.png'}); await A.click('#tab-jakt'); await W(A, 200); await A.screenshot({path:'shots/a_jakt.png'});
+  await V.screenshot({path:shot('v_vilt.png')}); await A.click('#tab-jakt'); await W(A, 200); await A.screenshot({path:shot('a_jakt.png')});
   // mobilvy av Jakt
   const M = await mkPage(browser, 'mia', '', {viewport:{width:390, height:844}, deviceScaleFactor:2, isMobile:true, hasTouch:true});
   await M.click('#tab-jakt'); await W(M, 300); await M.click('[data-j="login-google"]'); await W(M, 300);
@@ -238,8 +243,9 @@ const gids = () => Object.keys(data.groups || {});
   const mk = await M.evaluate(() => { const up = {}; up['groups/zz/meta'] = {name:'Z', owner:'mia', created:1}; up['groups/zz/members/mia'] = {role:'admin', name:'M'}; up['userGroups/mia/zz'] = 'member'; return firebase.database().ref().update(up).then(() => 'ok', () => 'denied'); });
   check(mk === 'denied' && !data.groups.zz, 'annan inloggad nekas skapa jaktlag direkt mot databasen');
   await M.evaluate(() => { document.getElementById('handle').click; });
-  await M.locator('#handle').tap(); await W(M, 400); await M.screenshot({path:'shots/m_jakt.png'});
+  await M.locator('#handle').tap(); await W(M, 400); await M.screenshot({path:shot('m_jakt.png')});
   check(await M.evaluate(() => document.documentElement.scrollWidth) <= 390, 'mobil: Jakt-fliken utan sidscroll');
-  await browser.close();
+  await browser.close(); server.close();
   console.log(`\n${passes} PASS, ${fails.length} FAIL` + (fails.length ? '\n' + fails.join('\n') : ''));
+  process.exitCode = fails.length ? 1 : 0;
 })().catch(e => { console.error(e); process.exit(1); });

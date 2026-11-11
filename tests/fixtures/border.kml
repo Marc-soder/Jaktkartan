@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Placemark>
+    <name>Jaktmarken</name>
+    <Polygon><outerBoundaryIs><LinearRing>
+      <coordinates>17,59,0 17.01,59,0 17.01,59.01,0 17,59.01,0 17,59,0</coordinates>
+    </LinearRing></outerBoundaryIs></Polygon>
+  </Placemark>
+</kml>

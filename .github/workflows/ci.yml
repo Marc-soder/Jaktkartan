@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Bygg och testa
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Installera verktyg
+        run: |
+          npm ci
+          pip install -r tests/requirements.txt
+          npx playwright install --with-deps chromium
+          python -m playwright install chromium
+      - name: Kontrollera att index.html och database.rules.json är byggda från src/
+        run: npm run check
+      - name: Tester av appen
+        run: npm run test:app
+      - name: Tester av gränser och skogsvägar
+        run: npm run test:border
+      - name: Tester av jaktlag och säkerhetsregler
+        run: npm run test:cloud
+      - name: Spara skärmbilder
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: skarmbilder
+          path: tests/shots/
+          if-no-files-found: ignore
+
+  rules:
+    name: Ändrade säkerhetsregler?
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Jämför database.rules.json med ${{ github.base_ref }}
+        id: diff
+        run: |
+          if git diff --quiet "origin/${{ github.base_ref }}...HEAD" -- database.rules.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Säkerhetsreglerna är oförändrade." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "::warning file=database.rules.json::Säkerhetsreglerna ändras i den här PR:en. Klistra in nya database.rules.json i Firebase-konsolen efter merge."
+            {
+              echo "## ⚠️ Säkerhetsreglerna ändras"
+              echo "Efter merge: klistra in nya \`database.rules.json\` i Firebase-konsolen under Realtime Database → Regler → Publicera."
+              echo '```diff'
+              git diff "origin/${{ github.base_ref }}...HEAD" -- database.rules.json
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Kommentera på PR:en
+        if: steps.diff.outputs.changed == 'true' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- regelvarning -->';
+            const body = `${marker}
+            ## ⚠️ Säkerhetsreglerna för Firebase ändras i den här PR:en
+
+            Hemsidan uppdateras automatiskt när PR:en mergas, men **reglerna i Firebase gör det inte**.
+
+            Efter merge:
+            1. Öppna \`database.rules.json\` på \`main\` och kopiera hela innehållet.
+            2. Gå till Firebase-konsolen → projektet **jaktkartan-daa0a** → Realtime Database → **Regler**.
+            3. Ersätt allt, klicka **Publicera**.
+
+            Gör det direkt efter merge. Tills dess kör sidan ny kod mot gamla regler och vissa funktioner kan nekas.`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            if (!comments.some(c => c.body && c.body.includes(marker))) {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

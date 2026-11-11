@@ -1,8 +1,11 @@
 import json, re, sys, os, urllib.parse
 from playwright.sync_api import sync_playwright
+from offline import offline
 
 B = os.path.dirname(os.path.abspath(__file__))
-APP = 'file:///home/claude/jaktkartan.html'
+ROOT = os.path.dirname(B)
+APP = 'file://' + os.path.join(ROOT, 'index.html')
+CHROME = os.environ.get('CHROME_PATH') or None
 SHOTS = os.path.join(B, 'shots'); os.makedirs(SHOTS, exist_ok=True)
 tile = {k: open(os.path.join(B, f'tile_{k}.png'), 'rb').read() for k in ('osm', 'sat', 'dens')}
 calls = {'match': 0, 'occ': [], 'density': 0}
@@ -14,8 +17,8 @@ def check(cond, msg):
 
 def route(r):
     u = r.request.url
-    if 'fonts.googleapis' in u or 'fonts.gstatic' in u:
-        return r.abort()
+    if offline(r):
+        return
     if 'tile.openstreetmap.org' in u or 'opentopomap' in u:
         return r.fulfill(status=200, body=tile['osm'], content_type='image/png')
     if 'arcgisonline' in u:
@@ -41,10 +44,12 @@ def route(r):
                         'coordinateUncertaintyInMeters': 50, 'locality': 'Testskogen', 'datasetName': 'Artportalen (Swedish Species Observation System)'})
         return r.fulfill(status=200, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'},
                          body=json.dumps({'count': total, 'offset': off, 'limit': 300, 'endOfRecords': off + 300 >= total, 'results': res}))
-    return r.continue_()
+    if u.startswith('file:') or u.startswith('data:'):
+        return r.continue_()
+    return r.fulfill(status=404, body='')  # inga riktiga nätverksanrop i testerna
 
 with sync_playwright() as p:
-    br = p.chromium.launch(executable_path='/usr/bin/google-chrome', args=['--allow-file-access-from-files'])
+    br = p.chromium.launch(executable_path=CHROME, args=['--allow-file-access-from-files'])
     # ---------- Desktop ----------
     ctx = br.new_context(viewport={'width': 1280, 'height': 820}, accept_downloads=True, color_scheme='light')
     ctx.route('**/*', route)
@@ -275,3 +280,4 @@ with sync_playwright() as p:
     br.close()
 
 print('\n' + ('ALLA TESTER OK' if not fails else f'{len(fails)} FEL: ' + '; '.join(fails)))
+sys.exit(1 if fails else 0)
