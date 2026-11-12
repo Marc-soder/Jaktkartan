@@ -773,7 +773,7 @@ a{color:var(--accent)}
 .btnrow > *{flex:1 1 auto}
 
 /* Panel / bottenlåda */
-#panel{position:fixed;z-index:1000;left:0;right:0;bottom:0;height:var(--sheet-h);background:var(--surface);border-radius:18px 18px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.18);display:flex;flex-direction:column;transition:height .25s ease;padding-bottom:env(safe-area-inset-bottom,0px)}
+#panel{position:fixed;z-index:1000;left:0;right:0;bottom:0;height:var(--sheet-h);background:var(--surface);border-radius:18px 18px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.18);display:flex;flex-direction:column;transition:height .25s ease;padding-bottom:env(safe-area-inset-bottom,0px);overflow:hidden}
 #panel.dragging{transition:none}
 #panel.peek:not(.dragging) .p-body{visibility:hidden}
 .handle{flex:none;height:22px;display:grid;place-items:center;touch-action:none;cursor:grab;border:0;background:none;width:100%;padding:0}
@@ -1472,11 +1472,14 @@ function sheetHeight(s){
   const vh = window.innerHeight;
   if(s === 'full') return Math.round(vh - 64);
   if(s === 'half') return Math.round(Math.min(vh*0.52, vh - 120));
+  if(s === 'min') return minH();
   return peekH();
 }
+/* Lägsta läget: bara handtaget syns, så att kartan och korset får mer plats. */
+function minH(){ return $('#handle').offsetHeight + 4; }
 function setSheet(s, noAnim){
   sheet = s;
-  $('#panel').classList.toggle('peek', s === 'peek' && !isDesktop());
+  $('#panel').classList.toggle('peek', (s === 'peek' || s === 'min') && !isDesktop());
   if(isDesktop()){ document.documentElement.style.setProperty('--sheet-h','0px'); $('#panel').style.height = ''; return; }
   const px = sheetHeight(s);
   const panel = $('#panel');
@@ -1484,16 +1487,19 @@ function setSheet(s, noAnim){
   document.documentElement.style.setProperty('--sheet-h', px + 'px');
   panel.style.height = `calc(${px}px + env(safe-area-inset-bottom, 0px))`;
   if(noAnim) requestAnimationFrame(() => panel.classList.remove('dragging'));
+  setTimeout(syncCross, 280);
 }
+/* Efter placering och ritning: tillbaka från lägsta läget så att flikarna syns. */
+function sheetRestore(){ if(sheet === 'min' && !placing && !drawing && !(typeof cal !== 'undefined' && cal) && !(typeof adj !== 'undefined' && adj)) setSheet('peek'); }
 function bottomPad(){ return isDesktop() ? 0 : (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-h')) || 0); }
 (function sheetDrag(){
   const panel = $('#panel'); let startY = 0, startH = 0, moved = false, active = false;
   const down = e => { if(isDesktop()) return; active = true; moved = false; startY = e.clientY; startH = panel.getBoundingClientRect().height; panel.classList.add('dragging'); e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId); };
   const move = e => { if(!active) return; const dy = startY - e.clientY; if(Math.abs(dy) > 6) moved = true; if(!moved) return;
-    const hpx = Math.max(peekH(), Math.min(window.innerHeight - 40, startH + dy)); panel.style.height = hpx + 'px'; document.documentElement.style.setProperty('--sheet-h', hpx + 'px'); };
+    const hpx = Math.max(minH(), Math.min(window.innerHeight - 40, startH + dy)); panel.style.height = hpx + 'px'; document.documentElement.style.setProperty('--sheet-h', hpx + 'px'); syncCross(); };
   const up = e => { if(!active) return; active = false; panel.classList.remove('dragging');
-    if(!moved){ if(e.currentTarget.id === 'handle') setSheet(sheet === 'peek' ? 'half' : sheet === 'half' ? 'full' : 'peek'); else setSheet(sheet); return; }
-    const hpx = panel.getBoundingClientRect().height, opts = ['peek','half','full'];
+    if(!moved){ if(e.currentTarget.id === 'handle') setSheet(sheet === 'min' ? 'peek' : sheet === 'peek' ? 'half' : sheet === 'half' ? 'full' : 'peek'); else setSheet(sheet); return; }
+    const hpx = panel.getBoundingClientRect().height, opts = ['min','peek','half','full'];
     let best = 'peek', bd = Infinity; for(const o of opts){ const d = Math.abs(sheetHeight(o) - hpx); if(d < bd){ bd = d; best = o; } }
     setSheet(best); };
   for(const el of [$('#handle'), $('#pHead')]){
@@ -1915,6 +1921,24 @@ function openTypeForm(id, after){
 
 /* ---------- Placera nål ---------- */
 let placing = null; let crossEl = null;
+/* Korsets plats: mitt i den del av kartan som syns, ovanför knappfälten och bottenpanelen. */
+function crossPoint(){
+  const c = map.getContainer(), r = c.getBoundingClientRect();
+  let bottom = r.bottom;
+  for(const id of ['placebar', 'ovbar', 'drawbar']){ const el = document.getElementById(id); if(el && !el.hidden){ const b = el.getBoundingClientRect(); if(b.height) bottom = Math.min(bottom, b.top - 8); } }
+  if(!isDesktop()) bottom = Math.min(bottom, $('#panel').getBoundingClientRect().top);
+  const y = Math.round((r.top + bottom) / 2 - r.top);
+  return L.point(Math.round(c.clientWidth / 2), Math.max(80, Math.min(y, Math.round(c.clientHeight / 2))));
+}
+const crossLatLng = () => map.containerPointToLatLng(crossPoint());
+/* Flyttar kartan så att latlng hamnar under korset. */
+function panToCross(ll, animate){ map.panBy(map.latLngToContainerPoint(L.latLng(ll)).subtract(crossPoint()), {animate:!!animate}); }
+function syncCross(){
+  const y = crossPoint().y + 'px';
+  for(const el of [crossEl, typeof calCrossEl !== 'undefined' ? calCrossEl : null]) if(el && !el.hidden) el.style.top = y;
+  if(placing || (typeof cal !== 'undefined' && cal && cal.step === 'map')) loupeAtCenter();
+}
+map.on('resize', () => setTimeout(syncCross, 50));
 function startPlacing(opts){
   placing = opts;
   if(!crossEl){ crossEl = h(`<div class="crosshair" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="24" cy="24" r="9"/><path d="M24 3v11M24 34v11M3 24h11M34 24h11"/></svg></div>`); map.getContainer().appendChild(crossEl); }
@@ -1922,18 +1946,19 @@ function startPlacing(opts){
   $('#placebar').hidden = false; $('#btnAdd').hidden = true;
   $('#placeText').textContent = opts.mode === 'move' ? 'Flytta kartan så att korset hamnar på den nya platsen.' : 'Flytta kartan så att korset hamnar där nålen ska sitta.';
   $('#placeOk').textContent = opts.mode === 'move' ? 'Flytta hit' : 'Lägg nålen här';
-  if(!isDesktop()) setSheet('peek');
-  if(opts.mode === 'move'){ const p = pinById(opts.id); map.setView([p.lat,p.lng], Math.max(map.getZoom(), 16)); }
+  if(!isDesktop()) setSheet('min');
+  if(opts.mode === 'move'){ const p = pinById(opts.id); map.setView([p.lat,p.lng], Math.max(map.getZoom(), 16), {animate:false}); }
+  syncCross(); if(opts.mode === 'move'){ const p = pinById(opts.id); panToCross([p.lat, p.lng]); }
   map.closePopup();
   updatePlaceCoords();
-  setTimeout(() => { map.invalidateSize(); updatePlaceCoords(); }, 300);
+  setTimeout(() => { map.invalidateSize(); if(placing && placing.mode === 'move'){ const p = pinById(placing.id); if(p) panToCross([p.lat, p.lng]); } updatePlaceCoords(); }, 320);
 }
-function endPlacing(){ placing = null; loupeHide(); if(crossEl) crossEl.hidden = true; $('#placebar').hidden = true; $('#btnAdd').hidden = false; }
-function updatePlaceCoords(){ if(!placing) return; loupeAtCenter(); const c = map.getCenter(); $('#placeCoords').textContent = `${fmtLatLng(c.lat,c.lng)} · SWEREF ${fmtSweref(c.lat,c.lng)}`; }
+function endPlacing(){ placing = null; loupeHide(); if(crossEl) crossEl.hidden = true; $('#placebar').hidden = true; $('#btnAdd').hidden = false; sheetRestore(); }
+function updatePlaceCoords(){ if(!placing) return; const show = () => { const c = crossLatLng(); $('#placeCoords').textContent = `${fmtLatLng(c.lat,c.lng)} · SWEREF ${fmtSweref(c.lat,c.lng)}`; }; show(); syncCross(); show(); }
 map.on('move', updatePlaceCoords);
-map.on('click', e => { if(placing && !drawing) map.panTo(e.latlng); });
+map.on('click', e => { if(placing && !drawing) panToCross(e.latlng, true); });
 $('#placeOk').addEventListener('click', () => {
-  const c = map.getCenter(); const opts = placing; endPlacing();
+  const c = crossLatLng(); const opts = placing; endPlacing();
   if(opts.mode === 'move'){ const p = pinById(opts.id); if(!p) return; p.lat = c.lat; p.lng = c.lng; p.updated = Date.now(); save(); renderAll(); toast('Nålen flyttades'); setTimeout(() => { const m = findMarker(p.id); if(m) m.openPopup(); }, 200); }
   else openPinForm({lat:c.lat, lng:c.lng});
 });
@@ -2906,8 +2931,8 @@ function loupeFlash(latlng, ms){
   loupeShow(latlng, map.latLngToContainerPoint(latlng)); loupeLayers();
   clearTimeout(loupe.timer); loupe.timer = setTimeout(loupeHide, ms || 1600);
 }
-/* Förstoringsglas vid kartans mitt, där korset sitter. */
-function loupeAtCenter(){ loupeShow(map.getCenter(), L.point(map.getContainer().clientWidth / 2, map.getContainer().clientHeight / 2)); }
+/* Förstoringsglas vid korset. */
+function loupeAtCenter(){ const p = crossPoint(); loupeShow(map.containerPointToLatLng(p), p); }
 /* Gör en markör dragbar med förstoringsglas. onMove(latlng) anropas under dragningen, onEnd(latlng) när den släpps. */
 function loupeDrag(marker, onMove, onEnd){
   marker.on('dragstart', () => { clearTimeout(loupe.timer); loupeShow(marker.getLatLng(), map.latLngToContainerPoint(marker.getLatLng())); loupeLayers(); });
@@ -3029,7 +3054,7 @@ function startLine(areaId, kind, name, lid){
   closeModal(); map.closePopup(); if(placing) endPlacing();
   if(a.visible === false){ a.visible = true; save(); renderAll(); }
   drawing = {mode:'line', id:areaId, kind, name, lid:lid || null, pts:lid && a.lines && a.lines[lid] ? parseBorder(a.lines[lid].p) : []};
-  $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('peek');
+  $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
   if(drawing.pts.length >= 2) map.fitBounds(L.latLngBounds(drawing.pts), {paddingTopLeft:[40,70], paddingBottomRight:[40, bottomPad() + 190], maxZoom:17});
   renderBorders(); drawDraft();
 }
@@ -3065,11 +3090,11 @@ function startDrawing(id){
   if(!canEditArea(a)){ toast('Du har inte rättighet att ändra det området.'); return; }
   closeModal(); map.closePopup(); if(placing) endPlacing();
   drawing = {mode:'border', id, pts:parseBorder(a.border)};
-  $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('peek');
+  $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
   if(drawing.pts.length) map.fitBounds(L.latLngBounds(drawing.pts), {paddingTopLeft:[40,70], paddingBottomRight:[40, bottomPad() + 190], maxZoom:17});
   renderBorders(); drawDraft();
 }
-function endDrawing(){ drawing = null; drawLayer.clearLayers(); drawHandles.clearLayers(); loupeHide(); $('#drawbar').hidden = true; $('#btnAdd').hidden = false; renderBorders(); }
+function endDrawing(){ drawing = null; drawLayer.clearLayers(); drawHandles.clearLayers(); loupeHide(); $('#drawbar').hidden = true; $('#btnAdd').hidden = false; renderBorders(); sheetRestore(); }
 map.on('click', e => { if(!drawing) return; drawing.pts.push([e.latlng.lat, e.latlng.lng]); drawDraft(); loupeFlash(e.latlng); });
 $('#drawUndo').addEventListener('click', () => { drawing.pts.pop(); drawDraft(); });
 $('#drawCancel').addEventListener('click', endDrawing);
@@ -3341,7 +3366,7 @@ function calCross(show){
 }
 function pickMap(i){
   const s = cal.shot, p = s.pts[i]; cal.step = 'map'; cal.i = i; map.closePopup();
-  $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('peek');
+  $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
   $('#ovbar').innerHTML = `<div class="shot-hint"><canvas id="ovCrop" width="120" height="80" aria-label="Utsnitt av bilden runt punkten"></canvas>
       <p>Flytta kartan så att <b>korset</b> hamnar på samma plats som i bilden (punkt ${i + 1} av 2). Förstoringsglaset visar vad som ligger under korset.</p></div>
     <div class="btnrow"><button class="btn primary" id="ovMapOk" type="button">${i ? 'Lägg bilden på kartan' : 'Nästa punkt'}</button><button class="btn" id="ovBack" type="button">Tillbaka till bilden</button><button class="btn ghost" id="ovMapCancel" type="button">Avbryt</button></div>`;
@@ -3352,10 +3377,12 @@ function pickMap(i){
     g.drawImage(img, p.u - z * .75, p.v - z / 2, z * 1.5, z, 0, 0, 120, 80);
     g.strokeStyle = '#d9520e'; g.lineWidth = 2; g.beginPath(); g.moveTo(60, 30); g.lineTo(60, 50); g.moveTo(50, 40); g.lineTo(70, 40); g.stroke();
   }; img.src = s.url;
-  if(p.ll) map.setView(p.ll, Math.max(map.getZoom(), 15), {animate:false});
-  calCross(true); calMarks(); loupeAtCenter();
+  calCross(true); syncCross();
+  if(p.ll){ map.setView(p.ll, Math.max(map.getZoom(), 15), {animate:false}); panToCross(p.ll); }
+  setTimeout(() => { if(cal && cal.step === 'map' && cal.i === i){ syncCross(); if(p.ll) panToCross(p.ll); loupeAtCenter(); } }, 320);
+  calMarks(); loupeAtCenter();
   $('#ovMapOk').addEventListener('click', () => {
-    const c = map.getCenter(); p.ll = {lat:c.lat, lng:c.lng};
+    const c = crossLatLng(); p.ll = {lat:c.lat, lng:c.lng};
     if(i === 0){ pickImage(1); return; }
     const [A, B] = s.pts;
     if(Math.hypot(B.u - A.u, B.v - A.v) < Math.max(s.w, s.h) / 10){ toast('Punkterna i bilden ligger för nära varandra. Välj två platser längre ifrån varandra.', 5000); pickImage(1); return; }
@@ -3372,11 +3399,12 @@ function calMarks(){
   loupeDrag(dragHandle(A.ll, 'shot first'), null, ll => { A.ll = {lat:ll.lat, lng:ll.lng}; }).addTo(calHandles);
 }
 map.on('move', () => { if(cal && cal.step === 'map') loupeAtCenter(); });
-map.on('click', e => { if(cal && cal.step === 'map') map.panTo(e.latlng); });
+map.on('click', e => { if(cal && cal.step === 'map') panToCross(e.latlng, true); });
 function endCalBar(keepCal){
   calCross(false); calHandles.clearLayers(); loupeHide();
   if(!adj){ $('#ovbar').hidden = true; $('#ovbar').innerHTML = ''; }
   if(!keepCal && !drawing && !placing) $('#btnAdd').hidden = false;
+  if(!keepCal) setTimeout(sheetRestore, 0);
 }
 function finishCalibration(){
   const s = cal.shot, isNew = cal.isNew;
@@ -3412,7 +3440,7 @@ function startAdjust(s){
     c.addTo(adj.handles);
   };
   draw();
-  $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('peek');
+  $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
   $('#ovbar').innerHTML = `<p>Dra en <b>punkt</b> för att passa in bilden: det skalar och vrider den. Dra <b>mitten</b> för att flytta hela bilden. Förstoringsglaset visas medan du drar.</p>
     <label class="trail-range" style="padding:0"><span style="display:flex;justify-content:space-between"><strong>Genomskinlighet</strong><span id="ovOpTxt">${Math.round(s.opacity * 100)} %</span></span><input type="range" id="ovOpacity" min="10" max="100" step="5" value="${Math.round(s.opacity * 100)}"></label>
     <div class="btnrow"><button class="btn primary" id="ovAdjDone" type="button">Klar</button><button class="btn" id="ovAdjRedo" type="button">Gör om punkterna</button></div>`;
@@ -3427,6 +3455,7 @@ function endAdjust(){
   map.removeLayer(adj.handles); adj = null; saveShots(); loupeHide();
   $('#ovbar').hidden = true; $('#ovbar').innerHTML = '';
   if(!drawing && !placing && !cal) $('#btnAdd').hidden = false;
+  sheetRestore();
 }
 
 loadShots();
@@ -3449,7 +3478,7 @@ let rz = null;
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

@@ -112,7 +112,7 @@ a{color:var(--accent)}
 .btnrow > *{flex:1 1 auto}
 
 /* Panel / bottenlåda */
-#panel{position:fixed;z-index:1000;left:0;right:0;bottom:0;height:var(--sheet-h);background:var(--surface);border-radius:18px 18px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.18);display:flex;flex-direction:column;transition:height .25s ease;padding-bottom:env(safe-area-inset-bottom,0px)}
+#panel{position:fixed;z-index:1000;left:0;right:0;bottom:0;height:var(--sheet-h);background:var(--surface);border-radius:18px 18px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.18);display:flex;flex-direction:column;transition:height .25s ease;padding-bottom:env(safe-area-inset-bottom,0px);overflow:hidden}
 #panel.dragging{transition:none}
 #panel.peek:not(.dragging) .p-body{visibility:hidden}
 .handle{flex:none;height:22px;display:grid;place-items:center;touch-action:none;cursor:grab;border:0;background:none;width:100%;padding:0}
@@ -806,11 +806,14 @@ function sheetHeight(s){
   const vh = window.innerHeight;
   if(s === 'full') return Math.round(vh - 64);
   if(s === 'half') return Math.round(Math.min(vh*0.52, vh - 120));
+  if(s === 'min') return minH();
   return peekH();
 }
+/* Lägsta läget: bara handtaget syns, så att kartan och korset får mer plats. */
+function minH(){ return $('#handle').offsetHeight + 4; }
 function setSheet(s, noAnim){
   sheet = s;
-  $('#panel').classList.toggle('peek', s === 'peek' && !isDesktop());
+  $('#panel').classList.toggle('peek', (s === 'peek' || s === 'min') && !isDesktop());
   if(isDesktop()){ document.documentElement.style.setProperty('--sheet-h','0px'); $('#panel').style.height = ''; return; }
   const px = sheetHeight(s);
   const panel = $('#panel');
@@ -818,16 +821,19 @@ function setSheet(s, noAnim){
   document.documentElement.style.setProperty('--sheet-h', px + 'px');
   panel.style.height = `calc(${px}px + env(safe-area-inset-bottom, 0px))`;
   if(noAnim) requestAnimationFrame(() => panel.classList.remove('dragging'));
+  setTimeout(syncCross, 280);
 }
+/* Efter placering och ritning: tillbaka från lägsta läget så att flikarna syns. */
+function sheetRestore(){ if(sheet === 'min' && !placing && !drawing && !(typeof cal !== 'undefined' && cal) && !(typeof adj !== 'undefined' && adj)) setSheet('peek'); }
 function bottomPad(){ return isDesktop() ? 0 : (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-h')) || 0); }
 (function sheetDrag(){
   const panel = $('#panel'); let startY = 0, startH = 0, moved = false, active = false;
   const down = e => { if(isDesktop()) return; active = true; moved = false; startY = e.clientY; startH = panel.getBoundingClientRect().height; panel.classList.add('dragging'); e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId); };
   const move = e => { if(!active) return; const dy = startY - e.clientY; if(Math.abs(dy) > 6) moved = true; if(!moved) return;
-    const hpx = Math.max(peekH(), Math.min(window.innerHeight - 40, startH + dy)); panel.style.height = hpx + 'px'; document.documentElement.style.setProperty('--sheet-h', hpx + 'px'); };
+    const hpx = Math.max(minH(), Math.min(window.innerHeight - 40, startH + dy)); panel.style.height = hpx + 'px'; document.documentElement.style.setProperty('--sheet-h', hpx + 'px'); syncCross(); };
   const up = e => { if(!active) return; active = false; panel.classList.remove('dragging');
-    if(!moved){ if(e.currentTarget.id === 'handle') setSheet(sheet === 'peek' ? 'half' : sheet === 'half' ? 'full' : 'peek'); else setSheet(sheet); return; }
-    const hpx = panel.getBoundingClientRect().height, opts = ['peek','half','full'];
+    if(!moved){ if(e.currentTarget.id === 'handle') setSheet(sheet === 'min' ? 'peek' : sheet === 'peek' ? 'half' : sheet === 'half' ? 'full' : 'peek'); else setSheet(sheet); return; }
+    const hpx = panel.getBoundingClientRect().height, opts = ['min','peek','half','full'];
     let best = 'peek', bd = Infinity; for(const o of opts){ const d = Math.abs(sheetHeight(o) - hpx); if(d < bd){ bd = d; best = o; } }
     setSheet(best); };
   for(const el of [$('#handle'), $('#pHead')]){
@@ -1249,6 +1255,24 @@ function openTypeForm(id, after){
 
 /* ---------- Placera nål ---------- */
 let placing = null; let crossEl = null;
+/* Korsets plats: mitt i den del av kartan som syns, ovanför knappfälten och bottenpanelen. */
+function crossPoint(){
+  const c = map.getContainer(), r = c.getBoundingClientRect();
+  let bottom = r.bottom;
+  for(const id of ['placebar', 'ovbar', 'drawbar']){ const el = document.getElementById(id); if(el && !el.hidden){ const b = el.getBoundingClientRect(); if(b.height) bottom = Math.min(bottom, b.top - 8); } }
+  if(!isDesktop()) bottom = Math.min(bottom, $('#panel').getBoundingClientRect().top);
+  const y = Math.round((r.top + bottom) / 2 - r.top);
+  return L.point(Math.round(c.clientWidth / 2), Math.max(80, Math.min(y, Math.round(c.clientHeight / 2))));
+}
+const crossLatLng = () => map.containerPointToLatLng(crossPoint());
+/* Flyttar kartan så att latlng hamnar under korset. */
+function panToCross(ll, animate){ map.panBy(map.latLngToContainerPoint(L.latLng(ll)).subtract(crossPoint()), {animate:!!animate}); }
+function syncCross(){
+  const y = crossPoint().y + 'px';
+  for(const el of [crossEl, typeof calCrossEl !== 'undefined' ? calCrossEl : null]) if(el && !el.hidden) el.style.top = y;
+  if(placing || (typeof cal !== 'undefined' && cal && cal.step === 'map')) loupeAtCenter();
+}
+map.on('resize', () => setTimeout(syncCross, 50));
 function startPlacing(opts){
   placing = opts;
   if(!crossEl){ crossEl = h(`<div class="crosshair" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="24" cy="24" r="9"/><path d="M24 3v11M24 34v11M3 24h11M34 24h11"/></svg></div>`); map.getContainer().appendChild(crossEl); }
@@ -1256,18 +1280,19 @@ function startPlacing(opts){
   $('#placebar').hidden = false; $('#btnAdd').hidden = true;
   $('#placeText').textContent = opts.mode === 'move' ? 'Flytta kartan så att korset hamnar på den nya platsen.' : 'Flytta kartan så att korset hamnar där nålen ska sitta.';
   $('#placeOk').textContent = opts.mode === 'move' ? 'Flytta hit' : 'Lägg nålen här';
-  if(!isDesktop()) setSheet('peek');
-  if(opts.mode === 'move'){ const p = pinById(opts.id); map.setView([p.lat,p.lng], Math.max(map.getZoom(), 16)); }
+  if(!isDesktop()) setSheet('min');
+  if(opts.mode === 'move'){ const p = pinById(opts.id); map.setView([p.lat,p.lng], Math.max(map.getZoom(), 16), {animate:false}); }
+  syncCross(); if(opts.mode === 'move'){ const p = pinById(opts.id); panToCross([p.lat, p.lng]); }
   map.closePopup();
   updatePlaceCoords();
-  setTimeout(() => { map.invalidateSize(); updatePlaceCoords(); }, 300);
+  setTimeout(() => { map.invalidateSize(); if(placing && placing.mode === 'move'){ const p = pinById(placing.id); if(p) panToCross([p.lat, p.lng]); } updatePlaceCoords(); }, 320);
 }
-function endPlacing(){ placing = null; loupeHide(); if(crossEl) crossEl.hidden = true; $('#placebar').hidden = true; $('#btnAdd').hidden = false; }
-function updatePlaceCoords(){ if(!placing) return; loupeAtCenter(); const c = map.getCenter(); $('#placeCoords').textContent = `${fmtLatLng(c.lat,c.lng)} · SWEREF ${fmtSweref(c.lat,c.lng)}`; }
+function endPlacing(){ placing = null; loupeHide(); if(crossEl) crossEl.hidden = true; $('#placebar').hidden = true; $('#btnAdd').hidden = false; sheetRestore(); }
+function updatePlaceCoords(){ if(!placing) return; const show = () => { const c = crossLatLng(); $('#placeCoords').textContent = `${fmtLatLng(c.lat,c.lng)} · SWEREF ${fmtSweref(c.lat,c.lng)}`; }; show(); syncCross(); show(); }
 map.on('move', updatePlaceCoords);
-map.on('click', e => { if(placing && !drawing) map.panTo(e.latlng); });
+map.on('click', e => { if(placing && !drawing) panToCross(e.latlng, true); });
 $('#placeOk').addEventListener('click', () => {
-  const c = map.getCenter(); const opts = placing; endPlacing();
+  const c = crossLatLng(); const opts = placing; endPlacing();
   if(opts.mode === 'move'){ const p = pinById(opts.id); if(!p) return; p.lat = c.lat; p.lng = c.lng; p.updated = Date.now(); save(); renderAll(); toast('Nålen flyttades'); setTimeout(() => { const m = findMarker(p.id); if(m) m.openPopup(); }, 200); }
   else openPinForm({lat:c.lat, lng:c.lng});
 });
@@ -1529,7 +1554,7 @@ let rz = null;
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

@@ -191,7 +191,7 @@ function calCross(show){
 }
 function pickMap(i){
   const s = cal.shot, p = s.pts[i]; cal.step = 'map'; cal.i = i; map.closePopup();
-  $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('peek');
+  $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
   $('#ovbar').innerHTML = `<div class="shot-hint"><canvas id="ovCrop" width="120" height="80" aria-label="Utsnitt av bilden runt punkten"></canvas>
       <p>Flytta kartan så att <b>korset</b> hamnar på samma plats som i bilden (punkt ${i + 1} av 2). Förstoringsglaset visar vad som ligger under korset.</p></div>
     <div class="btnrow"><button class="btn primary" id="ovMapOk" type="button">${i ? 'Lägg bilden på kartan' : 'Nästa punkt'}</button><button class="btn" id="ovBack" type="button">Tillbaka till bilden</button><button class="btn ghost" id="ovMapCancel" type="button">Avbryt</button></div>`;
@@ -202,10 +202,12 @@ function pickMap(i){
     g.drawImage(img, p.u - z * .75, p.v - z / 2, z * 1.5, z, 0, 0, 120, 80);
     g.strokeStyle = '#d9520e'; g.lineWidth = 2; g.beginPath(); g.moveTo(60, 30); g.lineTo(60, 50); g.moveTo(50, 40); g.lineTo(70, 40); g.stroke();
   }; img.src = s.url;
-  if(p.ll) map.setView(p.ll, Math.max(map.getZoom(), 15), {animate:false});
-  calCross(true); calMarks(); loupeAtCenter();
+  calCross(true); syncCross();
+  if(p.ll){ map.setView(p.ll, Math.max(map.getZoom(), 15), {animate:false}); panToCross(p.ll); }
+  setTimeout(() => { if(cal && cal.step === 'map' && cal.i === i){ syncCross(); if(p.ll) panToCross(p.ll); loupeAtCenter(); } }, 320);
+  calMarks(); loupeAtCenter();
   $('#ovMapOk').addEventListener('click', () => {
-    const c = map.getCenter(); p.ll = {lat:c.lat, lng:c.lng};
+    const c = crossLatLng(); p.ll = {lat:c.lat, lng:c.lng};
     if(i === 0){ pickImage(1); return; }
     const [A, B] = s.pts;
     if(Math.hypot(B.u - A.u, B.v - A.v) < Math.max(s.w, s.h) / 10){ toast('Punkterna i bilden ligger för nära varandra. Välj två platser längre ifrån varandra.', 5000); pickImage(1); return; }
@@ -222,11 +224,12 @@ function calMarks(){
   loupeDrag(dragHandle(A.ll, 'shot first'), null, ll => { A.ll = {lat:ll.lat, lng:ll.lng}; }).addTo(calHandles);
 }
 map.on('move', () => { if(cal && cal.step === 'map') loupeAtCenter(); });
-map.on('click', e => { if(cal && cal.step === 'map') map.panTo(e.latlng); });
+map.on('click', e => { if(cal && cal.step === 'map') panToCross(e.latlng, true); });
 function endCalBar(keepCal){
   calCross(false); calHandles.clearLayers(); loupeHide();
   if(!adj){ $('#ovbar').hidden = true; $('#ovbar').innerHTML = ''; }
   if(!keepCal && !drawing && !placing) $('#btnAdd').hidden = false;
+  if(!keepCal) setTimeout(sheetRestore, 0);
 }
 function finishCalibration(){
   const s = cal.shot, isNew = cal.isNew;
@@ -262,7 +265,7 @@ function startAdjust(s){
     c.addTo(adj.handles);
   };
   draw();
-  $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('peek');
+  $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
   $('#ovbar').innerHTML = `<p>Dra en <b>punkt</b> för att passa in bilden: det skalar och vrider den. Dra <b>mitten</b> för att flytta hela bilden. Förstoringsglaset visas medan du drar.</p>
     <label class="trail-range" style="padding:0"><span style="display:flex;justify-content:space-between"><strong>Genomskinlighet</strong><span id="ovOpTxt">${Math.round(s.opacity * 100)} %</span></span><input type="range" id="ovOpacity" min="10" max="100" step="5" value="${Math.round(s.opacity * 100)}"></label>
     <div class="btnrow"><button class="btn primary" id="ovAdjDone" type="button">Klar</button><button class="btn" id="ovAdjRedo" type="button">Gör om punkterna</button></div>`;
@@ -277,6 +280,7 @@ function endAdjust(){
   map.removeLayer(adj.handles); adj = null; saveShots(); loupeHide();
   $('#ovbar').hidden = true; $('#ovbar').innerHTML = '';
   if(!drawing && !placing && !cal) $('#btnAdd').hidden = false;
+  sheetRestore();
 }
 
 loadShots();

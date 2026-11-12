@@ -108,7 +108,7 @@ function startLine(areaId, kind, name, lid){
   closeModal(); map.closePopup(); if(placing) endPlacing();
   if(a.visible === false){ a.visible = true; save(); renderAll(); }
   drawing = {mode:'line', id:areaId, kind, name, lid:lid || null, pts:lid && a.lines && a.lines[lid] ? parseBorder(a.lines[lid].p) : []};
-  $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('peek');
+  $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
   if(drawing.pts.length >= 2) map.fitBounds(L.latLngBounds(drawing.pts), {paddingTopLeft:[40,70], paddingBottomRight:[40, bottomPad() + 190], maxZoom:17});
   renderBorders(); drawDraft();
 }
@@ -144,11 +144,11 @@ function startDrawing(id){
   if(!canEditArea(a)){ toast('Du har inte rättighet att ändra det området.'); return; }
   closeModal(); map.closePopup(); if(placing) endPlacing();
   drawing = {mode:'border', id, pts:parseBorder(a.border)};
-  $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('peek');
+  $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
   if(drawing.pts.length) map.fitBounds(L.latLngBounds(drawing.pts), {paddingTopLeft:[40,70], paddingBottomRight:[40, bottomPad() + 190], maxZoom:17});
   renderBorders(); drawDraft();
 }
-function endDrawing(){ drawing = null; drawLayer.clearLayers(); drawHandles.clearLayers(); loupeHide(); $('#drawbar').hidden = true; $('#btnAdd').hidden = false; renderBorders(); }
+function endDrawing(){ drawing = null; drawLayer.clearLayers(); drawHandles.clearLayers(); loupeHide(); $('#drawbar').hidden = true; $('#btnAdd').hidden = false; renderBorders(); sheetRestore(); }
 map.on('click', e => { if(!drawing) return; drawing.pts.push([e.latlng.lat, e.latlng.lng]); drawDraft(); loupeFlash(e.latlng); });
 $('#drawUndo').addEventListener('click', () => { drawing.pts.pop(); drawDraft(); });
 $('#drawCancel').addEventListener('click', endDrawing);

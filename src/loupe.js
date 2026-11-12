@@ -55,8 +55,8 @@ function loupeFlash(latlng, ms){
   loupeShow(latlng, map.latLngToContainerPoint(latlng)); loupeLayers();
   clearTimeout(loupe.timer); loupe.timer = setTimeout(loupeHide, ms || 1600);
 }
-/* Förstoringsglas vid kartans mitt, där korset sitter. */
-function loupeAtCenter(){ loupeShow(map.getCenter(), L.point(map.getContainer().clientWidth / 2, map.getContainer().clientHeight / 2)); }
+/* Förstoringsglas vid korset. */
+function loupeAtCenter(){ const p = crossPoint(); loupeShow(map.containerPointToLatLng(p), p); }
 /* Gör en markör dragbar med förstoringsglas. onMove(latlng) anropas under dragningen, onEnd(latlng) när den släpps. */
 function loupeDrag(marker, onMove, onEnd){
   marker.on('dragstart', () => { clearTimeout(loupe.timer); loupeShow(marker.getLatLng(), map.latLngToContainerPoint(marker.getLatLng())); loupeLayers(); });
