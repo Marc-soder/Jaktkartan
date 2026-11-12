@@ -12,7 +12,8 @@ permissions:
 jobs:
   test:
     name: Bygg och testa
-    runs-on: ubuntu-latest
+    # Låst version: Playwright 1.56 stöder inte Ubuntu 26.04, som ubuntu-latest pekar på.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
