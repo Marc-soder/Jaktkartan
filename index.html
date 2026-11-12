@@ -950,6 +950,7 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
   <label class="base-opt" id="satLabelsRow"><input type="checkbox" id="satLabels"><span>Ortnamn och gränser på satellit</span></label>
   <div class="pop-sep"></div>
   <label class="base-opt"><input type="checkbox" id="popRoads"><span><strong>Skogsvägar och stigar</strong><small id="roadNote">Från OpenStreetMap, syns när du zoomat in</small></span></label>
+  <button class="base-opt" type="button" id="popDrawLine" style="width:100%;border:0;background:none;text-align:left;color:inherit;font:inherit"><span style="width:18px;text-align:center;font-weight:700;color:var(--accent)">+</span><span><strong>Rita egen väg eller stig</strong><small>Saknas en väg? Rita den så syns den för jaktlaget</small></span></button>
   <a class="base-opt" href="https://minkarta.lantmateriet.se/" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><span style="width:18px"></span><span><strong>Fastighetsgränser</strong><small>Öppnas i Lantmäteriets Min karta</small></span></a>
   <label class="base-opt"><input type="checkbox" id="popSvamp"><span><strong>Svampkarta</strong><small>Dina svampställen och andras fynd</small></span></label>
 </div>
@@ -1792,10 +1793,14 @@ function openAreaForm(id){
     <p class="note" style="margin:-4px 0 0">${canMove ? `Delar du området ser alla i jaktlaget dess ${n} ${n === 1 ? 'nål' : 'nålar'}, och medlemmar kan ändra dem.` : 'Bara en admin kan sluta dela området.'}</p>` : '<p class="note" style="margin:-4px 0 0">Logga in under Jakt och skapa ett jaktlag för att kunna dela området.</p>'}
     <div class="field" style="margin-top:14px"><span>Gräns</span><div class="small">${parseBorder(a.border).length >= 3 ? `${parseBorder(a.border).length} punkter · ${fmtHa(areaHa(parseBorder(a.border)))}` : 'Ingen gräns är ritad.'}</div>
       <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afDraw">${a.border ? 'Ändra gräns' : 'Rita gräns'}</button><button class="btn sm" type="button" id="afImport">Importera från fil</button>${a.border ? '<button class="btn sm danger" type="button" id="afBorderDel">Ta bort gräns</button>' : ''}</div></div>
+    <div class="field" style="margin-top:14px"><span>Egna vägar och stigar</span>${areaLines(a).length ? areaLines(a).map(([lid, l]) => `<div class="frow"><span class="fname">${esc(l.n || LINE_KIND[l.k])}<br><span class="small muted">${LINE_KIND[l.k]} · ${fmtDist(lineLen(parseBorder(l.p)))}</span></span><button class="btn sm" type="button" data-line-edit="${lid}">Ändra</button></div>`).join('') : '<div class="small">Inga egna vägar eller stigar.</div>'}
+      <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afLine">Rita väg eller stig</button></div></div>
     <div class="actions"><button class="btn primary grow" type="submit">Spara</button><button class="btn ghost" type="button" id="afCancel">Avbryt</button></div></form>`, m => {
     m.querySelector('#afCancel').addEventListener('click', closeModal);
     m.querySelector('#afDraw').addEventListener('click', () => startDrawing(id));
     m.querySelector('#afImport').addEventListener('click', () => { borderTarget = id; $('#fileBorder').click(); });
+    m.querySelector('#afLine').addEventListener('click', () => openLineForm({areaId:id}));
+    m.querySelectorAll('[data-line-edit]').forEach(b => b.addEventListener('click', () => openLineForm({areaId:id, lid:b.dataset.lineEdit})));
     const bd = m.querySelector('#afBorderDel'); if(bd) bd.addEventListener('click', () => confirmClick(bd, 'Bekräfta', () => { const cur = areaById(id); if(cur){ delete cur.border; cur.updated = Date.now(); save(); } closeModal(); renderAll(); toast('Gränsen är borttagen'); }));
     m.querySelector('#afForm').addEventListener('submit', e => { e.preventDefault(); const v = m.querySelector('#afName').value.trim(); if(!v) return; const cur = areaById(id); if(!cur){ closeModal(); return; }
       cur.name = v; cur.updated = Date.now(); delete cur.example;
@@ -1913,7 +1918,7 @@ $('#btnLocate').addEventListener('click', () => locate(true));
 function fitAll(){
   const pts = state.pins.filter(pinVisible).map(p => [p.lat,p.lng]);
   if(state.settings.svampMode) state.external.forEach(s => { if(s.visible !== false) s.points.forEach(pt => pts.push([pt.lat,pt.lng])); });
-  state.areas.forEach(a => { if(a.visible !== false) parseBorder(a.border).forEach(pt => pts.push(pt)); });
+  state.areas.forEach(a => { if(a.visible !== false){ parseBorder(a.border).forEach(pt => pts.push(pt)); areaLines(a).forEach(([, l]) => parseBorder(l.p).forEach(pt => pts.push(pt))); } });
   if(!pts.length){ toast('Inga nålar visas just nu.'); return; }
   map.closePopup();
   if(pts.length === 1){ map.setView(pts[0], 15); return; }
@@ -2201,6 +2206,7 @@ function viltRows(v, lan){ return v.rules.filter(r => r.lan === '*' ? !(r.ex || 
 function viltLawful(v, lan, md){ return viltRows(v, lan).filter(r => r.per.some(p => inPer(md, p))); }
 const rowLabel = r => [r.cls, r.sub].filter(Boolean).join(', ');
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const nowHM = () => { const d = new Date(); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
 
 function renderVilt(){
   const pane = $('#paneVilt'); if(!pane) return;
@@ -2233,7 +2239,7 @@ let viltDay = null;
 /* ---------- Moln: jaktlag, rättigheter, jakter och positioner (Firebase Realtime Database) ---------- */
 const FB_VER = '10.12.2', FBKEY = 'faltkartan.fb', NAMEKEY = 'faltkartan.name';
 const BAKED_CFG = {apiKey:"AIzaSyDlhnsDFs3HxuMmGPYBUm-3e0ZBmVsCiq0", authDomain:"jaktkartan-daa0a.firebaseapp.com", databaseURL:"https://jaktkartan-daa0a-default-rtdb.europe-west1.firebasedatabase.app", projectId:"jaktkartan-daa0a", storageBucket:"jaktkartan-daa0a.firebasestorage.app", messagingSenderId:"813258995773", appId:"1:813258995773:web:00660a1eb536eaa85cd254"};
-const RULES_TEXT = "{\n  \"rules\": {\n    \".read\": false,\n    \".write\": false,\n    \"owner\": {\n      \".read\": \"auth != null\",\n      \".write\": \"auth != null && !data.exists() && newData.val() === auth.uid && auth.token.firebase.sign_in_provider !== 'anonymous'\"\n    },\n    \"creators\": {\n      \"$uid\": {\n        \".read\": \"auth != null && (auth.uid === $uid || root.child('owner').val() === auth.uid)\",\n        \".write\": \"auth != null && root.child('owner').val() === auth.uid\",\n        \".validate\": \"newData.isBoolean()\"\n      }\n    },\n    \"userGroups\": {\n      \"$uid\": {\n        \".read\": \"auth != null && auth.uid === $uid\",\n        \".write\": \"auth != null && auth.uid === $uid\"\n      }\n    },\n    \"invites\": {\n      \"$code\": {\n        \".read\": \"auth != null\",\n        \".write\": \"auth != null && ((!data.exists() && root.child('groups/'+newData.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin') || (data.exists() && !newData.exists() && root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin'))\",\n        \".validate\": \"$code.length >= 8 && newData.hasChildren(['gid','role','expires']) && newData.child('expires').isNumber() && (newData.child('role').val() === 'leader' || newData.child('role').val() === 'editor' || newData.child('role').val() === 'viewer')\"\n      }\n    },\n    \"huntCodes\": {\n      \"$code\": {\n        \".read\": \"auth != null\",\n        \".write\": \"auth != null && ((!data.exists() && (root.child('groups/'+newData.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin' || root.child('groups/'+newData.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'leader')) || (data.exists() && !newData.exists() && (root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin' || root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'leader')))\",\n        \".validate\": \"$code.length >= 6 && newData.hasChildren(['gid','hid','expires']) && newData.child('expires').isNumber()\"\n      }\n    },\n    \"groups\": {\n      \"$gid\": {\n        \".write\": \"auth != null && data.child('meta/owner').val() === auth.uid && !newData.exists()\",\n        \"meta\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now)\",\n          \".write\": \"auth != null && ((!data.exists() && newData.child('owner').val() === auth.uid && (root.child('owner').val() === auth.uid || root.child('creators/'+auth.uid).val() === true)) || ((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin') && newData.child('owner').val() === data.child('owner').val()))\",\n          \".validate\": \"newData.hasChildren(['name','owner']) && newData.child('name').isString() && newData.child('name').val().length <= 80\"\n        },\n        \"members\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$uid\": {\n            \".write\": \"auth != null && (((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin') && ($uid !== data.parent().parent().child('meta/owner').val() || newData.child('role').val() === 'admin')) || ($uid === auth.uid && !data.exists() && !data.parent().parent().child('meta').exists() && newData.parent().parent().child('meta/owner').val() === auth.uid && newData.child('role').val() === 'admin') || ($uid === auth.uid && !data.exists() && newData.exists() && root.child('invites/'+newData.child('code').val()).child('gid').val() === $gid && root.child('invites/'+newData.child('code').val()).child('expires').val() > now && newData.child('role').val() === root.child('invites/'+newData.child('code').val()).child('role').val()) || ($uid === auth.uid && data.exists() && $uid !== data.parent().parent().child('meta/owner').val() && (!newData.exists() || newData.child('role').val() === data.child('role').val())) || ($uid === auth.uid && data.exists() && $uid === data.parent().parent().child('meta/owner').val() && newData.child('role').val() === 'admin'))\",\n            \".validate\": \"newData.hasChildren(['role','name']) && newData.child('name').isString() && newData.child('name').val().length <= 60 && (newData.child('role').val() === 'admin' || newData.child('role').val() === 'leader' || newData.child('role').val() === 'editor' || newData.child('role').val() === 'viewer')\"\n          }\n        },\n        \"areas\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$aid\": {\n            \".read\": \"((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/hunts/'+root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val()+'/areas/'+$aid).val() === true)\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'editor'))\",\n            \".validate\": \"newData.child('name').isString() && newData.child('name').val().length <= 80\"\n          }\n        },\n        \"pins\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$aid\": {\n            \".read\": \"((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/hunts/'+root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val()+'/areas/'+$aid).val() === true)\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'editor'))\",\n            \"$pid\": {\n              \".validate\": \"newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('typeId').isString()\"\n            }\n          }\n        },\n        \"types\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now)\",\n          \"$tid\": {\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'editor'))\",\n            \".validate\": \"newData.child('name').isString() && newData.child('color').isString()\"\n          }\n        },\n        \"hunts\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$hid\": {\n            \".read\": \"(auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))\",\n            \".validate\": \"newData.hasChildren(['name','expires','code']) && newData.child('expires').isNumber()\"\n          }\n        },\n        \"guests\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$uid\": {\n            \".read\": \"auth != null && auth.uid === $uid\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) || (auth != null && $uid === auth.uid && (!newData.exists() || (root.child('huntCodes/'+newData.child('code').val()).child('gid').val() === $gid && root.child('huntCodes/'+newData.child('code').val()).child('hid').val() === newData.child('hid').val() && root.child('huntCodes/'+newData.child('code').val()).child('expires').val() > now && newData.child('expires').val() === root.child('huntCodes/'+newData.child('code').val()).child('expires').val())))\",\n            \".validate\": \"newData.hasChildren(['hid','code','name','expires']) && newData.child('name').isString() && newData.child('name').val().length <= 60\"\n          }\n        },\n        \"positions\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now)\",\n          \"$uid\": {\n            \".write\": \"auth != null && $uid === auth.uid && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now)\",\n            \".validate\": \"newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber()\"\n          }\n        }\n      }\n    }\n  }\n}";
+const RULES_TEXT = "{\n  \"rules\": {\n    \".read\": false,\n    \".write\": false,\n    \"owner\": {\n      \".read\": \"auth != null\",\n      \".write\": \"auth != null && !data.exists() && newData.val() === auth.uid && auth.token.firebase.sign_in_provider !== 'anonymous'\"\n    },\n    \"creators\": {\n      \"$uid\": {\n        \".read\": \"auth != null && (auth.uid === $uid || root.child('owner').val() === auth.uid)\",\n        \".write\": \"auth != null && root.child('owner').val() === auth.uid\",\n        \".validate\": \"newData.isBoolean()\"\n      }\n    },\n    \"userGroups\": {\n      \"$uid\": {\n        \".read\": \"auth != null && auth.uid === $uid\",\n        \".write\": \"auth != null && auth.uid === $uid\"\n      }\n    },\n    \"invites\": {\n      \"$code\": {\n        \".read\": \"auth != null\",\n        \".write\": \"auth != null && ((!data.exists() && root.child('groups/'+newData.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin') || (data.exists() && !newData.exists() && root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin'))\",\n        \".validate\": \"$code.length >= 8 && newData.hasChildren(['gid','role','expires']) && newData.child('expires').isNumber() && (newData.child('role').val() === 'leader' || newData.child('role').val() === 'editor' || newData.child('role').val() === 'viewer')\"\n      }\n    },\n    \"huntCodes\": {\n      \"$code\": {\n        \".read\": \"auth != null\",\n        \".write\": \"auth != null && ((!data.exists() && (root.child('groups/'+newData.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin' || root.child('groups/'+newData.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'leader')) || (data.exists() && !newData.exists() && (root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin' || root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'leader')))\",\n        \".validate\": \"$code.length >= 6 && newData.hasChildren(['gid','hid','expires']) && newData.child('expires').isNumber()\"\n      }\n    },\n    \"groups\": {\n      \"$gid\": {\n        \".write\": \"auth != null && data.child('meta/owner').val() === auth.uid && !newData.exists()\",\n        \"meta\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now)\",\n          \".write\": \"auth != null && ((!data.exists() && newData.child('owner').val() === auth.uid && (root.child('owner').val() === auth.uid || root.child('creators/'+auth.uid).val() === true)) || ((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin') && newData.child('owner').val() === data.child('owner').val()))\",\n          \".validate\": \"newData.hasChildren(['name','owner']) && newData.child('name').isString() && newData.child('name').val().length <= 80\"\n        },\n        \"members\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$uid\": {\n            \".write\": \"auth != null && (((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin') && ($uid !== data.parent().parent().child('meta/owner').val() || newData.child('role').val() === 'admin')) || ($uid === auth.uid && !data.exists() && !data.parent().parent().child('meta').exists() && newData.parent().parent().child('meta/owner').val() === auth.uid && newData.child('role').val() === 'admin') || ($uid === auth.uid && !data.exists() && newData.exists() && root.child('invites/'+newData.child('code').val()).child('gid').val() === $gid && root.child('invites/'+newData.child('code').val()).child('expires').val() > now && newData.child('role').val() === root.child('invites/'+newData.child('code').val()).child('role').val()) || ($uid === auth.uid && data.exists() && $uid !== data.parent().parent().child('meta/owner').val() && (!newData.exists() || newData.child('role').val() === data.child('role').val())) || ($uid === auth.uid && data.exists() && $uid === data.parent().parent().child('meta/owner').val() && newData.child('role').val() === 'admin'))\",\n            \".validate\": \"newData.hasChildren(['role','name']) && newData.child('name').isString() && newData.child('name').val().length <= 60 && (newData.child('role').val() === 'admin' || newData.child('role').val() === 'leader' || newData.child('role').val() === 'editor' || newData.child('role').val() === 'viewer')\"\n          }\n        },\n        \"areas\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$aid\": {\n            \".read\": \"((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/hunts/'+root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val()+'/areas/'+$aid).val() === true)\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'editor'))\",\n            \".validate\": \"newData.child('name').isString() && newData.child('name').val().length <= 80\"\n          }\n        },\n        \"pins\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$aid\": {\n            \".read\": \"((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/hunts/'+root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val()+'/areas/'+$aid).val() === true)\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'editor'))\",\n            \"$pid\": {\n              \".validate\": \"newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('typeId').isString()\"\n            }\n          }\n        },\n        \"types\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now)\",\n          \"$tid\": {\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'editor'))\",\n            \".validate\": \"newData.child('name').isString() && newData.child('color').isString()\"\n          }\n        },\n        \"hunts\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$hid\": {\n            \".read\": \"(auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))\",\n            \".validate\": \"newData.hasChildren(['name','expires','code']) && newData.child('expires').isNumber() && (!newData.child('starts').exists() || (newData.child('starts').isNumber() && newData.child('starts').val() < newData.child('expires').val()))\"\n          }\n        },\n        \"guests\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$uid\": {\n            \".read\": \"auth != null && auth.uid === $uid\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) || (auth != null && $uid === auth.uid && (!newData.exists() || (root.child('huntCodes/'+newData.child('code').val()).child('gid').val() === $gid && root.child('huntCodes/'+newData.child('code').val()).child('hid').val() === newData.child('hid').val() && root.child('huntCodes/'+newData.child('code').val()).child('expires').val() > now && newData.child('expires').val() === root.child('huntCodes/'+newData.child('code').val()).child('expires').val())))\",\n            \".validate\": \"newData.hasChildren(['hid','code','name','expires']) && newData.child('name').isString() && newData.child('name').val().length <= 60\"\n          }\n        },\n        \"huntPos\": {\n          \"$hid\": {\n            \".read\": \"((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid)) && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now))\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()\",\n            \"$uid\": {\n              \".write\": \"auth != null && $uid === auth.uid && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now)) && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid))\",\n              \".validate\": \"newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber()\"\n            }\n          }\n        }\n      }\n    }\n  }\n}";
 const ROLES = {admin:'Admin', leader:'Jaktledare', editor:'Medlem', viewer:'Läsare'};
 const ROLE_HELP = {admin:'Allt, även medlemmar och rättigheter', leader:'Skapa jakter, ändra nålar', editor:'Lägga till och ändra nålar', viewer:'Bara titta'};
 let fb = null;
@@ -2320,21 +2326,20 @@ function purgeLocal(gid){
 }
 function dropGroup(gid){
   const g = cloud.groups[gid]; if(!g) return;
-  g.refs.forEach(r => r.off()); delete cloud.groups[gid];
+  g.refs.forEach(r => r.off()); Object.values(g.posRefs).forEach(r => r.off()); delete cloud.groups[gid];
   purgeLocal(gid); scheduleRender(); renderPositions();
 }
 function forgetGroup(gid){ if(fb && cloud.user) fb.db.ref('userGroups/' + myUid() + '/' + gid).remove().catch(() => {}); dropGroup(gid); }
 function subGroup(gid, kind){
-  const g = cloud.groups[gid] = {id:gid, kind, meta:null, members:{}, areas:{}, pins:{}, types:{}, hunts:{}, guests:{}, positions:{}, guest:null, refs:[], areaRefs:{}, huntRef:null};
+  const g = cloud.groups[gid] = {id:gid, kind, meta:null, members:{}, areas:{}, pins:{}, types:{}, hunts:{}, guests:{}, guest:null, refs:[], areaRefs:{}, huntRef:null, posRefs:{}, huntPos:{}, disc:{}};
   const on = (path, fn) => { const r = fb.db.ref('groups/' + gid + '/' + path); r.on('value', s => { if(cloud.groups[gid] === g) fn(s.val()); }, () => { if(cloud.groups[gid] === g) fn(null, true); }); g.refs.push(r); return r; };
   on('meta', v => { g.meta = v; if(!v){ forgetGroup(gid); toast('Du har inte längre åtkomst till ett jaktlag eller en jakt.'); return; } scheduleRender(); });
   on('types', v => { g.types = v || {}; applyRemote(gid); });
-  on('positions', v => { g.positions = v || {}; renderPositions(); });
   if(kind === 'member'){
     on('members', v => { g.members = v || {}; scheduleRender(); });
     on('areas', v => { g.areas = v || {}; applyRemote(gid); });
     on('pins', v => { g.pins = v || {}; applyRemote(gid); });
-    on('hunts', v => { g.hunts = v || {}; scheduleRender(); });
+    on('hunts', v => { g.hunts = v || {}; scheduleRender(); syncHuntPos(); });
     on('guests', v => { g.guests = v || {}; scheduleRender(); });
   } else {
     on('guests/' + myUid(), v => {
@@ -2342,7 +2347,7 @@ function subGroup(gid, kind){
       if(!v) return;
       if(g.huntRef) return;
       g.huntRef = on('hunts/' + v.hid, hv => {
-        g.hunts = hv ? {[v.hid]: hv} : {};
+        g.hunts = hv ? {[v.hid]: hv} : {}; syncHuntPos();
         const want = hv && hv.areas ? Object.keys(hv.areas).filter(k => hv.areas[k] === true) : [];
         for(const aid of want){ if(g.areaRefs[aid]) continue; g.areaRefs[aid] = true;
           on('areas/' + aid, av => { if(av) g.areas[aid] = av; else delete g.areas[aid]; applyRemote(gid); });
@@ -2361,7 +2366,7 @@ function applyRemote(gid){
     if(!a) continue;
     const clash = state.areas.find(x => x.id === aid); // privat område med samma id: ge det ett nytt
     if(clash){ const nid = 'a-' + uid(); state.pins.forEach(p => { if(p.areaId === aid) p.areaId = nid; }); clash.id = nid; }
-    { const na = {id:aid, name:a.name || 'Område', gid, visible:!hidden[aid], updated:a.updated || 0}; if(typeof a.border === 'string' && a.border) na.border = a.border; state.areas.push(na); }
+    { const na = {id:aid, name:a.name || 'Område', gid, visible:!hidden[aid], updated:a.updated || 0}; if(typeof a.border === 'string' && a.border) na.border = a.border; if(a.lines && typeof a.lines === 'object') na.lines = JSON.parse(JSON.stringify(a.lines)); state.areas.push(na); }
     for(const [pid, p] of Object.entries(g.pins[aid] || {})){
       if(p && typeof p.lat === 'number' && typeof p.lng === 'number') state.pins.push({id:pid, areaId:aid, name:p.name || '', note:p.note || '', typeId:p.typeId, lat:p.lat, lng:p.lng, created:p.created || 0, updated:p.updated || 0, by:p.by || ''});
     }
@@ -2384,7 +2389,7 @@ function cloudSync(){
     if(g.kind !== 'member' || !canEditGroup(g)) continue;
     const up = {}, want = {};
     for(const a of state.areas){ if(a.gid !== g.id) continue;
-      const aj = {name:a.name, updated:a.updated || 0}; if(a.border) aj.border = a.border;
+      const aj = {name:a.name, updated:a.updated || 0}; if(a.border) aj.border = a.border; if(a.lines && Object.keys(a.lines).length) aj.lines = JSON.parse(JSON.stringify(a.lines));
       if(!g.areas[a.id] || canon(g.areas[a.id]) !== canon(aj)){ up['areas/' + a.id] = aj; g.areas[a.id] = aj; }
       want[a.id] = {};
     }
@@ -2413,9 +2418,35 @@ function refetch(g){
 const posLayer = L.layerGroup().addTo(map);
 const initials = n => (n || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
 const ago = t => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'nyss' : m < 60 ? `för ${m} min sedan` : `för ${Math.round(m / 60)} h sedan`; };
+/* Positioner delas bara under en pågående jakt. Varje jakt har sina egna positioner i groups/<lag>/huntPos/<jakt>,
+   och säkerhetsreglerna släpper bara igenom läsning och skrivning mellan jaktens start och slut. */
+const huntLive = (h, now) => !!h && h.expires > (now || Date.now()) && !(h.starts > (now || Date.now()));
+const liveHunts = g => Object.entries(g.hunts || {}).filter(([hid, h]) => huntLive(h) && (g.kind === 'member' || (g.guest && g.guest.hid === hid))).map(([hid]) => hid);
+const anyLiveHunt = () => Object.values(cloud.groups).some(g => liveHunts(g).length);
+let huntPosTimer = null;
+function syncHuntPos(){
+  if(!fb || !cloud.user) return;
+  let next = Infinity;
+  for(const g of Object.values(cloud.groups)){
+    const live = new Set(liveHunts(g));
+    for(const hid of Object.keys(g.posRefs)) if(!live.has(hid)){ g.posRefs[hid].off(); delete g.posRefs[hid]; delete g.huntPos[hid]; delete g.disc[hid]; }
+    for(const hid of live){
+      if(g.posRefs[hid]) continue;
+      const r = fb.db.ref(`groups/${g.id}/huntPos/${hid}`);
+      r.on('value', s => { if(g.posRefs[hid] === r){ g.huntPos[hid] = s.val() || {}; renderPositions(); } }, () => { if(g.posRefs[hid] === r){ delete g.posRefs[hid]; delete g.huntPos[hid]; renderPositions(); } });
+      g.posRefs[hid] = r;
+    }
+    // Nästa gång en jakt startar eller slutar
+    for(const h of Object.values(g.hunts || {})) if(h){ for(const t of [h.starts, h.expires]) if(t > Date.now() && t < next) next = t; }
+  }
+  if(cloud.sharing && !anyLiveHunt()){ stopSharing(); toast('Jakten är slut. Din position delas inte längre.', 5000); }
+  renderPositions(); scheduleRender();
+  clearTimeout(huntPosTimer);
+  if(next < Infinity) huntPosTimer = setTimeout(syncHuntPos, Math.min(next - Date.now() + 1000, 2147483000));
+}
 function activePositions(){
   const seen = {}, out = [];
-  for(const g of Object.values(cloud.groups)) for(const [uid, p] of Object.entries(g.positions || {})){
+  for(const g of Object.values(cloud.groups)) for(const pos of Object.values(g.huntPos || {})) for(const [uid, p] of Object.entries(pos || {})){
     if(!p || uid === myUid() || seen[uid] || typeof p.lat !== 'number' || Date.now() - p.t > 30 * 60000) continue;
     seen[uid] = true; out.push(Object.assign({uid}, p));
   }
@@ -2430,18 +2461,19 @@ function renderPositions(){
   }
   const el = $('#posCount'); if(el) el.textContent = posCountText();
 }
-const posCountText = () => { const n = activePositions().length; return n ? `${n} ${n === 1 ? 'person delar' : 'personer delar'} sin position just nu.` : 'Ingen annan delar sin position just nu.'; };
+const posCountText = () => { if(!anyLiveHunt()) return 'Positioner kan bara delas och ses medan en jakt pågår.'; const n = activePositions().length; return n ? `${n} ${n === 1 ? 'person delar' : 'personer delar'} sin position just nu.` : 'Ingen annan delar sin position just nu.'; };
 setInterval(renderPositions, 60000);
 function sendPos(){
   if(!fb || !cloud.user || !myPos) return;
-  for(const g of Object.values(cloud.groups)){
-    const r = fb.db.ref(`groups/${g.id}/positions/${myUid()}`);
-    if(!g.disc){ g.disc = true; try { r.onDisconnect().remove(); } catch(e){} }
+  for(const g of Object.values(cloud.groups)) for(const hid of liveHunts(g)){
+    const r = fb.db.ref(`groups/${g.id}/huntPos/${hid}/${myUid()}`);
+    if(!g.disc[hid]){ g.disc[hid] = true; try { r.onDisconnect().remove(); } catch(e){} }
     r.set({lat:+myPos.lat.toFixed(6), lng:+myPos.lng.toFixed(6), acc:Math.round(myPos.acc || 0), t:Date.now(), name:myName()}).catch(() => {});
   }
 }
 function startSharing(){
   if(!('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); return; }
+  if(!anyLiveHunt()){ toast('Positioner kan bara delas medan en jakt pågår.'); renderJakt(); return; }
   cloud.sharing = true; cloud.lastSent = 0;
   cloud.watchId = navigator.geolocation.watchPosition(pos => {
     showMe(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0);
@@ -2455,7 +2487,7 @@ function stopSharing(silent){
   if(cloud.watchId != null){ navigator.geolocation.clearWatch(cloud.watchId); cloud.watchId = null; }
   if(cloud.wake){ try { cloud.wake.release(); } catch(e){} cloud.wake = null; }
   const was = cloud.sharing; cloud.sharing = false;
-  if(was && !silent && fb && cloud.user) for(const g of Object.values(cloud.groups)) fb.db.ref(`groups/${g.id}/positions/${myUid()}`).remove().catch(() => {});
+  if(was && !silent && fb && cloud.user) for(const g of Object.values(cloud.groups)) for(const hid of liveHunts(g)) fb.db.ref(`groups/${g.id}/huntPos/${hid}/${myUid()}`).remove().catch(() => {});
 }
 
 /* Åtgärder */
@@ -2509,11 +2541,11 @@ function huntChips(hunt){ const ids = Object.keys(hunt.species || {}).filter(k =
 const fmtDay = d => d ? `${+d.slice(8)} ${MON[+d.slice(5,7) - 1]} ${d.slice(0,4)}` : '';
 const fmtTime = t => { const d = new Date(t); return `${fmtDay(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`)} kl. ${String(d.getHours()).padStart(2,'0')}.${String(d.getMinutes()).padStart(2,'0')}`; };
 function huntCard(g, hid, hunt, lead){
-  const live = hunt.expires > Date.now();
+  const now = Date.now(), live = hunt.expires > now, upcoming = live && hunt.starts > now;
   const guests = Object.entries(g.guests || {}).filter(([, v]) => v && v.hid === hid);
   const areas = Object.keys(hunt.areas || {}).map(a => (g.areas[a] || {}).name).filter(Boolean);
-  return `<div class="card${live ? '' : ' dim'}"><div class="card-h"><strong>${esc(hunt.name)}</strong><span class="tag${live ? ' on' : ''}">${live ? 'Pågår' : 'Avslutad'}</span></div>
-    <div class="small muted">${esc(fmtDay(hunt.day))}${hunt.lan ? ' · ' + esc(hunt.lan) : ''} · gäller till ${esc(fmtTime(hunt.expires))}</div>
+  return `<div class="card${live ? '' : ' dim'}"><div class="card-h"><strong>${esc(hunt.name)}</strong><span class="tag${live && !upcoming ? ' on' : ''}">${upcoming ? 'Kommande' : live ? 'Pågår' : 'Avslutad'}</span></div>
+    <div class="small muted">${esc(fmtDay(hunt.day))}${hunt.lan ? ' · ' + esc(hunt.lan) : ''}${hunt.starts ? ` · startar ${esc(fmtTime(hunt.starts))}` : ''} · gäller till ${esc(fmtTime(hunt.expires))}</div>
     <div class="lbl">Jaktbart vilt</div>${huntChips(hunt)}
     ${areas.length ? `<div class="lbl">Områden</div><div class="small">${areas.map(esc).join(', ')}</div>` : ''}
     ${lead && live ? `<div class="lbl">Tillfällig åtkomst för gäster</div><div class="codebox"><span>Jaktkod <b>${esc(hunt.code)}</b></span><button class="btn sm" type="button" data-j="hunt-link" data-g="${g.id}" data-h="${hid}">Kopiera länk</button></div>
@@ -2548,7 +2580,7 @@ function renderJakt(){
   } else {
     const u = cloud.user, gs = Object.values(cloud.groups);
     html += `<div class="userrow"><span class="pos-dot">${esc(initials(myName()))}</span><span class="grow"><strong>${esc(myName())}</strong><br><span class="small muted">${u.isAnonymous ? 'Gäst' : esc(u.email || 'Inloggad')}</span></span><button class="btn sm" type="button" data-j="name">Byt namn</button><button class="btn sm ghost" type="button" data-j="logout">Logga ut</button></div>
-      <label class="bigtoggle" for="shareToggle" style="margin-top:10px"><span><strong>Dela min position</strong><br><span class="small muted">Syns för alla i dina jaktlag och jakter</span></span><input class="sw-toggle" type="checkbox" id="shareToggle" ${cloud.sharing ? 'checked' : ''} ${gs.length ? '' : 'disabled'}></label>
+      <label class="bigtoggle" for="shareToggle" style="margin-top:10px"><span><strong>Dela min position</strong><br><span class="small muted">Syns bara för deltagarna i pågående jakter</span></span><input class="sw-toggle" type="checkbox" id="shareToggle" ${cloud.sharing ? 'checked' : ''} ${anyLiveHunt() ? '' : 'disabled'}></label>
       <p class="note" id="posCount">${posCountText()}</p>
       ${cloud.sharing ? '<p class="note">Positionen skickas bara medan appen är öppen och skärmen är på.</p>' : ''}`;
     for(const g of gs){
@@ -2594,7 +2626,9 @@ function openHuntForm(g){
   openModal(`<h2>Ny jakt</h2><form id="hfForm">
     <label class="field"><span>Namn</span><input class="input" id="hfName" maxlength="60" value="Jakt ${fmtDay(todayISO())}"></label>
     <div class="row2"><label class="field"><span>Datum</span><input class="input" type="date" id="hfDay" value="${todayISO()}"></label>
-    <label class="field"><span>Åtkomst gäller till kl.</span><input class="input" type="time" id="hfEnd" value="23:59"></label></div>
+    <label class="field"><span>Startar kl.</span><input class="input" type="time" id="hfStart" value="${nowHM()}"></label></div>
+    <label class="field"><span>Slutar kl.</span><input class="input" type="time" id="hfEnd" value="23:59"></label>
+    <p class="note" style="margin-top:0">Positioner kan bara delas och ses mellan start och slut. Gästernas åtkomst gäller till sluttiden.</p>
     <label class="field"><span>Län</span><select class="input" id="hfLan"><option value="">Välj län</option>${LAN.map(l => `<option${l === state.settings.lan ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
     <div class="field"><span>Områden som gästerna får se</span>${areas.length ? areas.map(a => `<label class="checkline"><input type="checkbox" data-area="${a.id}" checked><span>${esc(a.name)}</span></label>`).join('') : '<span class="small muted">Laget har inga delade områden ännu. Gäster ser då bara varandras positioner.</span>'}</div>
     <div class="field"><span>Jaktbart vilt</span><div id="hfVilt"></div></div>
@@ -2617,10 +2651,11 @@ function openHuntForm(g){
     m.querySelector('#hfForm').addEventListener('submit', e => {
       e.preventDefault();
       const name = m.querySelector('#hfName').value.trim() || 'Jakt', day = m.querySelector('#hfDay').value || todayISO(), end = m.querySelector('#hfEnd').value || '23:59', lan = m.querySelector('#hfLan').value;
-      const [y, mo, d] = day.split('-').map(Number), [hh, mm] = end.split(':').map(Number);
-      const expires = new Date(y, mo - 1, d, hh, mm, 59).getTime();
+      const [y, mo, d] = day.split('-').map(Number), [hh, mm] = end.split(':').map(Number), [sh, sm] = (m.querySelector('#hfStart').value || '00:00').split(':').map(Number);
+      const expires = new Date(y, mo - 1, d, hh, mm, 59).getTime(), starts = new Date(y, mo - 1, d, sh, sm, 0).getTime();
       if(expires < Date.now()){ toast('Sluttiden har redan passerat. Välj en senare tid.'); return; }
-      const hunt = {name, day, expires, lan, code:newCode(8), by:myUid(), created:Date.now(), areas:{}, species:{}};
+      if(starts >= expires){ toast('Starttiden måste vara före sluttiden.'); return; }
+      const hunt = {name, day, starts, expires, lan, code:newCode(8), by:myUid(), created:Date.now(), areas:{}, species:{}};
       $$('[data-area]', m).forEach(c => { if(c.checked) hunt.areas[c.dataset.area] = true; });
       for(const k of Object.keys(sel)) if(sel[k]) hunt.species[k] = true;
       const hid = uid(), up = {};
@@ -2646,7 +2681,7 @@ $('#paneJakt').addEventListener('click', e => {
   else if(!g) return;
   else if(act === 'hunt-new') openHuntForm(g);
   else if(act === 'hunt-link'){ const hunt = g.hunts[hid]; copyText(`${hunt.name}: gå med i jakten med kod ${hunt.code}\n${shareLink('j', hunt.code)}`, 'Länken är kopierad'); }
-  else if(act === 'hunt-end') confirmClick(b, 'Bekräfta', () => { const hunt = g.hunts[hid], up = {}; up[`groups/${g.id}/hunts/${hid}`] = null; if(hunt && hunt.code) up[`huntCodes/${hunt.code}`] = null;
+  else if(act === 'hunt-end') confirmClick(b, 'Bekräfta', () => { const hunt = g.hunts[hid], up = {}; up[`groups/${g.id}/hunts/${hid}`] = null; up[`groups/${g.id}/huntPos/${hid}`] = null; if(hunt && hunt.code) up[`huntCodes/${hunt.code}`] = null;
     for(const [gu, v] of Object.entries(g.guests || {})) if(v && v.hid === hid) up[`groups/${g.id}/guests/${gu}`] = null;
     fb.db.ref().update(up).then(() => toast('Jakten är avslutad. Gästernas åtkomst är borttagen.')).catch(fail()); });
   else if(act === 'guest-del') fb.db.ref(`groups/${g.id}/guests/${u}`).remove().catch(fail());
@@ -2688,14 +2723,96 @@ const fmtHa = ha => (ha >= 100 ? fmtInt(ha) : ha.toLocaleString('sv-SE', {maximu
 function renderBorders(){
   borderLayer.clearLayers();
   for(const a of state.areas){
-    if(a.visible === false || (drawing && drawing.id === a.id)) continue;
+    if(a.visible === false || (drawing && drawing.mode === 'border' && drawing.id === a.id)) continue;
     const pts = parseBorder(a.border); if(pts.length < 3) continue;
     L.polygon(pts, {color:'#ffffff', weight:6, opacity:.7, fill:false, interactive:false}).addTo(borderLayer);
     L.polygon(pts, {color:'#d9520e', weight:3, fillColor:'#d9520e', fillOpacity:.06, dashArray:'10 6', interactive:false}).addTo(borderLayer);
   }
+  renderLines();
+}
+
+/* ---------- Egna vägar och stigar ----------
+   Sparas per område som a.lines = {id: {k:'road'|'path', p:'lat,lng;lat,lng', n:'namn'}} och delas med jaktlaget tillsammans med området. */
+const lineLayer = L.layerGroup().addTo(map);
+const LINE_KIND = {road:'Väg', path:'Stig'};
+function lineLen(pts){ let m = 0; for(let i = 1; i < pts.length; i++) m += distM({lat:pts[i-1][0], lng:pts[i-1][1]}, {lat:pts[i][0], lng:pts[i][1]}); return m; }
+const areaLines = a => Object.entries(a && a.lines && typeof a.lines === 'object' ? a.lines : {}).filter(([, l]) => l && LINE_KIND[l.k] && parseBorder(l.p).length >= 2);
+function lineStyle(kind, pts, interactive){
+  const path = kind === 'path', o = {interactive:!!interactive, bubblingMouseEvents:false};
+  return [L.polyline(pts, Object.assign({color:'#ffffff', weight:path ? 6 : 8, opacity:.85}, o)), L.polyline(pts, Object.assign({color:path ? '#7a2e8f' : '#8a4b12', weight:path ? 3 : 4.5, dashArray:path ? '7 6' : null}, o))];
+}
+function renderLines(){
+  lineLayer.clearLayers();
+  for(const a of state.areas){
+    if(a.visible === false) continue;
+    for(const [lid, l] of areaLines(a)){
+      if(drawing && drawing.mode === 'line' && drawing.lid === lid) continue;
+      const pts = parseBorder(l.p);
+      for(const pl of lineStyle(l.k, pts, !drawing && !placing)){
+        pl.bindPopup(() => {
+          const el = h(`<div class="pp"><h4>${esc(l.n || LINE_KIND[l.k])}</h4><div class="pnote">${LINE_KIND[l.k]} · ${fmtDist(lineLen(pts))} · ${esc(a.name)}</div>${canEditArea(a) ? '<div class="pbtns"><button class="btn sm" type="button" data-l="edit">Ändra</button><button class="btn sm danger" type="button" data-l="del">Ta bort</button></div>' : ''}</div>`);
+          const ed = el.querySelector('[data-l="edit"]'), del = el.querySelector('[data-l="del"]');
+          if(ed) ed.addEventListener('click', () => { map.closePopup(); openLineForm({areaId:a.id, lid}); });
+          if(del) del.addEventListener('click', () => confirmClick(del, 'Bekräfta', () => { map.closePopup(); deleteLine(a.id, lid); }));
+          return el;
+        });
+        pl.addTo(lineLayer);
+      }
+    }
+  }
+}
+function deleteLine(areaId, lid){
+  const a = areaById(areaId); if(!a || !a.lines || !a.lines[lid]) return;
+  const name = a.lines[lid].n || LINE_KIND[a.lines[lid].k];
+  delete a.lines[lid]; if(!Object.keys(a.lines).length) delete a.lines;
+  a.updated = Date.now(); save(); renderAll(); toast(`${name} är borttagen.`);
+}
+/* Formulär för en ny eller befintlig väg/stig. opts: {areaId, lid} */
+function openLineForm(opts){
+  opts = opts || {};
+  const editable = state.areas.filter(a => canEditArea(a));
+  if(!editable.length){ toast('Skapa ett område under Filter först. Vägen sparas i ett område.', 5000); return; }
+  const cur = opts.lid ? (areaById(opts.areaId) || {}).lines : null, l = cur && cur[opts.lid] ? cur[opts.lid] : {k:'path', n:''};
+  const sel = opts.areaId || (editable.find(a => a.visible !== false && !a.example) || editable[0]).id;
+  openModal(`<h2>${opts.lid ? 'Ändra' : 'Rita'} väg eller stig</h2><form id="lfForm">
+    <div class="field"><span>Typ</span><div class="row2">${Object.entries(LINE_KIND).map(([k, t]) => `<label class="radio-card" style="margin:0"><input type="radio" name="lfKind" value="${k}" ${l.k === k ? 'checked' : ''}> ${t}<br><span class="small muted">${k === 'road' ? 'Brun heldragen' : 'Lila streckad'}</span></label>`).join('')}</div></div>
+    <label class="field"><span>Namn (valfritt)</span><input class="input" id="lfName" maxlength="60" value="${esc(l.n || '')}" placeholder="${opts.lid ? '' : 'Till exempel Stigen till tornet'}"></label>
+    <label class="field"><span>Område</span><select class="input" id="lfArea" ${opts.lid ? 'disabled' : ''}>${editable.map(a => `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.gid ? ' (delas med ' + esc(gname(cloud.groups[a.gid])) + ')' : ''}</option>`).join('')}</select></label>
+    <p class="note" style="margin-top:0">Vägen visas när området är påslaget och delas med jaktlaget om området är delat.</p>
+    <div class="actions"><button class="btn primary grow" type="submit">${opts.lid ? 'Spara' : 'Börja rita'}</button>${opts.lid ? '<button class="btn" type="button" id="lfRedraw">Rita om</button>' : ''}<button class="btn ghost" type="button" id="lfCancel">Avbryt</button></div></form>`, m => {
+    const read = () => ({k:(m.querySelector('input[name=lfKind]:checked') || {}).value || 'path', n:m.querySelector('#lfName').value.trim(), areaId:m.querySelector('#lfArea').value});
+    m.querySelector('#lfCancel').addEventListener('click', closeModal);
+    const rd = m.querySelector('#lfRedraw'); if(rd) rd.addEventListener('click', () => { const v = read(); startLine(opts.areaId, v.k, v.n, opts.lid); });
+    m.querySelector('#lfForm').addEventListener('submit', e => {
+      e.preventDefault(); const v = read();
+      if(!opts.lid){ startLine(v.areaId, v.k, v.n); return; }
+      const a = areaById(opts.areaId); if(!a || !a.lines || !a.lines[opts.lid]){ closeModal(); return; }
+      a.lines[opts.lid].k = v.k; if(v.n) a.lines[opts.lid].n = v.n; else delete a.lines[opts.lid].n;
+      a.updated = Date.now(); save(); closeModal(); renderAll(); toast('Ändringen är sparad.');
+    });
+  });
+}
+$('#popDrawLine').addEventListener('click', () => { toggleLayerPop(false); openLineForm(); });
+function startLine(areaId, kind, name, lid){
+  const a = areaById(areaId); if(!a) return;
+  if(!canEditArea(a)){ toast('Du har inte rättighet att ändra det området.'); return; }
+  closeModal(); map.closePopup(); if(placing) endPlacing();
+  if(a.visible === false){ a.visible = true; save(); renderAll(); }
+  drawing = {mode:'line', id:areaId, kind, name, lid:lid || null, pts:lid && a.lines && a.lines[lid] ? parseBorder(a.lines[lid].p) : []};
+  $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('peek');
+  if(drawing.pts.length >= 2) map.fitBounds(L.latLngBounds(drawing.pts), {paddingTopLeft:[40,70], paddingBottomRight:[40, bottomPad() + 190], maxZoom:17});
+  renderBorders(); drawDraft();
 }
 function drawDraft(){
   drawLayer.clearLayers(); const p = drawing.pts;
+  if(drawing.mode === 'line'){
+    if(p.length >= 2) lineStyle(drawing.kind, p, false).forEach(pl => pl.addTo(drawLayer));
+    p.forEach((pt, i) => L.circleMarker(pt, {radius:i === p.length - 1 ? 8 : 4, color:'#ffffff', weight:2, fillColor:drawing.kind === 'path' ? '#7a2e8f' : '#8a4b12', fillOpacity:1, interactive:false}).addTo(drawLayer));
+    const what = LINE_KIND[drawing.kind].toLowerCase();
+    $('#drawText').textContent = p.length < 2 ? `Tryck på kartan längs ${what}en, eller gå den och tryck på positionsknappen. ${p.length} av minst 2 punkter.` : `${p.length} punkter · ${fmtDist(lineLen(p))}. Fortsätt längs ${what}en eller tryck Klar.`;
+    $('#drawOk').disabled = p.length < 2; $('#drawUndo').disabled = !p.length;
+    return;
+  }
   if(p.length >= 3) L.polygon(p, {color:'#d9520e', weight:3, fillColor:'#d9520e', fillOpacity:.14, interactive:false}).addTo(drawLayer);
   else if(p.length === 2) L.polyline(p, {color:'#d9520e', weight:3, interactive:false}).addTo(drawLayer);
   p.forEach((pt, i) => L.circleMarker(pt, {radius:i === p.length - 1 ? 8 : 5, color:'#ffffff', weight:2, fillColor:'#d9520e', fillOpacity:1, interactive:false}).addTo(drawLayer));
@@ -2706,7 +2823,7 @@ function startDrawing(id){
   const a = areaById(id); if(!a) return;
   if(!canEditArea(a)){ toast('Du har inte rättighet att ändra det området.'); return; }
   closeModal(); map.closePopup(); if(placing) endPlacing();
-  drawing = {id, pts:parseBorder(a.border)};
+  drawing = {mode:'border', id, pts:parseBorder(a.border)};
   $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('peek');
   if(drawing.pts.length) map.fitBounds(L.latLngBounds(drawing.pts), {paddingTopLeft:[40,70], paddingBottomRight:[40, bottomPad() + 190], maxZoom:17});
   renderBorders(); drawDraft();
@@ -2721,8 +2838,15 @@ $('#drawGps').addEventListener('click', () => {
     () => toast('Kunde inte läsa din position.'), {enableHighAccuracy:true, timeout:15000, maximumAge:2000});
 });
 $('#drawOk').addEventListener('click', () => {
-  const a = areaById(drawing.id), pts = drawing.pts; endDrawing();
+  const d = drawing, a = areaById(d.id), pts = d.pts; endDrawing();
   if(!a){ toast('Området finns inte längre.'); return; }
+  if(d.mode === 'line'){
+    if(!a.lines || typeof a.lines !== 'object') a.lines = {};
+    const lid = d.lid || 'l-' + uid(), l = {k:d.kind, p:fmtBorder(pts)}; if(d.name) l.n = d.name;
+    a.lines[lid] = l; a.updated = Date.now(); delete a.example;
+    save(); renderAll(); toast(`${d.name || LINE_KIND[d.kind]} är sparad, ${fmtDist(lineLen(pts))}.`);
+    return;
+  }
   a.border = fmtBorder(pts); a.updated = Date.now(); delete a.example;
   save(); renderAll(); toast(`Gränsen för ${a.name} är sparad, ${fmtHa(areaHa(pts))}.`);
 });

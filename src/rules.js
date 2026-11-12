@@ -14,6 +14,9 @@ const adminOf = g => `root.child('groups/'+${g}+'/members/'+auth.uid+'/role').va
 const leadOf = g => `(root.child('groups/'+${g}+'/members/'+auth.uid+'/role').val() === 'admin' || root.child('groups/'+${g}+'/members/'+auth.uid+'/role').val() === 'leader')`;
 const owner = `data.parent().parent().child('meta/owner').val()`;
 const invite = `root.child('invites/'+newData.child('code').val())`;
+const hunt = `root.child(${G}+'/hunts/'+$hid)`;
+// Jakten pågår: sluttiden har inte passerat och starttiden (om den finns) har passerat.
+const huntLive = `(${hunt}.child('expires').val() > now && (!${hunt}.child('starts').exists() || ${hunt}.child('starts').val() <= now))`;
 const hcode = `root.child('huntCodes/'+newData.child('code').val())`;
 
 const rules = { rules: {
@@ -66,7 +69,7 @@ const rules = { rules: {
       '$hid': {
         '.read': `${isGuest} && ${guest}.child('hid').val() === $hid`,
         '.write': canLead,
-        '.validate': `newData.hasChildren(['name','expires','code']) && newData.child('expires').isNumber()`
+        '.validate': `newData.hasChildren(['name','expires','code']) && newData.child('expires').isNumber() && (!newData.child('starts').exists() || (newData.child('starts').isNumber() && newData.child('starts').val() < newData.child('expires').val()))`
       }
     },
     guests: {
@@ -77,11 +80,15 @@ const rules = { rules: {
         '.validate': `newData.hasChildren(['hid','code','name','expires']) && newData.child('name').isString() && newData.child('name').val().length <= 60`
       }
     },
-    positions: {
-      '.read': `${isMember} || ${isGuest}`,
-      '$uid': {
-        '.write': `${signed} && $uid === auth.uid && (${me}.exists() || ${guest}.child('expires').val() > now)`,
-        '.validate': `newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber()`
+    // Positioner finns bara per jakt och kan bara läsas och skrivas medan jakten pågår.
+    huntPos: {
+      '$hid': {
+        '.read': `(${isMember} || (${isGuest} && ${guest}.child('hid').val() === $hid)) && ${huntLive}`,
+        '.write': `${canLead} && !newData.exists()`,
+        '$uid': {
+          '.write': `${signed} && $uid === auth.uid && ${huntLive} && (${me}.exists() || (${isGuest} && ${guest}.child('hid').val() === $hid))`,
+          '.validate': `newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber()`
+        }
       }
     }
   } }

@@ -88,21 +88,20 @@ function purgeLocal(gid){
 }
 function dropGroup(gid){
   const g = cloud.groups[gid]; if(!g) return;
-  g.refs.forEach(r => r.off()); delete cloud.groups[gid];
+  g.refs.forEach(r => r.off()); Object.values(g.posRefs).forEach(r => r.off()); delete cloud.groups[gid];
   purgeLocal(gid); scheduleRender(); renderPositions();
 }
 function forgetGroup(gid){ if(fb && cloud.user) fb.db.ref('userGroups/' + myUid() + '/' + gid).remove().catch(() => {}); dropGroup(gid); }
 function subGroup(gid, kind){
-  const g = cloud.groups[gid] = {id:gid, kind, meta:null, members:{}, areas:{}, pins:{}, types:{}, hunts:{}, guests:{}, positions:{}, guest:null, refs:[], areaRefs:{}, huntRef:null};
+  const g = cloud.groups[gid] = {id:gid, kind, meta:null, members:{}, areas:{}, pins:{}, types:{}, hunts:{}, guests:{}, guest:null, refs:[], areaRefs:{}, huntRef:null, posRefs:{}, huntPos:{}, disc:{}};
   const on = (path, fn) => { const r = fb.db.ref('groups/' + gid + '/' + path); r.on('value', s => { if(cloud.groups[gid] === g) fn(s.val()); }, () => { if(cloud.groups[gid] === g) fn(null, true); }); g.refs.push(r); return r; };
   on('meta', v => { g.meta = v; if(!v){ forgetGroup(gid); toast('Du har inte längre åtkomst till ett jaktlag eller en jakt.'); return; } scheduleRender(); });
   on('types', v => { g.types = v || {}; applyRemote(gid); });
-  on('positions', v => { g.positions = v || {}; renderPositions(); });
   if(kind === 'member'){
     on('members', v => { g.members = v || {}; scheduleRender(); });
     on('areas', v => { g.areas = v || {}; applyRemote(gid); });
     on('pins', v => { g.pins = v || {}; applyRemote(gid); });
-    on('hunts', v => { g.hunts = v || {}; scheduleRender(); });
+    on('hunts', v => { g.hunts = v || {}; scheduleRender(); syncHuntPos(); });
     on('guests', v => { g.guests = v || {}; scheduleRender(); });
   } else {
     on('guests/' + myUid(), v => {
@@ -110,7 +109,7 @@ function subGroup(gid, kind){
       if(!v) return;
       if(g.huntRef) return;
       g.huntRef = on('hunts/' + v.hid, hv => {
-        g.hunts = hv ? {[v.hid]: hv} : {};
+        g.hunts = hv ? {[v.hid]: hv} : {}; syncHuntPos();
         const want = hv && hv.areas ? Object.keys(hv.areas).filter(k => hv.areas[k] === true) : [];
         for(const aid of want){ if(g.areaRefs[aid]) continue; g.areaRefs[aid] = true;
           on('areas/' + aid, av => { if(av) g.areas[aid] = av; else delete g.areas[aid]; applyRemote(gid); });
@@ -129,7 +128,7 @@ function applyRemote(gid){
     if(!a) continue;
     const clash = state.areas.find(x => x.id === aid); // privat område med samma id: ge det ett nytt
     if(clash){ const nid = 'a-' + uid(); state.pins.forEach(p => { if(p.areaId === aid) p.areaId = nid; }); clash.id = nid; }
-    { const na = {id:aid, name:a.name || 'Område', gid, visible:!hidden[aid], updated:a.updated || 0}; if(typeof a.border === 'string' && a.border) na.border = a.border; state.areas.push(na); }
+    { const na = {id:aid, name:a.name || 'Område', gid, visible:!hidden[aid], updated:a.updated || 0}; if(typeof a.border === 'string' && a.border) na.border = a.border; if(a.lines && typeof a.lines === 'object') na.lines = JSON.parse(JSON.stringify(a.lines)); state.areas.push(na); }
     for(const [pid, p] of Object.entries(g.pins[aid] || {})){
       if(p && typeof p.lat === 'number' && typeof p.lng === 'number') state.pins.push({id:pid, areaId:aid, name:p.name || '', note:p.note || '', typeId:p.typeId, lat:p.lat, lng:p.lng, created:p.created || 0, updated:p.updated || 0, by:p.by || ''});
     }
@@ -152,7 +151,7 @@ function cloudSync(){
     if(g.kind !== 'member' || !canEditGroup(g)) continue;
     const up = {}, want = {};
     for(const a of state.areas){ if(a.gid !== g.id) continue;
-      const aj = {name:a.name, updated:a.updated || 0}; if(a.border) aj.border = a.border;
+      const aj = {name:a.name, updated:a.updated || 0}; if(a.border) aj.border = a.border; if(a.lines && Object.keys(a.lines).length) aj.lines = JSON.parse(JSON.stringify(a.lines));
       if(!g.areas[a.id] || canon(g.areas[a.id]) !== canon(aj)){ up['areas/' + a.id] = aj; g.areas[a.id] = aj; }
       want[a.id] = {};
     }
@@ -181,9 +180,35 @@ function refetch(g){
 const posLayer = L.layerGroup().addTo(map);
 const initials = n => (n || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
 const ago = t => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'nyss' : m < 60 ? `för ${m} min sedan` : `för ${Math.round(m / 60)} h sedan`; };
+/* Positioner delas bara under en pågående jakt. Varje jakt har sina egna positioner i groups/<lag>/huntPos/<jakt>,
+   och säkerhetsreglerna släpper bara igenom läsning och skrivning mellan jaktens start och slut. */
+const huntLive = (h, now) => !!h && h.expires > (now || Date.now()) && !(h.starts > (now || Date.now()));
+const liveHunts = g => Object.entries(g.hunts || {}).filter(([hid, h]) => huntLive(h) && (g.kind === 'member' || (g.guest && g.guest.hid === hid))).map(([hid]) => hid);
+const anyLiveHunt = () => Object.values(cloud.groups).some(g => liveHunts(g).length);
+let huntPosTimer = null;
+function syncHuntPos(){
+  if(!fb || !cloud.user) return;
+  let next = Infinity;
+  for(const g of Object.values(cloud.groups)){
+    const live = new Set(liveHunts(g));
+    for(const hid of Object.keys(g.posRefs)) if(!live.has(hid)){ g.posRefs[hid].off(); delete g.posRefs[hid]; delete g.huntPos[hid]; delete g.disc[hid]; }
+    for(const hid of live){
+      if(g.posRefs[hid]) continue;
+      const r = fb.db.ref(`groups/${g.id}/huntPos/${hid}`);
+      r.on('value', s => { if(g.posRefs[hid] === r){ g.huntPos[hid] = s.val() || {}; renderPositions(); } }, () => { if(g.posRefs[hid] === r){ delete g.posRefs[hid]; delete g.huntPos[hid]; renderPositions(); } });
+      g.posRefs[hid] = r;
+    }
+    // Nästa gång en jakt startar eller slutar
+    for(const h of Object.values(g.hunts || {})) if(h){ for(const t of [h.starts, h.expires]) if(t > Date.now() && t < next) next = t; }
+  }
+  if(cloud.sharing && !anyLiveHunt()){ stopSharing(); toast('Jakten är slut. Din position delas inte längre.', 5000); }
+  renderPositions(); scheduleRender();
+  clearTimeout(huntPosTimer);
+  if(next < Infinity) huntPosTimer = setTimeout(syncHuntPos, Math.min(next - Date.now() + 1000, 2147483000));
+}
 function activePositions(){
   const seen = {}, out = [];
-  for(const g of Object.values(cloud.groups)) for(const [uid, p] of Object.entries(g.positions || {})){
+  for(const g of Object.values(cloud.groups)) for(const pos of Object.values(g.huntPos || {})) for(const [uid, p] of Object.entries(pos || {})){
     if(!p || uid === myUid() || seen[uid] || typeof p.lat !== 'number' || Date.now() - p.t > 30 * 60000) continue;
     seen[uid] = true; out.push(Object.assign({uid}, p));
   }
@@ -198,18 +223,19 @@ function renderPositions(){
   }
   const el = $('#posCount'); if(el) el.textContent = posCountText();
 }
-const posCountText = () => { const n = activePositions().length; return n ? `${n} ${n === 1 ? 'person delar' : 'personer delar'} sin position just nu.` : 'Ingen annan delar sin position just nu.'; };
+const posCountText = () => { if(!anyLiveHunt()) return 'Positioner kan bara delas och ses medan en jakt pågår.'; const n = activePositions().length; return n ? `${n} ${n === 1 ? 'person delar' : 'personer delar'} sin position just nu.` : 'Ingen annan delar sin position just nu.'; };
 setInterval(renderPositions, 60000);
 function sendPos(){
   if(!fb || !cloud.user || !myPos) return;
-  for(const g of Object.values(cloud.groups)){
-    const r = fb.db.ref(`groups/${g.id}/positions/${myUid()}`);
-    if(!g.disc){ g.disc = true; try { r.onDisconnect().remove(); } catch(e){} }
+  for(const g of Object.values(cloud.groups)) for(const hid of liveHunts(g)){
+    const r = fb.db.ref(`groups/${g.id}/huntPos/${hid}/${myUid()}`);
+    if(!g.disc[hid]){ g.disc[hid] = true; try { r.onDisconnect().remove(); } catch(e){} }
     r.set({lat:+myPos.lat.toFixed(6), lng:+myPos.lng.toFixed(6), acc:Math.round(myPos.acc || 0), t:Date.now(), name:myName()}).catch(() => {});
   }
 }
 function startSharing(){
   if(!('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); return; }
+  if(!anyLiveHunt()){ toast('Positioner kan bara delas medan en jakt pågår.'); renderJakt(); return; }
   cloud.sharing = true; cloud.lastSent = 0;
   cloud.watchId = navigator.geolocation.watchPosition(pos => {
     showMe(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0);
@@ -223,7 +249,7 @@ function stopSharing(silent){
   if(cloud.watchId != null){ navigator.geolocation.clearWatch(cloud.watchId); cloud.watchId = null; }
   if(cloud.wake){ try { cloud.wake.release(); } catch(e){} cloud.wake = null; }
   const was = cloud.sharing; cloud.sharing = false;
-  if(was && !silent && fb && cloud.user) for(const g of Object.values(cloud.groups)) fb.db.ref(`groups/${g.id}/positions/${myUid()}`).remove().catch(() => {});
+  if(was && !silent && fb && cloud.user) for(const g of Object.values(cloud.groups)) for(const hid of liveHunts(g)) fb.db.ref(`groups/${g.id}/huntPos/${hid}/${myUid()}`).remove().catch(() => {});
 }
 
 /* Åtgärder */
@@ -277,11 +303,11 @@ function huntChips(hunt){ const ids = Object.keys(hunt.species || {}).filter(k =
 const fmtDay = d => d ? `${+d.slice(8)} ${MON[+d.slice(5,7) - 1]} ${d.slice(0,4)}` : '';
 const fmtTime = t => { const d = new Date(t); return `${fmtDay(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`)} kl. ${String(d.getHours()).padStart(2,'0')}.${String(d.getMinutes()).padStart(2,'0')}`; };
 function huntCard(g, hid, hunt, lead){
-  const live = hunt.expires > Date.now();
+  const now = Date.now(), live = hunt.expires > now, upcoming = live && hunt.starts > now;
   const guests = Object.entries(g.guests || {}).filter(([, v]) => v && v.hid === hid);
   const areas = Object.keys(hunt.areas || {}).map(a => (g.areas[a] || {}).name).filter(Boolean);
-  return `<div class="card${live ? '' : ' dim'}"><div class="card-h"><strong>${esc(hunt.name)}</strong><span class="tag${live ? ' on' : ''}">${live ? 'Pågår' : 'Avslutad'}</span></div>
-    <div class="small muted">${esc(fmtDay(hunt.day))}${hunt.lan ? ' · ' + esc(hunt.lan) : ''} · gäller till ${esc(fmtTime(hunt.expires))}</div>
+  return `<div class="card${live ? '' : ' dim'}"><div class="card-h"><strong>${esc(hunt.name)}</strong><span class="tag${live && !upcoming ? ' on' : ''}">${upcoming ? 'Kommande' : live ? 'Pågår' : 'Avslutad'}</span></div>
+    <div class="small muted">${esc(fmtDay(hunt.day))}${hunt.lan ? ' · ' + esc(hunt.lan) : ''}${hunt.starts ? ` · startar ${esc(fmtTime(hunt.starts))}` : ''} · gäller till ${esc(fmtTime(hunt.expires))}</div>
     <div class="lbl">Jaktbart vilt</div>${huntChips(hunt)}
     ${areas.length ? `<div class="lbl">Områden</div><div class="small">${areas.map(esc).join(', ')}</div>` : ''}
     ${lead && live ? `<div class="lbl">Tillfällig åtkomst för gäster</div><div class="codebox"><span>Jaktkod <b>${esc(hunt.code)}</b></span><button class="btn sm" type="button" data-j="hunt-link" data-g="${g.id}" data-h="${hid}">Kopiera länk</button></div>
@@ -316,7 +342,7 @@ function renderJakt(){
   } else {
     const u = cloud.user, gs = Object.values(cloud.groups);
     html += `<div class="userrow"><span class="pos-dot">${esc(initials(myName()))}</span><span class="grow"><strong>${esc(myName())}</strong><br><span class="small muted">${u.isAnonymous ? 'Gäst' : esc(u.email || 'Inloggad')}</span></span><button class="btn sm" type="button" data-j="name">Byt namn</button><button class="btn sm ghost" type="button" data-j="logout">Logga ut</button></div>
-      <label class="bigtoggle" for="shareToggle" style="margin-top:10px"><span><strong>Dela min position</strong><br><span class="small muted">Syns för alla i dina jaktlag och jakter</span></span><input class="sw-toggle" type="checkbox" id="shareToggle" ${cloud.sharing ? 'checked' : ''} ${gs.length ? '' : 'disabled'}></label>
+      <label class="bigtoggle" for="shareToggle" style="margin-top:10px"><span><strong>Dela min position</strong><br><span class="small muted">Syns bara för deltagarna i pågående jakter</span></span><input class="sw-toggle" type="checkbox" id="shareToggle" ${cloud.sharing ? 'checked' : ''} ${anyLiveHunt() ? '' : 'disabled'}></label>
       <p class="note" id="posCount">${posCountText()}</p>
       ${cloud.sharing ? '<p class="note">Positionen skickas bara medan appen är öppen och skärmen är på.</p>' : ''}`;
     for(const g of gs){
@@ -362,7 +388,9 @@ function openHuntForm(g){
   openModal(`<h2>Ny jakt</h2><form id="hfForm">
     <label class="field"><span>Namn</span><input class="input" id="hfName" maxlength="60" value="Jakt ${fmtDay(todayISO())}"></label>
     <div class="row2"><label class="field"><span>Datum</span><input class="input" type="date" id="hfDay" value="${todayISO()}"></label>
-    <label class="field"><span>Åtkomst gäller till kl.</span><input class="input" type="time" id="hfEnd" value="23:59"></label></div>
+    <label class="field"><span>Startar kl.</span><input class="input" type="time" id="hfStart" value="${nowHM()}"></label></div>
+    <label class="field"><span>Slutar kl.</span><input class="input" type="time" id="hfEnd" value="23:59"></label>
+    <p class="note" style="margin-top:0">Positioner kan bara delas och ses mellan start och slut. Gästernas åtkomst gäller till sluttiden.</p>
     <label class="field"><span>Län</span><select class="input" id="hfLan"><option value="">Välj län</option>${LAN.map(l => `<option${l === state.settings.lan ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
     <div class="field"><span>Områden som gästerna får se</span>${areas.length ? areas.map(a => `<label class="checkline"><input type="checkbox" data-area="${a.id}" checked><span>${esc(a.name)}</span></label>`).join('') : '<span class="small muted">Laget har inga delade områden ännu. Gäster ser då bara varandras positioner.</span>'}</div>
     <div class="field"><span>Jaktbart vilt</span><div id="hfVilt"></div></div>
@@ -385,10 +413,11 @@ function openHuntForm(g){
     m.querySelector('#hfForm').addEventListener('submit', e => {
       e.preventDefault();
       const name = m.querySelector('#hfName').value.trim() || 'Jakt', day = m.querySelector('#hfDay').value || todayISO(), end = m.querySelector('#hfEnd').value || '23:59', lan = m.querySelector('#hfLan').value;
-      const [y, mo, d] = day.split('-').map(Number), [hh, mm] = end.split(':').map(Number);
-      const expires = new Date(y, mo - 1, d, hh, mm, 59).getTime();
+      const [y, mo, d] = day.split('-').map(Number), [hh, mm] = end.split(':').map(Number), [sh, sm] = (m.querySelector('#hfStart').value || '00:00').split(':').map(Number);
+      const expires = new Date(y, mo - 1, d, hh, mm, 59).getTime(), starts = new Date(y, mo - 1, d, sh, sm, 0).getTime();
       if(expires < Date.now()){ toast('Sluttiden har redan passerat. Välj en senare tid.'); return; }
-      const hunt = {name, day, expires, lan, code:newCode(8), by:myUid(), created:Date.now(), areas:{}, species:{}};
+      if(starts >= expires){ toast('Starttiden måste vara före sluttiden.'); return; }
+      const hunt = {name, day, starts, expires, lan, code:newCode(8), by:myUid(), created:Date.now(), areas:{}, species:{}};
       $$('[data-area]', m).forEach(c => { if(c.checked) hunt.areas[c.dataset.area] = true; });
       for(const k of Object.keys(sel)) if(sel[k]) hunt.species[k] = true;
       const hid = uid(), up = {};
@@ -414,7 +443,7 @@ $('#paneJakt').addEventListener('click', e => {
   else if(!g) return;
   else if(act === 'hunt-new') openHuntForm(g);
   else if(act === 'hunt-link'){ const hunt = g.hunts[hid]; copyText(`${hunt.name}: gå med i jakten med kod ${hunt.code}\n${shareLink('j', hunt.code)}`, 'Länken är kopierad'); }
-  else if(act === 'hunt-end') confirmClick(b, 'Bekräfta', () => { const hunt = g.hunts[hid], up = {}; up[`groups/${g.id}/hunts/${hid}`] = null; if(hunt && hunt.code) up[`huntCodes/${hunt.code}`] = null;
+  else if(act === 'hunt-end') confirmClick(b, 'Bekräfta', () => { const hunt = g.hunts[hid], up = {}; up[`groups/${g.id}/hunts/${hid}`] = null; up[`groups/${g.id}/huntPos/${hid}`] = null; if(hunt && hunt.code) up[`huntCodes/${hunt.code}`] = null;
     for(const [gu, v] of Object.entries(g.guests || {})) if(v && v.hid === hid) up[`groups/${g.id}/guests/${gu}`] = null;
     fb.db.ref().update(up).then(() => toast('Jakten är avslutad. Gästernas åtkomst är borttagen.')).catch(fail()); });
   else if(act === 'guest-del') fb.db.ref(`groups/${g.id}/guests/${u}`).remove().catch(fail());

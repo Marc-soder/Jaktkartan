@@ -79,6 +79,7 @@ function viltRows(v, lan){ return v.rules.filter(r => r.lan === '*' ? !(r.ex || 
 function viltLawful(v, lan, md){ return viltRows(v, lan).filter(r => r.per.some(p => inPer(md, p))); }
 const rowLabel = r => [r.cls, r.sub].filter(Boolean).join(', ');
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const nowHM = () => { const d = new Date(); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
 
 function renderVilt(){
   const pane = $('#paneVilt'); if(!pane) return;
