@@ -738,6 +738,20 @@ a{color:var(--accent)}
 .shot-mark.first{background:#1a73e8}
 .shot-hint{display:flex;gap:10px;align-items:center}
 .shot-hint canvas{flex:none;border-radius:8px;border:1px solid var(--line)}
+.loupe{position:absolute;z-index:850;width:150px;height:150px;border-radius:50%;overflow:hidden;border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35),0 6px 18px rgba(0,0,0,.35);pointer-events:none;background:var(--bg)}
+.loupe-map{position:absolute;inset:0}
+.loupe-cross{position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px 0 0 -20px;z-index:1000}
+.loupe-tag{position:absolute;right:18px;bottom:12px;z-index:1000;font:700 11px/1 var(--font-body);background:rgba(0,0,0,.55);color:#fff;padding:3px 5px;border-radius:6px}
+.drag-handle{background:none;border:0}
+.drag-handle span{position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:#d9520e;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35)}
+.drag-handle.last span{width:20px;height:20px;margin:-10px 0 0 -10px}
+.drag-handle.road span{background:#8a4b12}.drag-handle.path span{background:#7a2e8f}
+.drag-handle.shot span{width:22px;height:22px;margin:-11px 0 0 -11px;border-width:3px}
+.drag-handle.shot.first span{background:#1a73e8}
+.drag-handle.shot.move span{width:30px;height:30px;margin:-15px 0 0 -15px;background:rgba(255,255,255,.85);border:2px solid #d9520e}
+.drag-handle.shot.move span::after{content:"✥";position:absolute;inset:0;display:grid;place-items:center;color:#d9520e;font-size:18px;line-height:1}
+.shot-row{display:flex;align-items:center;gap:6px}
+.shot-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .trail-range{padding:4px 8px 8px}
 .trail-range label{display:flex;justify-content:space-between;gap:8px;font-size:14px}
 .trail-range input{width:100%;accent-color:var(--accent);margin:8px 0 2px}
@@ -759,7 +773,7 @@ a{color:var(--accent)}
 .btnrow > *{flex:1 1 auto}
 
 /* Panel / bottenlåda */
-#panel{position:fixed;z-index:1000;left:0;right:0;bottom:0;height:var(--sheet-h);background:var(--surface);border-radius:18px 18px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.18);display:flex;flex-direction:column;transition:height .25s ease;padding-bottom:env(safe-area-inset-bottom,0px)}
+#panel{position:fixed;z-index:1000;left:0;right:0;bottom:0;height:var(--sheet-h);background:var(--surface);border-radius:18px 18px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.18);display:flex;flex-direction:column;transition:height .25s ease;padding-bottom:env(safe-area-inset-bottom,0px);overflow:hidden}
 #panel.dragging{transition:none}
 #panel.peek:not(.dragging) .p-body{visibility:hidden}
 .handle{flex:none;height:22px;display:grid;place-items:center;touch-action:none;cursor:grab;border:0;background:none;width:100%;padding:0}
@@ -964,6 +978,9 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
   <button class="base-opt" type="button" id="popDrawLine" style="width:100%;border:0;background:none;text-align:left;color:inherit;font:inherit"><span style="width:18px;text-align:center;font-weight:700;color:var(--accent)">+</span><span><strong>Rita egen väg eller stig</strong><small>Saknas en väg? Rita den så syns den för jaktlaget</small></span></button>
   <a class="base-opt" href="https://minkarta.lantmateriet.se/" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><span style="width:18px"></span><span><strong>Fastighetsgränser</strong><small>Öppnas i Lantmäteriets Min karta</small></span></a>
   <label class="base-opt"><input type="checkbox" id="popSvamp"><span><strong>Svampkarta</strong><small>Dina svampställen och andras fynd</small></span></label>
+  <div class="pop-sep"></div>
+  <h3 class="sec">Skärmdumpar</h3>
+  <div id="shotList"></div>
   <div class="pop-sep"></div>
   <h3 class="sec">Spår</h3>
   <label class="base-opt"><input type="checkbox" id="popTrailRec"><span><strong>Spela in mitt spår</strong><small id="trailNote">Visar var du har gått. Sparas bara i din telefon.</small></span></label>
@@ -1455,11 +1472,14 @@ function sheetHeight(s){
   const vh = window.innerHeight;
   if(s === 'full') return Math.round(vh - 64);
   if(s === 'half') return Math.round(Math.min(vh*0.52, vh - 120));
+  if(s === 'min') return minH();
   return peekH();
 }
+/* Lägsta läget: bara handtaget syns, så att kartan och korset får mer plats. */
+function minH(){ return $('#handle').offsetHeight + 4; }
 function setSheet(s, noAnim){
   sheet = s;
-  $('#panel').classList.toggle('peek', s === 'peek' && !isDesktop());
+  $('#panel').classList.toggle('peek', (s === 'peek' || s === 'min') && !isDesktop());
   if(isDesktop()){ document.documentElement.style.setProperty('--sheet-h','0px'); $('#panel').style.height = ''; return; }
   const px = sheetHeight(s);
   const panel = $('#panel');
@@ -1467,16 +1487,19 @@ function setSheet(s, noAnim){
   document.documentElement.style.setProperty('--sheet-h', px + 'px');
   panel.style.height = `calc(${px}px + env(safe-area-inset-bottom, 0px))`;
   if(noAnim) requestAnimationFrame(() => panel.classList.remove('dragging'));
+  setTimeout(syncCross, 280);
 }
+/* Efter placering och ritning: tillbaka från lägsta läget så att flikarna syns. */
+function sheetRestore(){ if(sheet === 'min' && !placing && !drawing && !(typeof cal !== 'undefined' && cal) && !(typeof adj !== 'undefined' && adj)) setSheet('peek'); }
 function bottomPad(){ return isDesktop() ? 0 : (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-h')) || 0); }
 (function sheetDrag(){
   const panel = $('#panel'); let startY = 0, startH = 0, moved = false, active = false;
   const down = e => { if(isDesktop()) return; active = true; moved = false; startY = e.clientY; startH = panel.getBoundingClientRect().height; panel.classList.add('dragging'); e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId); };
   const move = e => { if(!active) return; const dy = startY - e.clientY; if(Math.abs(dy) > 6) moved = true; if(!moved) return;
-    const hpx = Math.max(peekH(), Math.min(window.innerHeight - 40, startH + dy)); panel.style.height = hpx + 'px'; document.documentElement.style.setProperty('--sheet-h', hpx + 'px'); };
+    const hpx = Math.max(minH(), Math.min(window.innerHeight - 40, startH + dy)); panel.style.height = hpx + 'px'; document.documentElement.style.setProperty('--sheet-h', hpx + 'px'); syncCross(); };
   const up = e => { if(!active) return; active = false; panel.classList.remove('dragging');
-    if(!moved){ if(e.currentTarget.id === 'handle') setSheet(sheet === 'peek' ? 'half' : sheet === 'half' ? 'full' : 'peek'); else setSheet(sheet); return; }
-    const hpx = panel.getBoundingClientRect().height, opts = ['peek','half','full'];
+    if(!moved){ if(e.currentTarget.id === 'handle') setSheet(sheet === 'min' ? 'peek' : sheet === 'peek' ? 'half' : sheet === 'half' ? 'full' : 'peek'); else setSheet(sheet); return; }
+    const hpx = panel.getBoundingClientRect().height, opts = ['min','peek','half','full'];
     let best = 'peek', bd = Infinity; for(const o of opts){ const d = Math.abs(sheetHeight(o) - hpx); if(d < bd){ bd = d; best = o; } }
     setSheet(best); };
   for(const el of [$('#handle'), $('#pHead')]){
@@ -1653,7 +1676,7 @@ function renderLayerPop(){
   $('#satLabelsRow').hidden = state.settings.base !== 'sat';
   $('#popSvamp').checked = !!state.settings.svampMode;
   $('#popRoads').checked = !!state.settings.roads;
-  renderTrailControls();
+  renderTrailControls(); renderShotList();
 }
 function renderAll(){
   renderMarkers(); renderExternal(); renderList(); renderFilter(); renderSvampPane(); renderData(); renderStatus(); renderLayerPop(); renderJakt(); renderVilt(); renderBorders();
@@ -1813,12 +1836,26 @@ function openAreaForm(id){
       <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afDraw">${a.border ? 'Ändra gräns' : 'Rita gräns'}</button><button class="btn sm" type="button" id="afImport">Importera från fil</button><button class="btn sm" type="button" id="afShot">Från skärmdump</button>${a.border ? '<button class="btn sm danger" type="button" id="afBorderDel">Ta bort gräns</button>' : ''}</div></div>
     <div class="field" style="margin-top:14px"><span>Egna vägar och stigar</span>${areaLines(a).length ? areaLines(a).map(([lid, l]) => `<div class="frow"><span class="fname">${esc(l.n || LINE_KIND[l.k])}<br><span class="small muted">${LINE_KIND[l.k]} · ${fmtDist(lineLen(parseBorder(l.p)))}</span></span><button class="btn sm" type="button" data-line-edit="${lid}">Ändra</button></div>`).join('') : '<div class="small">Inga egna vägar eller stigar.</div>'}
       <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afLine">Rita väg eller stig</button></div></div>
+    ${moveTargets(a).length && (a.border || areaLines(a).length || n) ? `<details class="field" style="margin-top:14px" id="afMoveBox"><summary><span>Flytta till ett annat område</span></summary>
+      <label class="field" style="margin-top:8px"><span>Till</span><select class="input" id="afMoveTo">${moveTargets(a).map(t => `<option value="${t.id}">${esc(t.name)}${t.border ? ' (har gräns)' : ''}</option>`).join('')}</select></label>
+      ${a.border ? '<label class="checkline"><input type="checkbox" id="afMvBorder" checked><span>Gränsen</span></label>' : ''}
+      ${areaLines(a).length ? `<label class="checkline"><input type="checkbox" id="afMvLines" checked><span>Vägar och stigar (${areaLines(a).length})</span></label>` : ''}
+      ${n ? `<label class="checkline"><input type="checkbox" id="afMvPins" checked><span>Nålar och pass (${n})</span></label>` : ''}
+      <div class="btnrow"><button class="btn sm" type="button" id="afMove">Flytta</button></div></details>` : ''}
     <div class="actions"><button class="btn primary grow" type="submit">Spara</button><button class="btn ghost" type="button" id="afCancel">Avbryt</button></div></form>`, m => {
     m.querySelector('#afCancel').addEventListener('click', closeModal);
     m.querySelector('#afDraw').addEventListener('click', () => startDrawing(id));
     m.querySelector('#afImport').addEventListener('click', () => { borderTarget = id; $('#fileBorder').click(); });
-    m.querySelector('#afShot').addEventListener('click', () => startOverlay(id));
+    m.querySelector('#afShot').addEventListener('click', () => startShotAdd(id));
     m.querySelector('#afLine').addEventListener('click', () => openLineForm({areaId:id}));
+    const mv = m.querySelector('#afMove');
+    if(mv) mv.addEventListener('click', () => {
+      const to = areaById(m.querySelector('#afMoveTo').value), chk = s => { const c = m.querySelector(s); return !!(c && c.checked); };
+      const what = {border:chk('#afMvBorder'), lines:chk('#afMvLines'), pins:chk('#afMvPins')};
+      if(!to || !(what.border || what.lines || what.pins)){ toast('Välj vad som ska flyttas.'); return; }
+      const go = () => { closeModal(); toast(moveAreaContent(id, to.id, what)); };
+      if(what.border && to.border) confirmClick(mv, `Tryck igen: ersätter gränsen i ${to.name}`, go); else go();
+    });
     m.querySelectorAll('[data-line-edit]').forEach(b => b.addEventListener('click', () => openLineForm({areaId:id, lid:b.dataset.lineEdit})));
     const bd = m.querySelector('#afBorderDel'); if(bd) bd.addEventListener('click', () => confirmClick(bd, 'Bekräfta', () => { const cur = areaById(id); if(cur){ delete cur.border; cur.updated = Date.now(); save(); } closeModal(); renderAll(); toast('Gränsen är borttagen'); }));
     m.querySelector('#afForm').addEventListener('submit', e => { e.preventDefault(); const v = m.querySelector('#afName').value.trim(); if(!v) return; const cur = areaById(id); if(!cur){ closeModal(); return; }
@@ -1884,6 +1921,24 @@ function openTypeForm(id, after){
 
 /* ---------- Placera nål ---------- */
 let placing = null; let crossEl = null;
+/* Korsets plats: mitt i den del av kartan som syns, ovanför knappfälten och bottenpanelen. */
+function crossPoint(){
+  const c = map.getContainer(), r = c.getBoundingClientRect();
+  let bottom = r.bottom;
+  for(const id of ['placebar', 'ovbar', 'drawbar']){ const el = document.getElementById(id); if(el && !el.hidden){ const b = el.getBoundingClientRect(); if(b.height) bottom = Math.min(bottom, b.top - 8); } }
+  if(!isDesktop()) bottom = Math.min(bottom, $('#panel').getBoundingClientRect().top);
+  const y = Math.round((r.top + bottom) / 2 - r.top);
+  return L.point(Math.round(c.clientWidth / 2), Math.max(80, Math.min(y, Math.round(c.clientHeight / 2))));
+}
+const crossLatLng = () => map.containerPointToLatLng(crossPoint());
+/* Flyttar kartan så att latlng hamnar under korset. */
+function panToCross(ll, animate){ map.panBy(map.latLngToContainerPoint(L.latLng(ll)).subtract(crossPoint()), {animate:!!animate}); }
+function syncCross(){
+  const y = crossPoint().y + 'px';
+  for(const el of [crossEl, typeof calCrossEl !== 'undefined' ? calCrossEl : null]) if(el && !el.hidden) el.style.top = y;
+  if(placing || (typeof cal !== 'undefined' && cal && cal.step === 'map')) loupeAtCenter();
+}
+map.on('resize', () => setTimeout(syncCross, 50));
 function startPlacing(opts){
   placing = opts;
   if(!crossEl){ crossEl = h(`<div class="crosshair" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="24" cy="24" r="9"/><path d="M24 3v11M24 34v11M3 24h11M34 24h11"/></svg></div>`); map.getContainer().appendChild(crossEl); }
@@ -1891,18 +1946,19 @@ function startPlacing(opts){
   $('#placebar').hidden = false; $('#btnAdd').hidden = true;
   $('#placeText').textContent = opts.mode === 'move' ? 'Flytta kartan så att korset hamnar på den nya platsen.' : 'Flytta kartan så att korset hamnar där nålen ska sitta.';
   $('#placeOk').textContent = opts.mode === 'move' ? 'Flytta hit' : 'Lägg nålen här';
-  if(!isDesktop()) setSheet('peek');
-  if(opts.mode === 'move'){ const p = pinById(opts.id); map.setView([p.lat,p.lng], Math.max(map.getZoom(), 16)); }
+  if(!isDesktop()) setSheet('min');
+  if(opts.mode === 'move'){ const p = pinById(opts.id); map.setView([p.lat,p.lng], Math.max(map.getZoom(), 16), {animate:false}); }
+  syncCross(); if(opts.mode === 'move'){ const p = pinById(opts.id); panToCross([p.lat, p.lng]); }
   map.closePopup();
   updatePlaceCoords();
-  setTimeout(() => { map.invalidateSize(); updatePlaceCoords(); }, 300);
+  setTimeout(() => { map.invalidateSize(); if(placing && placing.mode === 'move'){ const p = pinById(placing.id); if(p) panToCross([p.lat, p.lng]); } updatePlaceCoords(); }, 320);
 }
-function endPlacing(){ placing = null; if(crossEl) crossEl.hidden = true; $('#placebar').hidden = true; $('#btnAdd').hidden = false; }
-function updatePlaceCoords(){ if(!placing) return; const c = map.getCenter(); $('#placeCoords').textContent = `${fmtLatLng(c.lat,c.lng)} · SWEREF ${fmtSweref(c.lat,c.lng)}`; }
+function endPlacing(){ placing = null; loupeHide(); if(crossEl) crossEl.hidden = true; $('#placebar').hidden = true; $('#btnAdd').hidden = false; sheetRestore(); }
+function updatePlaceCoords(){ if(!placing) return; const show = () => { const c = crossLatLng(); $('#placeCoords').textContent = `${fmtLatLng(c.lat,c.lng)} · SWEREF ${fmtSweref(c.lat,c.lng)}`; }; show(); syncCross(); show(); }
 map.on('move', updatePlaceCoords);
-map.on('click', e => { if(placing && !drawing) map.panTo(e.latlng); });
+map.on('click', e => { if(placing && !drawing) panToCross(e.latlng, true); });
 $('#placeOk').addEventListener('click', () => {
-  const c = map.getCenter(); const opts = placing; endPlacing();
+  const c = crossLatLng(); const opts = placing; endPlacing();
   if(opts.mode === 'move'){ const p = pinById(opts.id); if(!p) return; p.lat = c.lat; p.lng = c.lng; p.updated = Date.now(); save(); renderAll(); toast('Nålen flyttades'); setTimeout(() => { const m = findMarker(p.id); if(m) m.openPopup(); }, 200); }
   else openPinForm({lat:c.lat, lng:c.lng});
 });
@@ -2818,8 +2874,78 @@ function openInvite(g){
   });
 }
 
+/* ---------- Förstoringsglas ----------
+   En liten karta som visar det som ligger under en punkt, 3 gånger större än huvudkartan.
+   Visas ovanför punkten när man placerar en nål med korset, passar in en skärmdump,
+   lägger till en punkt i en gräns eller drar en punkt. */
+const LOUPE_ZOOM = Math.log2(3), LOUPE_SIZE = 150;
+const loupe = {el:null, map:null, base:null, baseKey:null, vec:null, shots:null, timer:null, on:false};
+function loupeInit(){
+  if(loupe.map) return;
+  loupe.el = h(`<div class="loupe" aria-hidden="true" hidden><div class="loupe-map"></div><svg class="loupe-cross" viewBox="0 0 40 40" fill="none" stroke-linecap="round"><path d="M20 4v11M20 25v11M4 20h11M25 20h11" stroke="#fff" stroke-width="5"/><path d="M20 4v11M20 25v11M4 20h11M25 20h11" stroke="#d9520e" stroke-width="2.5"/><circle cx="20" cy="20" r="2" fill="#d9520e"/></svg><span class="loupe-tag">3×</span></div>`);
+  map.getContainer().appendChild(loupe.el);
+  loupe.el.hidden = false; // Leaflet behöver en synlig behållare när kartan skapas
+  loupe.map = L.map(loupe.el.firstElementChild, {zoomControl:false, attributionControl:false, zoomSnap:0, zoomAnimation:false, fadeAnimation:false,
+    dragging:false, touchZoom:false, scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, tap:false, inertia:false});
+  loupe.map.createPane('shot'); loupe.map.getPane('shot').style.zIndex = 300;
+  loupe.vec = L.layerGroup().addTo(loupe.map); loupe.shots = L.layerGroup().addTo(loupe.map);
+  loupe.el.hidden = true;
+}
+function loupeBase(){
+  const key = state.settings.base in BASES ? state.settings.base : 'osm';
+  if(loupe.baseKey === key) return;
+  if(loupe.base) loupe.map.removeLayer(loupe.base);
+  loupe.base = BASES[key].make().addTo(loupe.map); loupe.baseKey = key;
+}
+/* Ritar gränser, vägar, utkastet och synliga skärmdumpar i förstoringsglaset. */
+function loupeLayers(){
+  loupe.vec.clearLayers(); loupe.shots.clearLayers();
+  for(const a of state.areas){
+    if(a.visible === false || (drawing && drawing.mode === 'border' && drawing.id === a.id)) continue;
+    const pts = parseBorder(a.border); if(pts.length >= 3) L.polygon(pts, {color:'#d9520e', weight:3, fill:false, dashArray:'10 6', interactive:false}).addTo(loupe.vec);
+    for(const [, l] of areaLines(a)) L.polyline(parseBorder(l.p), {color:l.k === 'path' ? '#7a2e8f' : '#8a4b12', weight:3, interactive:false}).addTo(loupe.vec);
+  }
+  if(drawing && drawing.pts.length >= 2){
+    const p = drawing.pts, o = {color:'#d9520e', weight:3, interactive:false};
+    (drawing.mode === 'border' && p.length >= 3 ? L.polygon(p, Object.assign({fillOpacity:.1}, o)) : L.polyline(p, o)).addTo(loupe.vec);
+  }
+  if(drawing) drawing.pts.forEach(pt => L.circleMarker(pt, {radius:4, color:'#fff', weight:2, fillColor:'#d9520e', fillOpacity:1, interactive:false}).addTo(loupe.vec));
+  if(typeof shotLayersFor === 'function') shotLayersFor(loupe.map).forEach(l => l.addTo(loupe.shots));
+}
+/* Visar förstoringsglaset för latlng. at = punktens läge i kartbehållaren (pixlar). */
+function loupeShow(latlng, at){
+  loupeInit();
+  const c = map.getContainer(), W = c.clientWidth, H = c.clientHeight, s = LOUPE_SIZE;
+  let x = at.x - s / 2, y = at.y - s - 34;
+  if(y < 8) y = Math.min(at.y + 34, H - s - 8);                       // för nära kanten upptill: visa under punkten
+  x = Math.max(8, Math.min(W - s - 8, x));
+  loupe.el.style.left = x + 'px'; loupe.el.style.top = y + 'px';
+  const wasHidden = loupe.el.hidden; loupe.el.hidden = false;
+  if(wasHidden){ loupe.map.invalidateSize(false); loupeBase(); loupeLayers(); }
+  loupe.map.setView(latlng, map.getZoom() + LOUPE_ZOOM, {animate:false});
+  loupe.on = true;
+}
+function loupeHide(){ if(loupe.el) loupe.el.hidden = true; loupe.on = false; clearTimeout(loupe.timer); }
+/* Visar förstoringsglaset en kort stund, till exempel efter att en punkt lagts till med ett tryck. */
+function loupeFlash(latlng, ms){
+  loupeShow(latlng, map.latLngToContainerPoint(latlng)); loupeLayers();
+  clearTimeout(loupe.timer); loupe.timer = setTimeout(loupeHide, ms || 1600);
+}
+/* Förstoringsglas vid korset. */
+function loupeAtCenter(){ const p = crossPoint(); loupeShow(map.containerPointToLatLng(p), p); }
+/* Gör en markör dragbar med förstoringsglas. onMove(latlng) anropas under dragningen, onEnd(latlng) när den släpps. */
+function loupeDrag(marker, onMove, onEnd){
+  marker.on('dragstart', () => { clearTimeout(loupe.timer); loupeShow(marker.getLatLng(), map.latLngToContainerPoint(marker.getLatLng())); loupeLayers(); });
+  marker.on('drag', () => { const ll = marker.getLatLng(); if(onMove) onMove(ll); loupeShow(ll, map.latLngToContainerPoint(ll)); });
+  marker.on('dragend', () => { loupeHide(); if(onEnd) onEnd(marker.getLatLng()); });
+  return marker;
+}
+/* Handtag som går att dra med fingret: en synlig prick i en större träffyta. */
+const dragHandle = (ll, cls) => L.marker(ll, {draggable:true, autoPan:true, keyboard:false, zIndexOffset:2000,
+  icon:L.divIcon({className:'drag-handle ' + (cls || ''), html:'<span></span>', iconSize:[36, 36], iconAnchor:[18, 18]})});
+
 /* ---------- Gränser för områden ---------- */
-const borderLayer = L.layerGroup().addTo(map), drawLayer = L.layerGroup().addTo(map);
+const borderLayer = L.layerGroup().addTo(map), drawLayer = L.layerGroup().addTo(map), drawHandles = L.layerGroup().addTo(map);
 let drawing = null;
 const parseBorder = s => typeof s === 'string' && s ? s.split(';').map(p => p.split(',').map(Number)).filter(p => p.length === 2 && isFinite(p[0]) && isFinite(p[1]) && Math.abs(p[0]) <= 90 && Math.abs(p[1]) <= 180) : [];
 const fmtBorder = pts => pts.map(p => p[0].toFixed(5) + ',' + p[1].toFixed(5)).join(';');
@@ -2877,6 +3003,22 @@ function deleteLine(areaId, lid){
   delete a.lines[lid]; if(!Object.keys(a.lines).length) delete a.lines;
   a.updated = Date.now(); save(); renderAll(); toast(`${name} är borttagen.`);
 }
+/* Områden man kan flytta innehåll till */
+const moveTargets = a => state.areas.filter(t => t.id !== a.id && canEditArea(t));
+/* Flyttar gräns, egna vägar och nålar från ett område till ett annat. Returnerar en text till användaren. */
+function moveAreaContent(fromId, toId, what){
+  const from = areaById(fromId), to = areaById(toId); if(!from || !to) return 'Området finns inte längre.';
+  if(!canEditArea(from) || !canEditArea(to)) return 'Du har inte rättighet att ändra något av områdena.';
+  const done = [], now = Date.now();
+  if(what.border && from.border){ to.border = from.border; delete from.border; done.push('gränsen'); }
+  if(what.lines && areaLines(from).length){ const n = areaLines(from).length; to.lines = Object.assign({}, to.lines || {}, from.lines); delete from.lines; done.push(n === 1 ? '1 väg eller stig' : `${n} vägar och stigar`); }
+  if(what.pins){ const ps = state.pins.filter(p => p.areaId === fromId); ps.forEach(p => { p.areaId = toId; p.updated = now; }); if(ps.length) done.push(ps.length === 1 ? '1 nål' : `${ps.length} nålar`); }
+  if(!done.length) return 'Det fanns inget att flytta.';
+  from.updated = now; to.updated = now; delete from.example; delete to.example;
+  if(to.visible === false) to.visible = true;
+  save(); renderAll();
+  return `Flyttade ${done.join(', ').replace(/, ([^,]*)$/, ' och $1')} till ${to.name}.`;
+}
 /* Formulär för en ny eller befintlig väg/stig. opts: {areaId, lid} */
 function openLineForm(opts){
   opts = opts || {};
@@ -2887,7 +3029,7 @@ function openLineForm(opts){
   openModal(`<h2>${opts.lid ? 'Ändra' : 'Rita'} väg eller stig</h2><form id="lfForm">
     <div class="field"><span>Typ</span><div class="row2">${Object.entries(LINE_KIND).map(([k, t]) => `<label class="radio-card" style="margin:0"><input type="radio" name="lfKind" value="${k}" ${l.k === k ? 'checked' : ''}> ${t}<br><span class="small muted">${k === 'road' ? 'Brun heldragen' : 'Lila streckad'}</span></label>`).join('')}</div></div>
     <label class="field"><span>Namn (valfritt)</span><input class="input" id="lfName" maxlength="60" value="${esc(l.n || '')}" placeholder="${opts.lid ? '' : 'Till exempel Stigen till tornet'}"></label>
-    <label class="field"><span>Område</span><select class="input" id="lfArea" ${opts.lid ? 'disabled' : ''}>${editable.map(a => `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.gid ? ' (delas med ' + esc(gname(cloud.groups[a.gid])) + ')' : ''}</option>`).join('')}</select></label>
+    <label class="field"><span>Område</span><select class="input" id="lfArea">${editable.map(a => `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.gid ? ' (delas med ' + esc(gname(cloud.groups[a.gid])) + ')' : ''}</option>`).join('')}</select></label>
     <p class="note" style="margin-top:0">Vägen visas när området är påslaget och delas med jaktlaget om området är delat.</p>
     <div class="actions"><button class="btn primary grow" type="submit">${opts.lid ? 'Spara' : 'Börja rita'}</button>${opts.lid ? '<button class="btn" type="button" id="lfRedraw">Rita om</button>' : ''}<button class="btn ghost" type="button" id="lfCancel">Avbryt</button></div></form>`, m => {
     const read = () => ({k:(m.querySelector('input[name=lfKind]:checked') || {}).value || 'path', n:m.querySelector('#lfName').value.trim(), areaId:m.querySelector('#lfArea').value});
@@ -2898,7 +3040,10 @@ function openLineForm(opts){
       if(!opts.lid){ startLine(v.areaId, v.k, v.n); return; }
       const a = areaById(opts.areaId); if(!a || !a.lines || !a.lines[opts.lid]){ closeModal(); return; }
       a.lines[opts.lid].k = v.k; if(v.n) a.lines[opts.lid].n = v.n; else delete a.lines[opts.lid].n;
-      a.updated = Date.now(); save(); closeModal(); renderAll(); toast('Ändringen är sparad.');
+      a.updated = Date.now();
+      const to = v.areaId !== a.id && areaById(v.areaId);
+      if(to){ to.lines = Object.assign({}, to.lines || {}, {[opts.lid]: a.lines[opts.lid]}); delete a.lines[opts.lid]; if(!Object.keys(a.lines).length) delete a.lines; to.updated = Date.now(); if(to.visible === false) to.visible = true; }
+      save(); closeModal(); renderAll(); toast(to ? `Flyttad till ${to.name}.` : 'Ändringen är sparad.');
     });
   });
 }
@@ -2909,24 +3054,35 @@ function startLine(areaId, kind, name, lid){
   closeModal(); map.closePopup(); if(placing) endPlacing();
   if(a.visible === false){ a.visible = true; save(); renderAll(); }
   drawing = {mode:'line', id:areaId, kind, name, lid:lid || null, pts:lid && a.lines && a.lines[lid] ? parseBorder(a.lines[lid].p) : []};
-  $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('peek');
+  $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
   if(drawing.pts.length >= 2) map.fitBounds(L.latLngBounds(drawing.pts), {paddingTopLeft:[40,70], paddingBottomRight:[40, bottomPad() + 190], maxZoom:17});
   renderBorders(); drawDraft();
 }
-function drawDraft(){
+/* Hörnen går att dra med fingret (med förstoringsglas). Linjen ritas om under dragningen. */
+function drawHandlesRender(){
+  drawHandles.clearLayers(); if(!drawing) return;
+  const cls = drawing.mode === 'line' ? (drawing.kind === 'path' ? 'path' : 'road') : 'border';
+  drawing.pts.forEach((pt, i) => {
+    const m = dragHandle(pt, cls + (i === drawing.pts.length - 1 ? ' last' : ''));
+    loupeDrag(m, ll => { drawing.pts[i] = [ll.lat, ll.lng]; drawShape(); }, ll => { drawing.pts[i] = [ll.lat, ll.lng]; drawDraft(); });
+    m.addTo(drawHandles);
+  });
+}
+function drawShape(){
   drawLayer.clearLayers(); const p = drawing.pts;
+  if(drawing.mode === 'line'){ if(p.length >= 2) lineStyle(drawing.kind, p, false).forEach(pl => pl.addTo(drawLayer)); return; }
+  if(p.length >= 3) L.polygon(p, {color:'#d9520e', weight:3, fillColor:'#d9520e', fillOpacity:.14, interactive:false}).addTo(drawLayer);
+  else if(p.length === 2) L.polyline(p, {color:'#d9520e', weight:3, interactive:false}).addTo(drawLayer);
+}
+function drawDraft(){
+  const p = drawing.pts; drawShape(); drawHandlesRender();
   if(drawing.mode === 'line'){
-    if(p.length >= 2) lineStyle(drawing.kind, p, false).forEach(pl => pl.addTo(drawLayer));
-    p.forEach((pt, i) => L.circleMarker(pt, {radius:i === p.length - 1 ? 8 : 4, color:'#ffffff', weight:2, fillColor:drawing.kind === 'path' ? '#7a2e8f' : '#8a4b12', fillOpacity:1, interactive:false}).addTo(drawLayer));
     const what = LINE_KIND[drawing.kind].toLowerCase();
-    $('#drawText').textContent = p.length < 2 ? `Tryck på kartan längs ${what}en, eller gå den och tryck på positionsknappen. ${p.length} av minst 2 punkter.` : `${p.length} punkter · ${fmtDist(lineLen(p))}. Fortsätt längs ${what}en eller tryck Klar.`;
+    $('#drawText').textContent = p.length < 2 ? `Tryck på kartan längs ${what}en, eller gå den och tryck på positionsknappen. ${p.length} av minst 2 punkter.` : `${p.length} punkter · ${fmtDist(lineLen(p))}. Fortsätt längs ${what}en, dra en punkt för att flytta den, eller tryck Klar.`;
     $('#drawOk').disabled = p.length < 2; $('#drawUndo').disabled = !p.length;
     return;
   }
-  if(p.length >= 3) L.polygon(p, {color:'#d9520e', weight:3, fillColor:'#d9520e', fillOpacity:.14, interactive:false}).addTo(drawLayer);
-  else if(p.length === 2) L.polyline(p, {color:'#d9520e', weight:3, interactive:false}).addTo(drawLayer);
-  p.forEach((pt, i) => L.circleMarker(pt, {radius:i === p.length - 1 ? 8 : 5, color:'#ffffff', weight:2, fillColor:'#d9520e', fillOpacity:1, interactive:false}).addTo(drawLayer));
-  $('#drawText').textContent = p.length < 3 ? `Tryck på kartan i varje hörn av marken. ${p.length} av minst 3 punkter.` : `${p.length} punkter · ${fmtHa(areaHa(p))}. Fortsätt runt marken eller tryck Klar.`;
+  $('#drawText').textContent = p.length < 3 ? `Tryck på kartan i varje hörn av marken. ${p.length} av minst 3 punkter.` : `${p.length} punkter · ${fmtHa(areaHa(p))}. Fortsätt runt marken, dra en punkt för att flytta den, eller tryck Klar.`;
   $('#drawOk').disabled = p.length < 3; $('#drawUndo').disabled = !p.length;
 }
 function startDrawing(id){
@@ -2934,14 +3090,14 @@ function startDrawing(id){
   if(!canEditArea(a)){ toast('Du har inte rättighet att ändra det området.'); return; }
   closeModal(); map.closePopup(); if(placing) endPlacing();
   drawing = {mode:'border', id, pts:parseBorder(a.border)};
-  $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('peek');
+  $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
   if(drawing.pts.length) map.fitBounds(L.latLngBounds(drawing.pts), {paddingTopLeft:[40,70], paddingBottomRight:[40, bottomPad() + 190], maxZoom:17});
   renderBorders(); drawDraft();
 }
-function endDrawing(){ drawing = null; drawLayer.clearLayers(); $('#drawbar').hidden = true; $('#btnAdd').hidden = false; renderBorders(); }
-map.on('click', e => { if(!drawing) return; drawing.pts.push([e.latlng.lat, e.latlng.lng]); drawDraft(); });
+function endDrawing(){ drawing = null; drawLayer.clearLayers(); drawHandles.clearLayers(); loupeHide(); $('#drawbar').hidden = true; $('#btnAdd').hidden = false; renderBorders(); sheetRestore(); }
+map.on('click', e => { if(!drawing) return; drawing.pts.push([e.latlng.lat, e.latlng.lng]); drawDraft(); loupeFlash(e.latlng); });
 $('#drawUndo').addEventListener('click', () => { drawing.pts.pop(); drawDraft(); });
-$('#drawCancel').addEventListener('click', () => { endDrawing(); overlayDrawEnded(false); });
+$('#drawCancel').addEventListener('click', endDrawing);
 $('#drawGps').addEventListener('click', () => {
   if(!('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); return; }
   navigator.geolocation.getCurrentPosition(pos => { if(!drawing) return; showMe(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0); drawing.pts.push([pos.coords.latitude, pos.coords.longitude]); map.panTo([pos.coords.latitude, pos.coords.longitude]); drawDraft(); },
@@ -2958,7 +3114,7 @@ $('#drawOk').addEventListener('click', () => {
     return;
   }
   a.border = fmtBorder(pts); a.updated = Date.now(); delete a.example;
-  save(); renderAll(); overlayDrawEnded(true); toast(`Gränsen för ${a.name} är sparad, ${fmtHa(areaHa(pts))}.`);
+  save(); renderAll(); toast(`Gränsen för ${a.name} är sparad, ${fmtHa(areaHa(pts))}.`);
 });
 function parseRing(text){
   const ring = c => c.map(x => [+x[1], +x[0]]);
@@ -3017,76 +3173,174 @@ function roadsUpdate(){
 }
 map.on('moveend', () => { clearTimeout(roads.timer); roads.timer = setTimeout(roadsUpdate, 400); });
 
-/* ---------- Skärmdump ovanpå kartan ----------
-   Hjälp att rita en gräns efter en skärmdump (till exempel från Min karta eller en annan jaktapp).
-   Man pekar ut två punkter i bilden och samma två punkter i kartan. Appen räknar ut skala, vridning
-   och läge, och lägger bilden halvgenomskinlig ovanpå kartan. Bilden sparas inte, den finns bara
-   kvar tills man tar bort den eller sparar gränsen. */
+/* ---------- Skärmdumpar ovanpå kartan ----------
+   Hjälp att rita gränser och lägga ut pass efter en skärmdump (till exempel från Min karta eller en annan jaktapp).
+   Man pekar ut två punkter i bilden och samma två punkter i kartan. Appen räknar ut skala, vridning och läge
+   och lägger bilden halvgenomskinlig ovanpå kartan. Bilderna ligger kvar tills man tar bort dem och sparas
+   bara i den här webbläsaren (bilden i IndexedDB, resten i localStorage). De delas aldrig. */
 map.createPane('shot'); map.getPane('shot').style.zIndex = 300; map.getPane('shot').style.pointerEvents = 'none';
-let ov = null;           // {url, w, h, areaId, pts:[{u,v,ll}], step, i, layer, mark, opacity}
-const OV_MAX = 2400;     // längsta sida i pixlar efter nedskalning
+const SHOT_META = 'faltkartan.shots', SHOT_MAX = 2400;
+let shots = [];   // {id, name, created, w, h, pts:[{u,v,ll},{u,v,ll}], visible, opacity, url, layer}
+let cal = null;   // inpassning: {shot, i, step:'img'|'map', isNew, areaId}
+let adj = null;   // justering: {shot, handles}
 
-/* Likformighetsavbildning (skala, vridning, förflyttning) från bildpixel till kartans lagerpunkt,
-   räknad som komplexa tal: p = a·u + b. */
-// Lagerpunkt utan avrundning (Leaflets latLngToLayerPoint avrundar till hela pixlar, vilket ger fel som växer längre från punkterna)
-const exactLayerPoint = ll => map.project(L.latLng(ll)).subtract(map.getPixelOrigin());
-function ovTransform(){
-  const [A, B] = ov.pts, P1 = exactLayerPoint(A.ll), P2 = exactLayerPoint(B.ll);
+/* --- Lagring --- */
+function idb(){
+  if(idb.p) return idb.p;
+  idb.p = new Promise((ok, no) => {
+    try { const r = indexedDB.open('jaktkartan', 1); r.onupgradeneeded = () => r.result.createObjectStore('shots'); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); } catch(e){ no(e); }
+  });
+  return idb.p;
+}
+const idbDo = (mode, fn) => idb().then(db => new Promise((ok, no) => { const t = db.transaction('shots', mode), r = fn(t.objectStore('shots')); t.oncomplete = () => ok(r && r.result); t.onerror = () => no(t.error); }));
+const idbPut = (id, blob) => idbDo('readwrite', s => s.put(blob, id)).catch(() => {});
+const idbGet = id => idbDo('readonly', s => s.get(id)).catch(() => null);
+const idbDel = id => idbDo('readwrite', s => s.delete(id)).catch(() => {});
+const calibrated = s => s && s.pts.length === 2 && s.pts.every(p => p && p.ll && p.u != null);
+function saveShots(){ lsSet(SHOT_META, JSON.stringify(shots.filter(calibrated).map(s => ({id:s.id, name:s.name, created:s.created, w:s.w, h:s.h, pts:s.pts, visible:s.visible, opacity:s.opacity})))); }
+async function loadShots(){
+  let meta = [];
+  try { meta = JSON.parse(lsGet(SHOT_META) || '[]'); } catch(e){}
+  for(const m of Array.isArray(meta) ? meta : []){
+    const blob = await idbGet(m.id);
+    if(!blob || !calibrated(m)) continue;
+    const s = Object.assign({}, m, {url:URL.createObjectURL(blob)});
+    shots.push(s); if(s.visible) showShot(s);
+  }
+  if(shots.length !== meta.length) saveShots();
+  renderShotList();
+}
+
+/* --- Avbildning ---
+   Likformighetsavbildning (skala, vridning, förflyttning) från bildpixel till kartans lagerpunkt, som komplexa tal p = a·u + b.
+   Räknas utan Leaflets avrundning till hela pixlar, som annars ger fel som växer längre från punkterna. */
+const exactLayerPoint = (m, ll) => m.project(L.latLng(ll)).subtract(m.getPixelOrigin());
+function shotTransform(s, m){
+  const [A, B] = s.pts, P1 = exactLayerPoint(m, A.ll), P2 = exactLayerPoint(m, B.ll);
   const dx = B.u - A.u, dy = B.v - A.v, px = P2.x - P1.x, py = P2.y - P1.y, n = dx * dx + dy * dy;
   const ar = (px * dx + py * dy) / n, ai = (py * dx - px * dy) / n;
   return {ar, ai, bx:P1.x - (ar * A.u - ai * A.v), by:P1.y - (ai * A.u + ar * A.v)};
 }
-function ovImgToLatLng(u, v){
-  const t = ovTransform();
-  return map.layerPointToLatLng(L.point(t.ar * u - t.ai * v + t.bx, t.ai * u + t.ar * v + t.by));
+function shotImgToLatLng(s, u, v){
+  const t = shotTransform(s, map);
+  return map.unproject(L.point(t.ar * u - t.ai * v + t.bx, t.ai * u + t.ar * v + t.by).add(map.getPixelOrigin()));
 }
 const ShotLayer = L.Layer.extend({
+  initialize(s){ this._s = s; },
   onAdd(m){
-    const img = this._img = L.DomUtil.create('img', 'shot-img leaflet-zoom-hide', m.getPane('shot'));
-    img.src = ov.url; img.alt = '';
-    Object.assign(img.style, {position:'absolute', left:'0', top:'0', width:ov.w + 'px', height:ov.h + 'px', maxWidth:'none', transformOrigin:'0 0', opacity:ov.opacity});
+    const s = this._s, img = this._img = L.DomUtil.create('img', 'shot-img leaflet-zoom-hide', m.getPane('shot'));
+    img.src = s.url; img.alt = ''; img.dataset.shot = s.id;
+    Object.assign(img.style, {position:'absolute', left:'0', top:'0', width:s.w + 'px', height:s.h + 'px', maxWidth:'none', transformOrigin:'0 0', opacity:s.opacity, pointerEvents:'none'});
     m.on('zoomend viewreset', this._update, this); this._update();
   },
   onRemove(m){ L.DomUtil.remove(this._img); m.off('zoomend viewreset', this._update, this); },
-  _update(){ const t = ovTransform(); this._img.style.transform = `matrix(${t.ar},${t.ai},${-t.ai},${t.ar},${t.bx},${t.by})`; },
+  _update(){ const t = shotTransform(this._s, this._map); this._img.style.transform = `matrix(${t.ar},${t.ai},${-t.ai},${t.ar},${t.bx},${t.by})`; },
   setOpacity(o){ if(this._img) this._img.style.opacity = o; }
 });
+function showShot(s){ if(!s.layer && calibrated(s)) s.layer = new ShotLayer(s).addTo(map); }
+function hideShot(s){ if(s.layer){ map.removeLayer(s.layer); s.layer = null; } }
+function refreshShot(s){ if(s.layer) s.layer._update(); }
+/* Lager för förstoringsglaset */
+const shotLayersFor = m => shots.filter(s => s.visible && calibrated(s)).map(s => new ShotLayer(s));
+const shotById = id => shots.find(s => s.id === id);
 
-function startOverlay(areaId){
-  const a = areaById(areaId); if(!a) return;
-  if(!canEditArea(a)){ toast('Du har inte rättighet att ändra det området.'); return; }
-  $('#fileOverlay').dataset.area = areaId; $('#fileOverlay').click();
+/* --- Lista i lagermenyn --- */
+function renderShotList(){
+  const el = $('#shotList'); if(!el) return;
+  el.innerHTML = shots.map(s => `<div class="shot-row"><label class="base-opt" style="flex:1;min-width:0"><input type="checkbox" data-shot-vis="${s.id}" ${s.visible ? 'checked' : ''}><span class="shot-name">${esc(s.name)}</span></label><button class="btn sm" type="button" data-shot-edit="${s.id}">Ändra</button></div>`).join('')
+    + `<button class="base-opt" type="button" id="shotAdd" style="width:100%;border:0;background:none;text-align:left;color:inherit;font:inherit"><span style="width:18px;text-align:center;font-weight:700;color:var(--accent)">+</span><span><strong>Lägg till skärmdump</strong><small>Ligger kvar tills du tar bort den. Sparas bara i den här telefonen.</small></span></button>`;
 }
+$('#layerPop').addEventListener('click', e => {
+  const ed = e.target.closest('[data-shot-edit]'); if(ed){ toggleLayerPop(false); openShotForm(shotById(ed.dataset.shotEdit)); return; }
+  if(e.target.closest('#shotAdd')){ toggleLayerPop(false); startShotAdd(); }
+});
+$('#layerPop').addEventListener('change', e => {
+  const id = e.target.dataset && e.target.dataset.shotVis; if(!id) return;
+  const s = shotById(id); if(!s) return;
+  s.visible = e.target.checked; if(s.visible) showShot(s); else hideShot(s); saveShots();
+});
+function openShotForm(s){
+  if(!s) return;
+  openModal(`<h2>Skärmdump</h2><form id="seForm">
+    <label class="field"><span>Namn</span><input class="input" id="seName" maxlength="60" value="${esc(s.name)}"></label>
+    <label class="trail-range" style="padding:0"><span style="display:flex;justify-content:space-between"><strong>Genomskinlighet</strong><span id="seOpTxt">${Math.round(s.opacity * 100)} %</span></span><input type="range" id="seOpacity" min="10" max="100" step="5" value="${Math.round(s.opacity * 100)}"></label>
+    <label class="checkline"><input type="checkbox" id="seVis" ${s.visible ? 'checked' : ''}><span>Visa på kartan</span></label>
+    <div class="btnrow" style="margin-top:10px"><button class="btn" type="button" id="seAdjust">Flytta, skala och vrid</button><button class="btn" type="button" id="seRedo">Gör om punkterna</button><button class="btn" type="button" id="seDraw">Rita gräns</button></div>
+    <div class="actions"><button class="btn primary grow" type="submit">Klar</button><button class="btn danger" type="button" id="seDel">Ta bort</button></div></form>`, m => {
+    const keepName = () => { const v = m.querySelector('#seName').value.trim(); if(v) s.name = v; };
+    m.querySelector('#seOpacity').addEventListener('input', e => { s.opacity = e.target.value / 100; m.querySelector('#seOpTxt').textContent = e.target.value + ' %'; if(s.layer) s.layer.setOpacity(s.opacity); });
+    m.querySelector('#seVis').addEventListener('change', e => { s.visible = e.target.checked; if(s.visible) showShot(s); else hideShot(s); });
+    m.querySelector('#seAdjust').addEventListener('click', () => { keepName(); closeModal(); startAdjust(s); });
+    m.querySelector('#seRedo').addEventListener('click', () => { keepName(); closeModal(); startCalibration(s, false); });
+    m.querySelector('#seDraw').addEventListener('click', () => { keepName(); saveShots(); renderShotList(); openBorderPick(); });
+    const del = m.querySelector('#seDel');
+    del.addEventListener('click', () => confirmClick(del, 'Bekräfta', () => { closeModal(); deleteShot(s); toast('Skärmdumpen är borttagen.'); }));
+    m.querySelector('#seForm').addEventListener('submit', e => { e.preventDefault(); keepName(); saveShots(); renderShotList(); closeModal(); });
+  });
+}
+function deleteShot(s){
+  if(adj && adj.shot === s) endAdjust();
+  hideShot(s); shots = shots.filter(x => x !== s); idbDel(s.id);
+  try { URL.revokeObjectURL(s.url); } catch(e){}
+  saveShots(); renderShotList();
+}
+/* Välj område och börja rita dess gräns, med skärmdumparna kvar under. */
+function openBorderPick(areaId){
+  const editable = state.areas.filter(a => canEditArea(a));
+  if(!editable.length){ toast('Skapa ett område under Filter först.'); return; }
+  const sel = areaId || (cal && cal.areaId) || (editable.find(a => !a.example) || editable[0]).id;
+  openModal(`<h2>Rita gräns</h2><label class="field"><span>Område</span><select class="input" id="obArea">${editable.map(a => `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.border ? ' (har en gräns, ersätts)' : ''}</option>`).join('')}</select></label>
+    <div class="actions"><button class="btn primary grow" type="button" id="obGo">Börja rita</button><button class="btn ghost" type="button" id="obCancel">Avbryt</button></div>`, m => {
+    m.querySelector('#obCancel').addEventListener('click', closeModal);
+    m.querySelector('#obGo').addEventListener('click', () => { const id = m.querySelector('#obArea').value; endAdjust(); cal = null; endCalBar(); startDrawing(id); });
+  });
+}
+
+/* --- Ny skärmdump och inpassning --- */
+function startShotAdd(areaId){ $('#fileOverlay').dataset.area = areaId || ''; $('#fileOverlay').click(); }
 $('#fileOverlay').addEventListener('change', e => {
-  const file = e.target.files && e.target.files[0], areaId = e.target.dataset.area; e.target.value = '';
+  const file = e.target.files && e.target.files[0], areaId = e.target.dataset.area || null; e.target.value = '';
   if(!file) return;
   if(!/^image\//.test(file.type)){ toast('Välj en bild, till exempel en skärmdump.'); return; }
   const src = URL.createObjectURL(file), img = new Image();
   img.onload = () => {
     let w = img.naturalWidth, h = img.naturalHeight;
-    const done = url => { removeOverlay(true); ov = {url, w, h, areaId, pts:[], step:'img', i:0, opacity:.6}; closeModal(); pickImage(0); };
-    if(Math.max(w, h) <= OV_MAX){ done(src); return; }
-    const k = OV_MAX / Math.max(w, h); w = Math.round(w * k); h = Math.round(h * k);
+    const done = blob => {
+      const d = new Date(), s = {id:'s-' + uid(), name:`Skärmdump ${d.getDate()}/${d.getMonth() + 1} ${String(d.getHours()).padStart(2, '0')}.${String(d.getMinutes()).padStart(2, '0')}`,
+        created:Date.now(), w, h, pts:[{}, {}], visible:true, opacity:.6, url:URL.createObjectURL(blob), blob};
+      URL.revokeObjectURL(src); closeModal(); startCalibration(s, true, areaId);
+    };
+    if(Math.max(w, h) <= SHOT_MAX){ done(file); return; }
+    const k = SHOT_MAX / Math.max(w, h); w = Math.round(w * k); h = Math.round(h * k);
     const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h);
-    URL.revokeObjectURL(src);
-    c.toBlob(b => done(URL.createObjectURL(b)), 'image/jpeg', .9);
+    c.toBlob(b => done(b), 'image/jpeg', .9);
   };
   img.onerror = () => { URL.revokeObjectURL(src); toast('Bilden kunde inte läsas.'); };
   img.src = src;
 });
-
+function startCalibration(s, isNew, areaId){
+  endAdjust(); hideShot(s);
+  cal = {shot:s, i:0, step:'img', isNew, areaId:areaId || null, old:isNew ? null : JSON.parse(JSON.stringify(s.pts))};
+  pickImage(0);
+}
+function cancelCalibration(){
+  if(!cal) return; const s = cal.shot;
+  if(cal.isNew){ try { URL.revokeObjectURL(s.url); } catch(e){} }
+  else { s.pts = cal.old; if(s.visible) showShot(s); }
+  endCalBar(); cal = null;
+}
 /* Steg 1: punkt i bilden */
 function pickImage(i){
-  ov.step = 'img'; ov.i = i; $('#ovbar').hidden = true; ovCross(false);
+  const s = cal.shot; cal.step = 'img'; cal.i = i; endCalBar(true);
   let zoom = 1;
-  const p = ov.pts[i] || {};
+  const p = s.pts[i] || (s.pts[i] = {});
   openModal(`<h2>Punkt ${i + 1} av 2 i bilden</h2>
     <p class="note" style="margin-top:0">Tryck på en plats som är lätt att hitta även i kartan, till exempel en vägkorsning, ett vägslut eller ett hus. ${i ? 'Välj en plats långt från den första.' : 'Den andra punkten ska ligga långt från den här.'}</p>
-    <div class="shot-pick" id="ovWrap"><div class="shot-inner" id="ovInner"><img id="ovImg" src="${ov.url}" alt="Skärmdumpen"><span class="shot-mark" id="ovMark" hidden></span>${i ? `<span class="shot-mark first" style="left:${ov.pts[0].u / ov.w * 100}%;top:${ov.pts[0].v / ov.h * 100}%"></span>` : ''}</div></div>
+    <div class="shot-pick" id="ovWrap"><div class="shot-inner" id="ovInner"><img id="ovImg" src="${s.url}" alt="Skärmdumpen"><span class="shot-mark" id="ovMark" hidden></span>${i && s.pts[0].u != null ? `<span class="shot-mark first" style="left:${s.pts[0].u / s.w * 100}%;top:${s.pts[0].v / s.h * 100}%"></span>` : ''}</div></div>
     <div class="btnrow" style="margin-top:8px"><button class="btn sm" type="button" id="ovZoomIn" aria-label="Förstora bilden">+</button><button class="btn sm" type="button" id="ovZoomOut" aria-label="Förminska bilden">−</button><span class="small muted" style="align-self:center">Förstora för att träffa rätt.</span></div>
     <div class="actions"><button class="btn primary grow" type="button" id="ovNext" ${p.u == null ? 'disabled' : ''}>Nästa: samma plats i kartan</button><button class="btn ghost" type="button" id="ovCancel">Avbryt</button></div>`, m => {
     const inner = m.querySelector('#ovInner'), mark = m.querySelector('#ovMark'), wrap = m.querySelector('#ovWrap');
-    const showMark = () => { if(p.u == null) return; mark.hidden = false; mark.style.left = (p.u / ov.w * 100) + '%'; mark.style.top = (p.v / ov.h * 100) + '%'; };
+    const showMark = () => { if(p.u == null) return; mark.hidden = false; mark.style.left = (p.u / s.w * 100) + '%'; mark.style.top = (p.v / s.h * 100) + '%'; };
     const setZoom = z => {
       const cx = (wrap.scrollLeft + wrap.clientWidth / 2) / inner.clientWidth, cy = (wrap.scrollTop + wrap.clientHeight / 2) / inner.clientHeight;
       zoom = Math.max(1, Math.min(8, z)); inner.style.width = (zoom * 100) + '%';
@@ -3094,92 +3348,117 @@ function pickImage(i){
     };
     m.querySelector('#ovImg').addEventListener('click', e => {
       const r = e.currentTarget.getBoundingClientRect();
-      p.u = (e.clientX - r.left) / r.width * ov.w; p.v = (e.clientY - r.top) / r.height * ov.h;
-      ov.pts[i] = Object.assign(ov.pts[i] || {}, {u:p.u, v:p.v}); showMark();
+      p.u = (e.clientX - r.left) / r.width * s.w; p.v = (e.clientY - r.top) / r.height * s.h; showMark();
       m.querySelector('#ovNext').disabled = false;
     });
     m.querySelector('#ovZoomIn').addEventListener('click', () => setZoom(zoom * 2));
     m.querySelector('#ovZoomOut').addEventListener('click', () => setZoom(zoom / 2));
-    m.querySelector('#ovCancel').addEventListener('click', () => { closeModal(); removeOverlay(true); });
+    m.querySelector('#ovCancel').addEventListener('click', () => { closeModal(); cancelCalibration(); });
     m.querySelector('#ovNext').addEventListener('click', () => { closeModal(); pickMap(i); });
     showMark();
   });
 }
-
-/* Steg 2: samma punkt i kartan */
+/* Steg 2: samma punkt i kartan, med kors och förstoringsglas. Den första punkten går att dra om den hamnade fel. */
+let calCrossEl = null, calHandles = L.layerGroup().addTo(map);
+function calCross(show){
+  if(show && !calCrossEl){ calCrossEl = h(`<div class="crosshair" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="24" cy="24" r="9"/><path d="M24 3v11M24 34v11M3 24h11M34 24h11"/></svg></div>`); map.getContainer().appendChild(calCrossEl); }
+  if(calCrossEl) calCrossEl.hidden = !show;
+}
 function pickMap(i){
-  ov.step = 'map'; ov.i = i; map.closePopup();
-  if(ov.layer){ map.removeLayer(ov.layer); ov.layer = null; }
-  $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('peek');
-  const p = ov.pts[i];
+  const s = cal.shot, p = s.pts[i]; cal.step = 'map'; cal.i = i; map.closePopup();
+  $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
   $('#ovbar').innerHTML = `<div class="shot-hint"><canvas id="ovCrop" width="120" height="80" aria-label="Utsnitt av bilden runt punkten"></canvas>
-      <p>Flytta kartan så att <b>korset</b> hamnar på samma plats som i bilden (punkt ${i + 1} av 2). Zooma in för att träffa rätt. Satellit kan göra det lättare.</p></div>
+      <p>Flytta kartan så att <b>korset</b> hamnar på samma plats som i bilden (punkt ${i + 1} av 2). Förstoringsglaset visar vad som ligger under korset.</p></div>
     <div class="btnrow"><button class="btn primary" id="ovMapOk" type="button">${i ? 'Lägg bilden på kartan' : 'Nästa punkt'}</button><button class="btn" id="ovBack" type="button">Tillbaka till bilden</button><button class="btn ghost" id="ovMapCancel" type="button">Avbryt</button></div>`;
   $('#ovbar').hidden = false;
-  // utsnitt av bilden runt punkten, med ett kors i mitten
   const img = new Image(); img.onload = () => {
-    const c = $('#ovCrop'); if(!c) return; const g = c.getContext('2d'), s = Math.max(ov.w, ov.h) / 8;
+    const c = $('#ovCrop'); if(!c) return; const g = c.getContext('2d'), z = Math.max(s.w, s.h) / 8;
     g.fillStyle = '#ddd'; g.fillRect(0, 0, 120, 80);
-    g.drawImage(img, p.u - s * .75, p.v - s / 2, s * 1.5, s, 0, 0, 120, 80);
+    g.drawImage(img, p.u - z * .75, p.v - z / 2, z * 1.5, z, 0, 0, 120, 80);
     g.strokeStyle = '#d9520e'; g.lineWidth = 2; g.beginPath(); g.moveTo(60, 30); g.lineTo(60, 50); g.moveTo(50, 40); g.lineTo(70, 40); g.stroke();
-  }; img.src = ov.url;
-  if(p.ll) map.setView(p.ll, Math.max(map.getZoom(), 15), {animate:false});
-  ovCross(true); ovMark();
+  }; img.src = s.url;
+  calCross(true); syncCross();
+  if(p.ll){ map.setView(p.ll, Math.max(map.getZoom(), 15), {animate:false}); panToCross(p.ll); }
+  setTimeout(() => { if(cal && cal.step === 'map' && cal.i === i){ syncCross(); if(p.ll) panToCross(p.ll); loupeAtCenter(); } }, 320);
+  calMarks(); loupeAtCenter();
   $('#ovMapOk').addEventListener('click', () => {
-    const c = map.getCenter(); ov.pts[i].ll = {lat:c.lat, lng:c.lng};
+    const c = crossLatLng(); p.ll = {lat:c.lat, lng:c.lng};
     if(i === 0){ pickImage(1); return; }
-    const [A, B] = ov.pts;
-    if(Math.hypot(B.u - A.u, B.v - A.v) < Math.max(ov.w, ov.h) / 10){ toast('Punkterna i bilden ligger för nära varandra. Välj två platser längre ifrån varandra.', 5000); pickImage(1); return; }
+    const [A, B] = s.pts;
+    if(Math.hypot(B.u - A.u, B.v - A.v) < Math.max(s.w, s.h) / 10){ toast('Punkterna i bilden ligger för nära varandra. Välj två platser längre ifrån varandra.', 5000); pickImage(1); return; }
     if(distM(A.ll, B.ll) < 30){ toast('Punkterna i kartan ligger för nära varandra.', 5000); return; }
-    placeOverlay(true);
+    finishCalibration();
   });
-  $('#ovBack').addEventListener('click', () => { ovCross(false); pickImage(i); });
-  $('#ovMapCancel').addEventListener('click', () => removeOverlay());
+  $('#ovBack').addEventListener('click', () => pickImage(i));
+  $('#ovMapCancel').addEventListener('click', () => cancelCalibration());
 }
-/* Visar den första punkten i kartan medan man väljer den andra. */
-function ovMark(){
-  if(ov.mark){ map.removeLayer(ov.mark); ov.mark = null; }
-  const p = ov.step === 'map' && ov.i === 1 && ov.pts[0];
-  if(p && p.ll) ov.mark = L.circleMarker(p.ll, {radius:8, color:'#ffffff', weight:3, fillColor:'#1a73e8', fillOpacity:1, interactive:false}).addTo(map);
+function calMarks(){
+  calHandles.clearLayers();
+  if(!cal || cal.step !== 'map' || cal.i !== 1 || !cal.shot.pts[0].ll) return;
+  const A = cal.shot.pts[0];
+  loupeDrag(dragHandle(A.ll, 'shot first'), null, ll => { A.ll = {lat:ll.lat, lng:ll.lng}; }).addTo(calHandles);
 }
-let ovCrossEl = null;
-function ovCross(show){
-  if(show && !ovCrossEl){ ovCrossEl = h(`<div class="crosshair" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="24" cy="24" r="9"/><path d="M24 3v11M24 34v11M3 24h11M34 24h11"/></svg></div>`); map.getContainer().appendChild(ovCrossEl); }
-  if(ovCrossEl) ovCrossEl.hidden = !show;
+map.on('move', () => { if(cal && cal.step === 'map') loupeAtCenter(); });
+map.on('click', e => { if(cal && cal.step === 'map') panToCross(e.latlng, true); });
+function endCalBar(keepCal){
+  calCross(false); calHandles.clearLayers(); loupeHide();
+  if(!adj){ $('#ovbar').hidden = true; $('#ovbar').innerHTML = ''; }
+  if(!keepCal && !drawing && !placing) $('#btnAdd').hidden = false;
+  if(!keepCal) setTimeout(sheetRestore, 0);
 }
-// Ett tryck i kartan flyttar korset dit
-map.on('click', e => { if(ov && ov.step === 'map') map.panTo(e.latlng); });
+function finishCalibration(){
+  const s = cal.shot, isNew = cal.isNew;
+  endCalBar(true); cal.step = 'done';
+  if(isNew){ shots.push(s); idbPut(s.id, s.blob); delete s.blob; }
+  s.visible = true; showShot(s); refreshShot(s); saveShots(); renderShotList();
+  const c = [[0, 0], [s.w, 0], [s.w, s.h], [0, s.h]].map(([u, v]) => shotImgToLatLng(s, u, v));
+  map.fitBounds(L.latLngBounds(c), {paddingTopLeft:[20, 60], paddingBottomRight:[20, bottomPad() + 200]});
+  const areaId = cal.areaId; cal = {shot:s, step:'done', areaId};
+  $('#ovbar').innerHTML = `<p>Bilden ligger på kartan och finns kvar tills du tar bort den. Stämmer den inte, tryck Justera och dra punkterna rätt.</p>
+    <div class="btnrow"><button class="btn primary" id="ovDrawBorder" type="button">Rita gräns</button><button class="btn" id="ovAdjust" type="button">Justera</button><button class="btn ghost" id="ovDone" type="button">Klar</button></div>
+    <p class="small">Pass och torn lägger du ut med + som vanligt. Skärmdumparna tänder och släcker du i lagermenyn.</p>`;
+  $('#ovbar').hidden = false; $('#btnAdd').hidden = true;
+  $('#ovDrawBorder').addEventListener('click', () => openBorderPick(areaId));
+  $('#ovAdjust').addEventListener('click', () => { const sh = cal.shot; cal = null; startAdjust(sh); });
+  $('#ovDone').addEventListener('click', () => { cal = null; endCalBar(); });
+}
 
-/* Steg 3: bilden ligger på kartan */
-function placeOverlay(fit){
-  ov.step = 'placed'; ovMark(); ovCross(false);
-  if(!ov.layer) ov.layer = new ShotLayer().addTo(map);
-  if(fit){ const c = [[0, 0], [ov.w, 0], [ov.w, ov.h], [0, ov.h]].map(([u, v]) => ovImgToLatLng(u, v)); map.fitBounds(L.latLngBounds(c), {paddingTopLeft:[20, 60], paddingBottomRight:[20, bottomPad() + 200]}); ov.layer._update(); }
-  $('#btnAdd').hidden = true;
-  $('#ovbar').innerHTML = `<p>Bilden ligger på kartan. Kontrollera att vägar och gränser i bilden stämmer med kartan, rita sedan gränsen ovanpå.</p>
-    <label class="trail-range" style="padding:0"><span style="display:flex;justify-content:space-between"><strong>Genomskinlighet</strong><span id="ovOpTxt">${Math.round(ov.opacity * 100)} %</span></span><input type="range" id="ovOpacity" min="10" max="100" step="5" value="${Math.round(ov.opacity * 100)}"></label>
-    <div class="btnrow"><button class="btn primary" id="ovDraw" type="button">Rita gränsen</button><button class="btn" id="ovRedo" type="button">Gör om punkterna</button><button class="btn ghost" id="ovRemove" type="button">Ta bort bilden</button></div>`;
+/* --- Justera: dra de två punkterna (skala och vridning) eller mitten (flytta hela bilden) --- */
+function startAdjust(s){
+  endAdjust(); if(cal){ endCalBar(); cal = null; }
+  if(!s.visible){ s.visible = true; saveShots(); renderShotList(); }
+  showShot(s);
+  adj = {shot:s, handles:L.layerGroup().addTo(map)};
+  const mid = () => { const a = exactLayerPoint(map, s.pts[0].ll), b = exactLayerPoint(map, s.pts[1].ll); return map.unproject(a.add(b).divideBy(2).add(map.getPixelOrigin())); };
+  const draw = () => {
+    adj.handles.clearLayers();
+    s.pts.forEach((p, i) => loupeDrag(dragHandle(p.ll, 'shot' + (i ? '' : ' first')), ll => { p.ll = {lat:ll.lat, lng:ll.lng}; refreshShot(s); }, () => { saveShots(); draw(); }).addTo(adj.handles));
+    const c = dragHandle(mid(), 'shot move'); let start = null, from = null;
+    c.on('dragstart', () => { start = exactLayerPoint(map, c.getLatLng()); from = s.pts.map(p => exactLayerPoint(map, p.ll)); });
+    c.on('drag', () => { const d = exactLayerPoint(map, c.getLatLng()).subtract(start); s.pts.forEach((p, i) => { const ll = map.unproject(from[i].add(d).add(map.getPixelOrigin())); p.ll = {lat:ll.lat, lng:ll.lng}; }); refreshShot(s); });
+    c.on('dragend', () => { saveShots(); draw(); });
+    c.addTo(adj.handles);
+  };
+  draw();
+  $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
+  $('#ovbar').innerHTML = `<p>Dra en <b>punkt</b> för att passa in bilden: det skalar och vrider den. Dra <b>mitten</b> för att flytta hela bilden. Förstoringsglaset visas medan du drar.</p>
+    <label class="trail-range" style="padding:0"><span style="display:flex;justify-content:space-between"><strong>Genomskinlighet</strong><span id="ovOpTxt">${Math.round(s.opacity * 100)} %</span></span><input type="range" id="ovOpacity" min="10" max="100" step="5" value="${Math.round(s.opacity * 100)}"></label>
+    <div class="btnrow"><button class="btn primary" id="ovAdjDone" type="button">Klar</button><button class="btn" id="ovAdjRedo" type="button">Gör om punkterna</button></div>`;
   $('#ovbar').hidden = false;
-  $('#ovOpacity').addEventListener('input', e => { ov.opacity = e.target.value / 100; $('#ovOpTxt').textContent = e.target.value + ' %'; ov.layer.setOpacity(ov.opacity); });
-  $('#ovDraw').addEventListener('click', () => { $('#ovbar').hidden = true; ov.step = 'draw'; startDrawing(ov.areaId); });
-  $('#ovRedo').addEventListener('click', () => { if(ov.layer){ map.removeLayer(ov.layer); ov.layer = null; } pickImage(0); });
-  $('#ovRemove').addEventListener('click', () => removeOverlay());
+  $('#ovOpacity').addEventListener('input', e => { s.opacity = e.target.value / 100; $('#ovOpTxt').textContent = e.target.value + ' %'; if(s.layer) s.layer.setOpacity(s.opacity); });
+  $('#ovOpacity').addEventListener('change', saveShots);
+  $('#ovAdjDone').addEventListener('click', () => { endAdjust(); toast('Bilden är sparad i sitt nya läge.'); });
+  $('#ovAdjRedo').addEventListener('click', () => { endAdjust(); startCalibration(s, false); });
 }
-/* Anropas av ritverktyget när ritningen är klar eller avbruten. */
-function overlayDrawEnded(saved){
-  if(!ov || ov.step !== 'draw') return;
-  if(saved){ removeOverlay(true); return; }
-  placeOverlay(false);
+function endAdjust(){
+  if(!adj) return;
+  map.removeLayer(adj.handles); adj = null; saveShots(); loupeHide();
+  $('#ovbar').hidden = true; $('#ovbar').innerHTML = '';
+  if(!drawing && !placing && !cal) $('#btnAdd').hidden = false;
+  sheetRestore();
 }
-function removeOverlay(silent){
-  if(!ov) return;
-  if(ov.layer) map.removeLayer(ov.layer);
-  if(ov.mark) map.removeLayer(ov.mark);
-  try { URL.revokeObjectURL(ov.url); } catch(e){}
-  ov = null; ovCross(false); $('#ovbar').hidden = true; $('#ovbar').innerHTML = '';
-  if(!drawing) $('#btnAdd').hidden = false;
-  if(!silent) toast('Bilden är borttagen.');
-}
+
+loadShots();
 
 
 /* ---------- Start ---------- */
@@ -3199,7 +3478,7 @@ let rz = null;
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {ov:() => ov, ovImgToLatLng, removeOverlay, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

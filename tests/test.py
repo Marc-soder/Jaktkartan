@@ -91,6 +91,10 @@ with sync_playwright() as p:
     pg.click('#btnAdd'); pg.wait_for_timeout(350)
     check(pg.is_visible('#placebar') and pg.is_visible('.crosshair'), 'placeringsläge visar kors och knappar')
     check('SWEREF' in pg.inner_text('#placeCoords'), 'placering visar SWEREF-koordinater')
+    cp = pg.evaluate('__fk.crossPoint()'); mh = pg.evaluate('__fk.map.getContainer().clientHeight')
+    pb = pg.locator('#placebar').bounding_box(); cb = pg.locator('.crosshair').bounding_box(); mb = pg.locator('#map').bounding_box()
+    check(cp['y'] < mh / 2 - 20 and cb['y'] + cb['height'] < pb['y'] and abs(cb['y'] + cb['height'] / 2 - (mb['y'] + cp['y'])) < 2, f'korset ligger ovanför knappfältet, högre än kartans mitt (y {cp["y"]} av {mh})')
+    cross_ll = pg.evaluate('__fk.crossLatLng()')
     pg.click('#placeOk'); pg.wait_for_timeout(200)
     pg.fill('#pfName', 'Saltstenen vid bäcken')
     pg.select_option('#pfType', label='Saltsten')
@@ -100,7 +104,7 @@ with sync_playwright() as p:
     pg.click('#pinForm button[type=submit]'); pg.wait_for_timeout(250)
     st = pg.evaluate('__fk.state()')
     newp = [x for x in st['pins'] if x['name'] == 'Saltstenen vid bäcken']
-    check(len(newp) == 1 and abs(newp[0]['lat'] - 58.72) < 0.001, 'ny nål sparad vid kartans mitt')
+    check(len(newp) == 1 and abs(newp[0]['lat'] - cross_ll['lat']) < 1e-6 and abs(newp[0]['lng'] - cross_ll['lng']) < 1e-6, 'ny nål sparad där korset stod')
     check(pg.locator('.pin-icon').count() == 9, 'nio nålar på kartan')
 
     # Ny nål via högerklick + ny typ från formuläret
@@ -275,6 +279,18 @@ with sync_playwright() as p:
             pg.locator('#handle').tap(); pg.wait_for_timeout(400)
             h1 = pg.evaluate('document.getElementById("panel").getBoundingClientRect().height')
             check(h1 > 300, f'tryck på handtaget fäller ut lådan ({h1:.0f}px)')
+            hb = pg.locator('#handle').bounding_box(); x0, y0 = hb['x'] + hb['width'] / 2, hb['y'] + hb['height'] / 2
+            pg.evaluate("__fk.setSheet('peek', true)"); pg.wait_for_timeout(350)
+            hb = pg.locator('#handle').bounding_box(); y0 = hb['y'] + hb['height'] / 2
+            pg.mouse.move(x0, y0); pg.mouse.down(); pg.mouse.move(x0, y0 + 30, steps=5); pg.mouse.move(x0, y0 + 80, steps=5); pg.mouse.up(); pg.wait_for_timeout(400)
+            h2 = pg.evaluate('document.getElementById("panel").getBoundingClientRect().height')
+            check(pg.evaluate('__fk.sheet()') == 'min' and h2 < 40, f'lådan kan dras ned till bara handtaget ({h2:.0f}px)')
+            pg.locator('#handle').tap(); pg.wait_for_timeout(400)
+            check(pg.evaluate('__fk.sheet()') == 'peek', 'tryck på handtaget tar fram flikarna igen')
+            pg.click('#btnAdd'); pg.wait_for_timeout(500)
+            check(pg.evaluate('__fk.sheet()') == 'min' and pg.is_visible('.loupe'), 'vid placering går lådan ned till handtaget och förstoringsglaset visas')
+            pg.click('#placeCancel'); pg.wait_for_timeout(400)
+            check(pg.evaluate('__fk.sheet()') == 'peek' and not pg.is_visible('.loupe'), 'efter placering kommer flikarna tillbaka')
         check(not errs, f'mobil {scheme}: inga JS-fel {errs[:2]}')
         ctx.close()
     br.close()
