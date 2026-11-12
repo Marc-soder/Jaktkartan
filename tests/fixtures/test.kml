@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Svampställen</name>
+    <Placemark>
+      <name>Kantarell kompis</name>
+      <description><![CDATA[<p><b>Bra ställe</b></p>]]></description>
+      <Point><coordinates>14.6050,58.7170,0</coordinates></Point>
+    </Placemark>
+    <Placemark>
+      <name>Trattkantarell</name>
+      <Point><coordinates>14.6150,58.7210,0</coordinates></Point>
+    </Placemark>
+  </Document>
+</kml>
