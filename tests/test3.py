@@ -85,6 +85,17 @@ with sync_playwright() as p:
         pg.click('.leaflet-popup [data-l="del"]'); pg.click('.leaflet-popup [data-l="del"]'); pg.wait_for_timeout(300)
         ar=[x for x in pg.evaluate('__fk.state().areas') if x['id']==aid][0]
         check(not ar.get('lines'), f'{name}: stigen borttagen efter bekräftelse')
+        # eget spår
+        pg.evaluate("__fk.trail.own.length = 0")
+        pg.evaluate("(() => { const t = __fk.trail.own; t.push({lat:58.71, lng:14.59, t:Date.now() - 50 * 60000}, {lat:58.711, lng:14.591, t:Date.now() - 49 * 60000}); __fk.showMe(58.712, 14.592, 10); __fk.showMe(58.713, 14.594, 10); })()"); pg.wait_for_timeout(400)
+        own=lambda: pg.evaluate("(() => { let n=0; __fk.map.eachLayer(l => { if(l instanceof L.Polyline && !(l instanceof L.Polygon) && l.options.color === '#1a73e8') n++; }); return n; })()")
+        check(own()==1 and len(pg.evaluate('__fk.trail.own'))==4, f'{name}: eget spår visas, de senaste 30 minuterna ({own()} linje)')
+        pg.click('#btnLayers'); pg.wait_for_timeout(200)
+        pg.evaluate("(() => { const r = document.getElementById('trailMin'); r.value = 60; r.dispatchEvent(new Event('input', {bubbles:true})); r.dispatchEvent(new Event('change', {bubbles:true})); })()"); pg.wait_for_timeout(400)
+        check(own()==2 and pg.inner_text('#trailMinTxt')=='1 h', f'{name}: med 1 h syns även den äldre sträckan, som ett eget stycke efter glappet ({own()})')
+        pg.evaluate("(() => { const r = document.getElementById('trailMin'); r.value = 0; r.dispatchEvent(new Event('input', {bubbles:true})); })()"); pg.wait_for_timeout(400)
+        check(own()==0 and pg.inner_text('#trailMinTxt')=='Av', f'{name}: reglaget på Av döljer spåret')
+        pg.keyboard.press('Escape')
         # skogsvägar
         over.clear(); pg.evaluate('__fk.map.setView([58.715,14.61],14)'); pg.wait_for_timeout(700)
         check(len(over)==0, f'{name}: inga vägar hämtas när lagret är av')

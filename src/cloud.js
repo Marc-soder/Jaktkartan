@@ -88,12 +88,12 @@ function purgeLocal(gid){
 }
 function dropGroup(gid){
   const g = cloud.groups[gid]; if(!g) return;
-  g.refs.forEach(r => r.off()); Object.values(g.posRefs).forEach(r => r.off()); delete cloud.groups[gid];
+  g.refs.forEach(r => r.off()); Object.values(g.posRefs).forEach(r => r.off()); Object.values(g.trailRefs).forEach(r => r.off()); delete cloud.groups[gid];
   purgeLocal(gid); scheduleRender(); renderPositions();
 }
 function forgetGroup(gid){ if(fb && cloud.user) fb.db.ref('userGroups/' + myUid() + '/' + gid).remove().catch(() => {}); dropGroup(gid); }
 function subGroup(gid, kind){
-  const g = cloud.groups[gid] = {id:gid, kind, meta:null, members:{}, areas:{}, pins:{}, types:{}, hunts:{}, guests:{}, guest:null, refs:[], areaRefs:{}, huntRef:null, posRefs:{}, huntPos:{}, disc:{}};
+  const g = cloud.groups[gid] = {id:gid, kind, meta:null, members:{}, areas:{}, pins:{}, types:{}, hunts:{}, guests:{}, guest:null, refs:[], areaRefs:{}, huntRef:null, posRefs:{}, huntPos:{}, trailRefs:{}, huntTrail:{}, disc:{}};
   const on = (path, fn) => { const r = fb.db.ref('groups/' + gid + '/' + path); r.on('value', s => { if(cloud.groups[gid] === g) fn(s.val()); }, () => { if(cloud.groups[gid] === g) fn(null, true); }); g.refs.push(r); return r; };
   on('meta', v => { g.meta = v; if(!v){ forgetGroup(gid); toast('Du har inte längre åtkomst till ett jaktlag eller en jakt.'); return; } scheduleRender(); });
   on('types', v => { g.types = v || {}; applyRemote(gid); });
@@ -192,7 +192,13 @@ function syncHuntPos(){
   for(const g of Object.values(cloud.groups)){
     const live = new Set(liveHunts(g));
     for(const hid of Object.keys(g.posRefs)) if(!live.has(hid)){ g.posRefs[hid].off(); delete g.posRefs[hid]; delete g.huntPos[hid]; delete g.disc[hid]; }
+    for(const hid of Object.keys(g.trailRefs)) if(!live.has(hid)){ g.trailRefs[hid].off(); delete g.trailRefs[hid]; delete g.huntTrail[hid]; }
     for(const hid of live){
+      if(!g.trailRefs[hid]){
+        const tr = fb.db.ref(`groups/${g.id}/huntTrail/${hid}`);
+        tr.on('value', s => { if(g.trailRefs[hid] === tr){ g.huntTrail[hid] = s.val() || {}; renderTrails(); } }, () => { if(g.trailRefs[hid] === tr){ delete g.trailRefs[hid]; delete g.huntTrail[hid]; renderTrails(); } });
+        g.trailRefs[hid] = tr;
+      }
       if(g.posRefs[hid]) continue;
       const r = fb.db.ref(`groups/${g.id}/huntPos/${hid}`);
       r.on('value', s => { if(g.posRefs[hid] === r){ g.huntPos[hid] = s.val() || {}; renderPositions(); } }, () => { if(g.posRefs[hid] === r){ delete g.posRefs[hid]; delete g.huntPos[hid]; renderPositions(); } });
@@ -217,14 +223,91 @@ function activePositions(){
 function renderPositions(){
   posLayer.clearLayers();
   for(const p of activePositions()){
-    const m = L.marker([p.lat, p.lng], {icon:L.divIcon({className:'pos-icon', html:`<span class="pos-dot">${esc(initials(p.name))}</span><span class="pos-name">${esc(p.name || 'Jägare')}</span>`, iconSize:[32,32], iconAnchor:[16,16], popupAnchor:[0,-14]}), zIndexOffset:500});
+    const m = L.marker([p.lat, p.lng], {icon:L.divIcon({className:'pos-icon', html:`<span class="pos-dot" style="background:${personColor(p.uid)}">${esc(initials(p.name))}</span><span class="pos-name">${esc(p.name || 'Jägare')}</span>`, iconSize:[32,32], iconAnchor:[16,16], popupAnchor:[0,-14]}), zIndexOffset:500});
     m.bindPopup(() => h(`<div class="pp"><h4>${esc(p.name || 'Jägare')}</h4><div class="pnote">Position ${ago(p.t)}${p.acc ? ` · ±${Math.round(p.acc)} m` : ''}${myPos ? `<br>${fmtDist(distM(myPos, p))} bort` : ''}</div><div class="pbtns"><a class="navbtn" href="${navUrl(p.lat, p.lng)}" target="_blank" rel="noopener">${ICON_NAV}Navigera</a></div></div>`), {maxWidth:260});
     m.addTo(posLayer);
   }
   const el = $('#posCount'); if(el) el.textContent = posCountText();
+  renderTrails();
 }
 const posCountText = () => { if(!anyLiveHunt()) return 'Positioner kan bara delas och ses medan en jakt pågår.'; const n = activePositions().length; return n ? `${n} ${n === 1 ? 'person delar' : 'personer delar'} sin position just nu.` : 'Ingen annan delar sin position just nu.'; };
 setInterval(renderPositions, 60000);
+
+/* Spår: var man själv och andra deltagare har varit de senaste minuterna.
+   Det egna spåret sparas bara i den här webbläsaren. Deltagarnas spår finns i groups/<lag>/huntTrail/<jakt> under jakten. */
+const TRAIL_KEY = 'faltkartan.trail', TRAIL_KEEP = 12 * 3600000, TRAIL_GAP = 5 * 60000;
+const PERSON_COLORS = ['#e11d48', '#7c3aed', '#0891b2', '#ca8a04', '#16a34a', '#db2777', '#4f46e5', '#ea580c'];
+const personColor = id => { let h = 0; for(const c of String(id || '')) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PERSON_COLORS[h % PERSON_COLORS.length]; };
+const trailLayer = L.layerGroup().addTo(map);
+const trail = {own:[], watchId:null, wake:null, timer:null};
+try { const v = JSON.parse(lsGet(TRAIL_KEY) || '[]'); if(Array.isArray(v)) trail.own = v.filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number' && Date.now() - p.t < TRAIL_KEEP); } catch(e){}
+const trailMinutes = () => { const v = state.settings.trailMin; return typeof v === 'number' && v >= 0 ? v : 30; };
+function trailAdd(lat, lng, acc){
+  if(acc > 100) return;
+  const now = Date.now(), last = trail.own[trail.own.length - 1];
+  if(last && now - last.t < 60000 && distM(last, {lat, lng}) < 5) return;
+  trail.own.push({lat:+lat.toFixed(6), lng:+lng.toFixed(6), t:now});
+  trail.own = trail.own.filter(p => now - p.t < TRAIL_KEEP).slice(-5000);
+  lsSet(TRAIL_KEY, JSON.stringify(trail.own));
+  renderTrails();
+}
+/* Delar upp punkterna i sträckor där det inte är för långt glapp i tid. */
+function trailSegments(pts, since){
+  const segs = []; let cur = [], prev = null;
+  for(const p of pts){
+    if(p.t < since) continue;
+    if(prev && p.t - prev.t > TRAIL_GAP){ if(cur.length > 1) segs.push(cur); cur = []; }
+    cur.push([p.lat, p.lng]); prev = p;
+  }
+  if(cur.length > 1) segs.push(cur);
+  return segs;
+}
+function renderTrails(){
+  clearTimeout(trail.timer);
+  trail.timer = setTimeout(() => {
+    trailLayer.clearLayers();
+    const min = trailMinutes(); if(!min) return;
+    const since = Date.now() - min * 60000;
+    const draw = (segs, color) => { for(const seg of segs){
+      L.polyline(seg, {color:'#ffffff', weight:6, opacity:.75, interactive:false}).addTo(trailLayer);
+      L.polyline(seg, {color, weight:3.5, opacity:.95, interactive:false, lineCap:'round', lineJoin:'round'}).addTo(trailLayer); } };
+    draw(trailSegments(trail.own, since), '#1a73e8');
+    const people = {};
+    for(const g of Object.values(cloud.groups)){
+      for(const pts of Object.values(g.huntTrail || {})) for(const [u, list] of Object.entries(pts || {})){
+        if(u === myUid() || !list) continue;
+        (people[u] = people[u] || []).push(...Object.values(list).filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number' && typeof p.t === 'number'));
+      }
+      for(const pos of Object.values(g.huntPos || {})) for(const [u, p] of Object.entries(pos || {})) if(u !== myUid() && people[u] && p && typeof p.lat === 'number') people[u].push({lat:p.lat, lng:p.lng, t:p.t});
+    }
+    for(const [u, list] of Object.entries(people)) draw(trailSegments(list.sort((a, b) => a.t - b.t), since), personColor(u));
+  }, 150);
+}
+setInterval(renderTrails, 60000);
+function renderTrailControls(){
+  const r = $('#trailMin'); if(!r) return;
+  const v = trailMinutes(); r.value = v;
+  $('#trailMinTxt').textContent = v ? (v >= 60 ? `${Math.floor(v / 60)} h${v % 60 ? ' ' + (v % 60) + ' min' : ''}` : `${v} min`) : 'Av';
+  $('#popTrailRec').checked = trail.watchId != null;
+  $('#trailNote').textContent = trail.watchId != null ? 'Spelar in. Skärmen hålls tänd medan appen är öppen.' : 'Visar var du har gått. Sparas bara i din telefon.';
+}
+function startTrailRec(){
+  if(!('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); renderTrailControls(); return; }
+  trail.watchId = navigator.geolocation.watchPosition(pos => showMe(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0),
+    err => { stopTrailRec(); toast(err.code === 1 ? 'Positionen är blockerad. Tillåt plats för sidan i webbläsarens inställningar.' : 'Kunde inte läsa din position.'); }, {enableHighAccuracy:true, maximumAge:5000, timeout:30000});
+  try { if(navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { trail.wake = l; }).catch(() => {}); } catch(e){}
+  if(!trailMinutes()){ state.settings.trailMin = 30; save(); }
+  renderTrailControls(); renderTrails();
+}
+function stopTrailRec(){
+  if(trail.watchId != null){ navigator.geolocation.clearWatch(trail.watchId); trail.watchId = null; }
+  if(trail.wake){ try { trail.wake.release(); } catch(e){} trail.wake = null; }
+  renderTrailControls();
+}
+$('#trailMin').addEventListener('input', e => { state.settings.trailMin = +e.target.value; renderTrailControls(); renderTrails(); });
+$('#trailMin').addEventListener('change', () => save());
+$('#popTrailRec').addEventListener('change', e => { if(e.target.checked) startTrailRec(); else stopTrailRec(); });
+function clearOwnTrail(){ trail.own = []; try { localStorage.removeItem(TRAIL_KEY); } catch(e){} renderTrails(); }
 function sendPos(){
   if(!fb || !cloud.user || !myPos) return;
   for(const g of Object.values(cloud.groups)) for(const hid of liveHunts(g)){
@@ -232,11 +315,18 @@ function sendPos(){
     if(!g.disc[hid]){ g.disc[hid] = true; try { r.onDisconnect().remove(); } catch(e){} }
     r.set({lat:+myPos.lat.toFixed(6), lng:+myPos.lng.toFixed(6), acc:Math.round(myPos.acc || 0), t:Date.now(), name:myName()}).catch(() => {});
   }
+  // Spårpunkt när man flyttat sig minst 10 m, eller varje minut
+  const lt = cloud.lastTrail, now = Date.now();
+  if((myPos.acc || 0) <= 100 && (!lt || now - lt.t >= 60000 || distM(lt, myPos) >= 10)){
+    cloud.lastTrail = {lat:myPos.lat, lng:myPos.lng, t:now};
+    for(const g of Object.values(cloud.groups)) for(const hid of liveHunts(g))
+      fb.db.ref(`groups/${g.id}/huntTrail/${hid}/${myUid()}`).push({lat:+myPos.lat.toFixed(6), lng:+myPos.lng.toFixed(6), t:now}).catch(() => {});
+  }
 }
 function startSharing(){
   if(!('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); return; }
   if(!anyLiveHunt()){ toast('Positioner kan bara delas medan en jakt pågår.'); renderJakt(); return; }
-  cloud.sharing = true; cloud.lastSent = 0;
+  cloud.sharing = true; cloud.lastSent = 0; cloud.lastTrail = null;
   cloud.watchId = navigator.geolocation.watchPosition(pos => {
     showMe(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0);
     if(Date.now() - cloud.lastSent < 8000) return;
@@ -249,7 +339,7 @@ function stopSharing(silent){
   if(cloud.watchId != null){ navigator.geolocation.clearWatch(cloud.watchId); cloud.watchId = null; }
   if(cloud.wake){ try { cloud.wake.release(); } catch(e){} cloud.wake = null; }
   const was = cloud.sharing; cloud.sharing = false;
-  if(was && !silent && fb && cloud.user) for(const g of Object.values(cloud.groups)) for(const hid of liveHunts(g)) fb.db.ref(`groups/${g.id}/huntPos/${hid}/${myUid()}`).remove().catch(() => {});
+  if(was && !silent && fb && cloud.user) for(const g of Object.values(cloud.groups)) for(const hid of liveHunts(g)){ fb.db.ref(`groups/${g.id}/huntPos/${hid}/${myUid()}`).remove().catch(() => {}); fb.db.ref(`groups/${g.id}/huntTrail/${hid}/${myUid()}`).remove().catch(() => {}); }
 }
 
 /* Åtgärder */
@@ -443,7 +533,7 @@ $('#paneJakt').addEventListener('click', e => {
   else if(!g) return;
   else if(act === 'hunt-new') openHuntForm(g);
   else if(act === 'hunt-link'){ const hunt = g.hunts[hid]; copyText(`${hunt.name}: gå med i jakten med kod ${hunt.code}\n${shareLink('j', hunt.code)}`, 'Länken är kopierad'); }
-  else if(act === 'hunt-end') confirmClick(b, 'Bekräfta', () => { const hunt = g.hunts[hid], up = {}; up[`groups/${g.id}/hunts/${hid}`] = null; up[`groups/${g.id}/huntPos/${hid}`] = null; if(hunt && hunt.code) up[`huntCodes/${hunt.code}`] = null;
+  else if(act === 'hunt-end') confirmClick(b, 'Bekräfta', () => { const hunt = g.hunts[hid], up = {}; up[`groups/${g.id}/hunts/${hid}`] = null; up[`groups/${g.id}/huntPos/${hid}`] = null; up[`groups/${g.id}/huntTrail/${hid}`] = null; if(hunt && hunt.code) up[`huntCodes/${hunt.code}`] = null;
     for(const [gu, v] of Object.entries(g.guests || {})) if(v && v.hid === hid) up[`groups/${g.id}/guests/${gu}`] = null;
     fb.db.ref().update(up).then(() => toast('Jakten är avslutad. Gästernas åtkomst är borttagen.')).catch(fail()); });
   else if(act === 'guest-del') fb.db.ref(`groups/${g.id}/guests/${u}`).remove().catch(fail());

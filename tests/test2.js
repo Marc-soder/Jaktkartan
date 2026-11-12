@@ -43,6 +43,7 @@ window.firebase = (function(){
     return { on(ev, cb, err){ const id = ++n; subs[id] = {cb, err}; ids.push(id); window.__fbSub(uid(), id, p); },
       off(){ ids.forEach(id => { delete subs[id]; window.__fbUnsub(id); }); },
       set: v => wr('set', p, v), update: v => wr('update', p, v), remove: () => wr('set', p, null),
+      push: v => { const k = 'k' + Date.now().toString(36) + (++n); return wr('set', p + '/' + k, v).then(() => ({key:k})); },
       get: () => window.__fbGet(uid(), p).then(r => { if(!r.ok) throw new Error('PERMISSION_DENIED'); return snap(r.val); }),
       onDisconnect: () => ({remove: () => Promise.resolve()}) }; };
   const db = {ref}; const dbFn = () => db;
@@ -186,12 +187,30 @@ const gids = () => Object.keys(data.groups || {});
   check(await B.locator('.pos-icon').count() === 1 && await C.locator('.pos-icon').count() === 1 && await A.locator('.pos-icon').count() === 0, 'Bob och gästen Carl ser Alice på kartan, Alice ser inte sig själv som annan');
   await C.locator('#shareToggle').check({force:true}); await W(C, 900);
   check(await A.locator('.pos-icon').count() === 1 && (await A.innerText('#posCount')).startsWith('1 person'), 'gästens position syns för laget');
+  // ---- Spår ----
+  const tr = () => (((data.groups[gid].huntTrail || {})[hid] || {}).alice || {});
+  check(Object.keys(tr()).length >= 1, 'Alices spårpunkt sparas i jakten');
+  await A.evaluate(([g, h]) => { const r = firebase.database().ref('groups/' + g + '/huntTrail/' + h + '/alice'); return Promise.all([r.push({lat:58.7150, lng:14.5950, t:Date.now() - 20 * 60000}), r.push({lat:58.7155, lng:14.5955, t:Date.now() - 19 * 60000}), r.push({lat:58.7180, lng:14.5980, t:Date.now() - 10 * 60000}), r.push({lat:58.7185, lng:14.5985, t:Date.now() - 9 * 60000})]); }, [gid, hid]); await W(B, 600);
+  const aliceColor = await B.evaluate(() => __fk.personColor('alice'));
+  const lines = (P, c) => P.evaluate(c => { let n = 0; __fk.map.eachLayer(l => { if(l instanceof L.Polyline && !(l instanceof L.Polygon) && l.options.color === c) n++; }); return n; }, c);
+  const minLat = (P, c) => P.evaluate(c => { let m = 99; __fk.map.eachLayer(l => { if(l instanceof L.Polyline && !(l instanceof L.Polygon) && l.options.color === c) l.getLatLngs().forEach(p => { m = Math.min(m, p.lat); }); }); return m; }, c);
+  const bobPin = await B.evaluate(() => getComputedStyle(document.querySelector('.pos-dot')).backgroundColor);
+  check(await lines(B, aliceColor) === 3 && Math.abs(await minLat(B, aliceColor) - 58.715) < 1e-6 && bobPin !== 'rgb(26, 115, 232)', 'Bob ser Alices spår i hennes färg (standard 30 min), uppdelat vid glapp i tid');
+  const setMin = (P, v) => P.evaluate(v => { const r = document.getElementById('trailMin'); r.value = v; r.dispatchEvent(new Event('input', {bubbles:true})); r.dispatchEvent(new Event('change', {bubbles:true})); }, v);
+  await setMin(B, 0); await W(B, 300);
+  check(await lines(B, aliceColor) === 0 && (await B.innerText('#trailMinTxt')) === 'Av', 'reglaget på Av döljer spåren');
+  await setMin(B, 5); await W(B, 300);
+  check(await minLat(B, aliceColor) > 58.719, 'med 5 minuter syns inte punkter som är 10 och 20 minuter gamla');
+  await setMin(B, 15); await W(B, 300);
+  check(await lines(B, aliceColor) === 2 && Math.abs(await minLat(B, aliceColor) - 58.718) < 1e-6 && (await B.innerText('#trailMinTxt')) === '15 min' && (await st(B)).settings.trailMin === 15, 'med 15 minuter syns spåret från 10 minuter sedan, och valet sparas');
+  const forged = await B.evaluate(([g, h]) => firebase.database().ref('groups/' + g + '/huntTrail/' + h + '/alice').push({lat:1, lng:1, t:Date.now()}).then(() => 'ok', () => 'denied'), [gid, hid]);
+  check(forged === 'denied', 'man kan inte skriva i någon annans spår');
   await A.locator('#shareToggle').uncheck({force:true}); await W(A, 500);
-  check(!hp().alice && await B.locator('.pos-icon').count() === 1, 'Alice slutar dela: hennes position tas bort');
+  check(!hp().alice && !Object.keys(tr()).length && await B.locator('.pos-icon').count() === 1, 'Alice slutar dela: hennes position och spår tas bort');
   // ---- Avsluta jakten ----
   await B.click('[data-j="hunt-end"]'); await B.click('[data-j="hunt-end"]'); await W(B, 900);
   check(!data.groups[gid].hunts && !data.huntCodes && !(data.groups[gid].guests || {})['anon-carl'], 'jakten, koden och gästposten är borta');
-  check(!data.groups[gid].huntPos, 'jaktens positioner raderades när jakten avslutades');
+  check(!data.groups[gid].huntPos && !data.groups[gid].huntTrail, 'jaktens positioner och spår raderades när jakten avslutades');
   await W(B, 300);
   check(await A.locator('.pos-icon').count() === 0 && await B.locator('.pos-icon').count() === 0 && await A.locator('#shareToggle').isDisabled(), 'efter jakten syns inga positioner och delningen är avstängd');
   sc = await st(C);
@@ -211,7 +230,7 @@ const gids = () => Object.keys(data.groups || {});
   const t0 = Date.now();
   const base = {owner:'o', creators:{c1:true}, groups:{g:{meta:{name:'L', owner:'o'}, members:{o:{role:'admin', name:'O'}, a2:{role:'admin', name:'A2'}, e:{role:'editor', name:'E'}, v:{role:'viewer', name:'V'}},
     areas:{ar:{name:'A'}}, pins:{ar:{p:{lat:1, lng:2, typeId:'t'}}}, hunts:{h:{name:'J', expires:t0 + 1000, code:'HUNTCODE', areas:{ar:true}}, h2:{name:'J2', starts:t0 + 500, expires:t0 + 1000, code:'HUNTCOD2'}}, guests:{gu:{hid:'h', code:'HUNTCODE', name:'G', expires:t0 + 1000}},
-      huntPos:{h:{e:{lat:1, lng:1, t:1}}, h2:{}}}},
+      huntPos:{h:{e:{lat:1, lng:1, t:1}}, h2:{}}, huntTrail:{h:{e:{k1:{lat:1, lng:1, t:1}}}}}},
     invites:{INVITECODE1:{gid:'g', role:'editor', expires:t0 + 1000}, OLDINVITE01:{gid:'g', role:'editor', expires:t0 - 1}}, huntCodes:{HUNTCODE:{gid:'g', hid:'h', expires:t0 + 1000}}};
   const D = (uid, now) => { const d = targaryen.database(rules, base, now || t0).as(uid ? tok(uid) : null);
     return {read: p => d.read(p, now || t0), write: (p, v) => d.write(p, v, undefined, now || t0)}; };
@@ -235,6 +254,10 @@ const gids = () => Object.keys(data.groups || {});
   check(!D('v').read('/groups/g/huntPos/h2').allowed && !D('e').write('/groups/g/huntPos/h2/e', P).allowed && D('v', t0 + 600).read('/groups/g/huntPos/h2').allowed && D('e', t0 + 600).write('/groups/g/huntPos/h2/e', P).allowed, 'regel: positioner går inte att se eller dela innan jakten startat');
   check(!D('v', t0 + 2000).read('/groups/g/huntPos/h').allowed && !D('e', t0 + 2000).write('/groups/g/huntPos/h/e', P).allowed, 'regel: positioner går inte att se eller dela efter att jakten slutat');
   check(D('a2').write('/groups/g/huntPos/h', null).allowed && !D('e').write('/groups/g/huntPos/h', null).allowed, 'regel: bara jaktledare och admin kan radera en jakts positioner');
+  const T = {lat:1, lng:1, t:t0};
+  check(D('e').write('/groups/g/huntTrail/h/e/k2', T).allowed && D('gu').write('/groups/g/huntTrail/h/gu/k2', T).allowed && !D('e').write('/groups/g/huntTrail/h/v/k2', T).allowed && !D('x').write('/groups/g/huntTrail/h/x/k2', T).allowed, 'regel: spår skrivs bara av personen själv, med åtkomst till jakten');
+  check(D('v').read('/groups/g/huntTrail/h').allowed && D('gu').read('/groups/g/huntTrail/h').allowed && !D('x').read('/groups/g/huntTrail/h').allowed && !D('v', t0 + 2000).read('/groups/g/huntTrail/h').allowed && !D('e', t0 + 2000).write('/groups/g/huntTrail/h/e/k2', T).allowed && !D('e').write('/groups/g/huntTrail/h2/e/k2', T).allowed, 'regel: spår syns och skrivs bara medan jakten pågår');
+  check(!D('e').write('/groups/g/huntTrail/h/e/k3', {lat:1, lng:1, t:t0 + 3600000}).allowed && D('a2').write('/groups/g/huntTrail/h', null).allowed && !D('e').write('/groups/g/huntTrail/h', null).allowed, 'regel: spårpunkter kan inte framtidsdateras, bara jaktledare raderar jaktens spår');
   check(!D('x').write('/groups/n2/meta', {name:'N', owner:'x'}).allowed && !D('e').write('/groups/n2/meta', {name:'N', owner:'e'}).allowed && D('o').write('/groups/n2/meta', {name:'N', owner:'o'}).allowed && D('c1').write('/groups/n2/meta', {name:'N', owner:'c1'}).allowed, 'regel: bara ägaren och godkända kan skapa jaktlag');
   check(!D('x').write('/owner', 'x').allowed && !D('o').write('/owner', 'x').allowed && !D('x').write('/creators/x', true).allowed && D('o').write('/creators/x', true).allowed, 'regel: ägarskapet kan inte tas över, bara ägaren godkänner fler');
   { const e0 = targaryen.database(rules, {}, t0); check(e0.as(tok('first')).write('/owner', 'first', undefined, t0).allowed && !e0.as(tok('anon-z')).write('/owner', 'anon-z', undefined, t0).allowed && !e0.as(tok('first')).write('/owner', 'other', undefined, t0).allowed, 'regel: första Google-inloggade blir ägare, inte en gäst och inte åt någon annan'); }

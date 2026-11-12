@@ -90,6 +90,17 @@ const rules = { rules: {
           '.validate': `newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber()`
         }
       }
+    },
+    // Spår (tidigare positioner) per jakt, med samma åtkomst som positionerna.
+    huntTrail: {
+      '$hid': {
+        '.read': `(${isMember} || (${isGuest} && ${guest}.child('hid').val() === $hid)) && ${huntLive}`,
+        '.write': `${canLead} && !newData.exists()`,
+        '$uid': {
+          '.write': `${signed} && $uid === auth.uid && ${huntLive} && (${me}.exists() || (${isGuest} && ${guest}.child('hid').val() === $hid))`,
+          '$pt': { '.validate': `newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000` }
+        }
+      }
     }
   } }
 } };
