@@ -1,5 +1,5 @@
 /* ---------- Gränser för områden ---------- */
-const borderLayer = L.layerGroup().addTo(map), drawLayer = L.layerGroup().addTo(map);
+const borderLayer = L.layerGroup().addTo(map), drawLayer = L.layerGroup().addTo(map), drawHandles = L.layerGroup().addTo(map);
 let drawing = null;
 const parseBorder = s => typeof s === 'string' && s ? s.split(';').map(p => p.split(',').map(Number)).filter(p => p.length === 2 && isFinite(p[0]) && isFinite(p[1]) && Math.abs(p[0]) <= 90 && Math.abs(p[1]) <= 180) : [];
 const fmtBorder = pts => pts.map(p => p[0].toFixed(5) + ',' + p[1].toFixed(5)).join(';');
@@ -57,6 +57,22 @@ function deleteLine(areaId, lid){
   delete a.lines[lid]; if(!Object.keys(a.lines).length) delete a.lines;
   a.updated = Date.now(); save(); renderAll(); toast(`${name} är borttagen.`);
 }
+/* Områden man kan flytta innehåll till */
+const moveTargets = a => state.areas.filter(t => t.id !== a.id && canEditArea(t));
+/* Flyttar gräns, egna vägar och nålar från ett område till ett annat. Returnerar en text till användaren. */
+function moveAreaContent(fromId, toId, what){
+  const from = areaById(fromId), to = areaById(toId); if(!from || !to) return 'Området finns inte längre.';
+  if(!canEditArea(from) || !canEditArea(to)) return 'Du har inte rättighet att ändra något av områdena.';
+  const done = [], now = Date.now();
+  if(what.border && from.border){ to.border = from.border; delete from.border; done.push('gränsen'); }
+  if(what.lines && areaLines(from).length){ const n = areaLines(from).length; to.lines = Object.assign({}, to.lines || {}, from.lines); delete from.lines; done.push(n === 1 ? '1 väg eller stig' : `${n} vägar och stigar`); }
+  if(what.pins){ const ps = state.pins.filter(p => p.areaId === fromId); ps.forEach(p => { p.areaId = toId; p.updated = now; }); if(ps.length) done.push(ps.length === 1 ? '1 nål' : `${ps.length} nålar`); }
+  if(!done.length) return 'Det fanns inget att flytta.';
+  from.updated = now; to.updated = now; delete from.example; delete to.example;
+  if(to.visible === false) to.visible = true;
+  save(); renderAll();
+  return `Flyttade ${done.join(', ').replace(/, ([^,]*)$/, ' och $1')} till ${to.name}.`;
+}
 /* Formulär för en ny eller befintlig väg/stig. opts: {areaId, lid} */
 function openLineForm(opts){
   opts = opts || {};
@@ -67,7 +83,7 @@ function openLineForm(opts){
   openModal(`<h2>${opts.lid ? 'Ändra' : 'Rita'} väg eller stig</h2><form id="lfForm">
     <div class="field"><span>Typ</span><div class="row2">${Object.entries(LINE_KIND).map(([k, t]) => `<label class="radio-card" style="margin:0"><input type="radio" name="lfKind" value="${k}" ${l.k === k ? 'checked' : ''}> ${t}<br><span class="small muted">${k === 'road' ? 'Brun heldragen' : 'Lila streckad'}</span></label>`).join('')}</div></div>
     <label class="field"><span>Namn (valfritt)</span><input class="input" id="lfName" maxlength="60" value="${esc(l.n || '')}" placeholder="${opts.lid ? '' : 'Till exempel Stigen till tornet'}"></label>
-    <label class="field"><span>Område</span><select class="input" id="lfArea" ${opts.lid ? 'disabled' : ''}>${editable.map(a => `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.gid ? ' (delas med ' + esc(gname(cloud.groups[a.gid])) + ')' : ''}</option>`).join('')}</select></label>
+    <label class="field"><span>Område</span><select class="input" id="lfArea">${editable.map(a => `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.gid ? ' (delas med ' + esc(gname(cloud.groups[a.gid])) + ')' : ''}</option>`).join('')}</select></label>
     <p class="note" style="margin-top:0">Vägen visas när området är påslaget och delas med jaktlaget om området är delat.</p>
     <div class="actions"><button class="btn primary grow" type="submit">${opts.lid ? 'Spara' : 'Börja rita'}</button>${opts.lid ? '<button class="btn" type="button" id="lfRedraw">Rita om</button>' : ''}<button class="btn ghost" type="button" id="lfCancel">Avbryt</button></div></form>`, m => {
     const read = () => ({k:(m.querySelector('input[name=lfKind]:checked') || {}).value || 'path', n:m.querySelector('#lfName').value.trim(), areaId:m.querySelector('#lfArea').value});
@@ -78,7 +94,10 @@ function openLineForm(opts){
       if(!opts.lid){ startLine(v.areaId, v.k, v.n); return; }
       const a = areaById(opts.areaId); if(!a || !a.lines || !a.lines[opts.lid]){ closeModal(); return; }
       a.lines[opts.lid].k = v.k; if(v.n) a.lines[opts.lid].n = v.n; else delete a.lines[opts.lid].n;
-      a.updated = Date.now(); save(); closeModal(); renderAll(); toast('Ändringen är sparad.');
+      a.updated = Date.now();
+      const to = v.areaId !== a.id && areaById(v.areaId);
+      if(to){ to.lines = Object.assign({}, to.lines || {}, {[opts.lid]: a.lines[opts.lid]}); delete a.lines[opts.lid]; if(!Object.keys(a.lines).length) delete a.lines; to.updated = Date.now(); if(to.visible === false) to.visible = true; }
+      save(); closeModal(); renderAll(); toast(to ? `Flyttad till ${to.name}.` : 'Ändringen är sparad.');
     });
   });
 }
@@ -93,20 +112,31 @@ function startLine(areaId, kind, name, lid){
   if(drawing.pts.length >= 2) map.fitBounds(L.latLngBounds(drawing.pts), {paddingTopLeft:[40,70], paddingBottomRight:[40, bottomPad() + 190], maxZoom:17});
   renderBorders(); drawDraft();
 }
-function drawDraft(){
+/* Hörnen går att dra med fingret (med förstoringsglas). Linjen ritas om under dragningen. */
+function drawHandlesRender(){
+  drawHandles.clearLayers(); if(!drawing) return;
+  const cls = drawing.mode === 'line' ? (drawing.kind === 'path' ? 'path' : 'road') : 'border';
+  drawing.pts.forEach((pt, i) => {
+    const m = dragHandle(pt, cls + (i === drawing.pts.length - 1 ? ' last' : ''));
+    loupeDrag(m, ll => { drawing.pts[i] = [ll.lat, ll.lng]; drawShape(); }, ll => { drawing.pts[i] = [ll.lat, ll.lng]; drawDraft(); });
+    m.addTo(drawHandles);
+  });
+}
+function drawShape(){
   drawLayer.clearLayers(); const p = drawing.pts;
+  if(drawing.mode === 'line'){ if(p.length >= 2) lineStyle(drawing.kind, p, false).forEach(pl => pl.addTo(drawLayer)); return; }
+  if(p.length >= 3) L.polygon(p, {color:'#d9520e', weight:3, fillColor:'#d9520e', fillOpacity:.14, interactive:false}).addTo(drawLayer);
+  else if(p.length === 2) L.polyline(p, {color:'#d9520e', weight:3, interactive:false}).addTo(drawLayer);
+}
+function drawDraft(){
+  const p = drawing.pts; drawShape(); drawHandlesRender();
   if(drawing.mode === 'line'){
-    if(p.length >= 2) lineStyle(drawing.kind, p, false).forEach(pl => pl.addTo(drawLayer));
-    p.forEach((pt, i) => L.circleMarker(pt, {radius:i === p.length - 1 ? 8 : 4, color:'#ffffff', weight:2, fillColor:drawing.kind === 'path' ? '#7a2e8f' : '#8a4b12', fillOpacity:1, interactive:false}).addTo(drawLayer));
     const what = LINE_KIND[drawing.kind].toLowerCase();
-    $('#drawText').textContent = p.length < 2 ? `Tryck på kartan längs ${what}en, eller gå den och tryck på positionsknappen. ${p.length} av minst 2 punkter.` : `${p.length} punkter · ${fmtDist(lineLen(p))}. Fortsätt längs ${what}en eller tryck Klar.`;
+    $('#drawText').textContent = p.length < 2 ? `Tryck på kartan längs ${what}en, eller gå den och tryck på positionsknappen. ${p.length} av minst 2 punkter.` : `${p.length} punkter · ${fmtDist(lineLen(p))}. Fortsätt längs ${what}en, dra en punkt för att flytta den, eller tryck Klar.`;
     $('#drawOk').disabled = p.length < 2; $('#drawUndo').disabled = !p.length;
     return;
   }
-  if(p.length >= 3) L.polygon(p, {color:'#d9520e', weight:3, fillColor:'#d9520e', fillOpacity:.14, interactive:false}).addTo(drawLayer);
-  else if(p.length === 2) L.polyline(p, {color:'#d9520e', weight:3, interactive:false}).addTo(drawLayer);
-  p.forEach((pt, i) => L.circleMarker(pt, {radius:i === p.length - 1 ? 8 : 5, color:'#ffffff', weight:2, fillColor:'#d9520e', fillOpacity:1, interactive:false}).addTo(drawLayer));
-  $('#drawText').textContent = p.length < 3 ? `Tryck på kartan i varje hörn av marken. ${p.length} av minst 3 punkter.` : `${p.length} punkter · ${fmtHa(areaHa(p))}. Fortsätt runt marken eller tryck Klar.`;
+  $('#drawText').textContent = p.length < 3 ? `Tryck på kartan i varje hörn av marken. ${p.length} av minst 3 punkter.` : `${p.length} punkter · ${fmtHa(areaHa(p))}. Fortsätt runt marken, dra en punkt för att flytta den, eller tryck Klar.`;
   $('#drawOk').disabled = p.length < 3; $('#drawUndo').disabled = !p.length;
 }
 function startDrawing(id){
@@ -118,10 +148,10 @@ function startDrawing(id){
   if(drawing.pts.length) map.fitBounds(L.latLngBounds(drawing.pts), {paddingTopLeft:[40,70], paddingBottomRight:[40, bottomPad() + 190], maxZoom:17});
   renderBorders(); drawDraft();
 }
-function endDrawing(){ drawing = null; drawLayer.clearLayers(); $('#drawbar').hidden = true; $('#btnAdd').hidden = false; renderBorders(); }
-map.on('click', e => { if(!drawing) return; drawing.pts.push([e.latlng.lat, e.latlng.lng]); drawDraft(); });
+function endDrawing(){ drawing = null; drawLayer.clearLayers(); drawHandles.clearLayers(); loupeHide(); $('#drawbar').hidden = true; $('#btnAdd').hidden = false; renderBorders(); }
+map.on('click', e => { if(!drawing) return; drawing.pts.push([e.latlng.lat, e.latlng.lng]); drawDraft(); loupeFlash(e.latlng); });
 $('#drawUndo').addEventListener('click', () => { drawing.pts.pop(); drawDraft(); });
-$('#drawCancel').addEventListener('click', () => { endDrawing(); overlayDrawEnded(false); });
+$('#drawCancel').addEventListener('click', endDrawing);
 $('#drawGps').addEventListener('click', () => {
   if(!('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); return; }
   navigator.geolocation.getCurrentPosition(pos => { if(!drawing) return; showMe(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0); drawing.pts.push([pos.coords.latitude, pos.coords.longitude]); map.panTo([pos.coords.latitude, pos.coords.longitude]); drawDraft(); },
@@ -138,7 +168,7 @@ $('#drawOk').addEventListener('click', () => {
     return;
   }
   a.border = fmtBorder(pts); a.updated = Date.now(); delete a.example;
-  save(); renderAll(); overlayDrawEnded(true); toast(`Gränsen för ${a.name} är sparad, ${fmtHa(areaHa(pts))}.`);
+  save(); renderAll(); toast(`Gränsen för ${a.name} är sparad, ${fmtHa(areaHa(pts))}.`);
 });
 function parseRing(text){
   const ring = c => c.map(x => [+x[1], +x[0]]);
