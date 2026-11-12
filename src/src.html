@@ -84,6 +84,9 @@ a{color:var(--accent)}
 .drag-handle{background:none;border:0}
 .drag-handle span{position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:#d9520e;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35)}
 .drag-handle.last span{width:20px;height:20px;margin:-10px 0 0 -10px}
+.drag-handle.sel span{width:24px;height:24px;margin:-12px 0 0 -12px;box-shadow:0 0 0 3px #1a73e8,0 0 0 5px #fff}
+.drag-handle.mid span{width:16px;height:16px;margin:-8px 0 0 -8px;background:rgba(255,255,255,.9);border:2px solid #d9520e;box-shadow:none}
+.drag-handle.mid span::after{content:"+";position:absolute;inset:0;display:grid;place-items:center;color:#d9520e;font:700 13px/1 var(--font-body)}
 .drag-handle.road span{background:#8a4b12}.drag-handle.path span{background:#7a2e8f}
 .drag-handle.shot span{width:22px;height:22px;margin:-11px 0 0 -11px;border-width:3px}
 .drag-handle.shot.first span{background:#1a73e8}
@@ -334,7 +337,8 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
   <p id="drawText"></p>
   <div class="btnrow">
     <button class="btn primary" id="drawOk" type="button">Klar</button>
-    <button class="btn" id="drawUndo" type="button">Ångra punkt</button>
+    <button class="btn" id="drawUndo" type="button">Ångra</button>
+    <button class="btn danger" id="drawDel" type="button" hidden>Ta bort punkt</button>
     <button class="btn" id="drawGps" type="button">Punkt där jag står</button>
     <button class="btn ghost" id="drawCancel" type="button">Avbryt</button>
   </div>

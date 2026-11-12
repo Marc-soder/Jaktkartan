@@ -53,8 +53,43 @@ with sync_playwright() as p:
         check(n==0, f'{name}: släckt område döljer gränsen')
         pg.evaluate(f'document.getElementById("ar-{aid}").click()')
         # avbryt ändrar inget
-        pg.evaluate(f'__fk.startDrawing("{aid}")'); pg.wait_for_timeout(400); pg.click('#drawUndo'); pg.click('#drawCancel'); pg.wait_for_timeout(200)
-        check(len([x for x in pg.evaluate('__fk.state().areas') if x['id']==aid][0]['border'].split(';'))==4, f'{name}: Avbryt lämnar gränsen orörd')
+        # redigera en befintlig gräns: lägga till och ta bort punkter mitt i
+        orig=[x for x in pg.evaluate('__fk.state().areas') if x['id']==aid][0]['border'].split(';')
+        pg.evaluate(f'__fk.openAreaForm("{aid}")'); pg.wait_for_timeout(200); pg.click('#afDraw'); pg.wait_for_timeout(500)
+        check(pg.locator('.drag-handle.border').count()==4 and pg.locator('.drag-handle.mid').count()==4 and pg.is_disabled('#drawUndo') and pg.is_hidden('#drawDel'), f'{name}: befintlig gräns laddas med 4 punkter och 4 plus mellan dem')
+        P0=pg.evaluate('__fk.drawingPts()')
+        pg.locator('.drag-handle.mid').nth(1).click(); pg.wait_for_timeout(300)
+        P1=pg.evaluate('__fk.drawingPts()')
+        mid=[(P0[1][0]+P0[2][0])/2, (P0[1][1]+P0[2][1])/2]
+        check(len(P1)==5 and abs(P1[2][0]-mid[0]) < 1e-4 and abs(P1[2][1]-mid[1]) < 1e-4 and P1[1]==P0[1] and P1[3]==P0[2], f'{name}: tryck på + lägger in en punkt mellan punkt 2 och 3')
+        # dra ett + till en ny plats
+        mb=pg.locator('.drag-handle.mid').nth(0).bounding_box(); mx, my = mb['x']+mb['width']/2, mb['y']+mb['height']/2
+        pg.mouse.move(mx, my); pg.mouse.down(); pg.mouse.move(mx+10, my-10, steps=4); pg.mouse.move(mx+20, my-30, steps=5); vis=pg.is_visible('.loupe'); pg.mouse.up(); pg.wait_for_timeout(300)
+        P2=pg.evaluate('__fk.drawingPts()')
+        dm=[(P1[0][0]+P1[1][0])/2, (P1[0][1]+P1[1][1])/2]
+        check(len(P2)==6 and P2[0]==P1[0] and P2[2]==P1[1] and abs(P2[1][0]-dm[0]) > 1e-5 and vis, f'{name}: dra ett + lägger in en punkt där man släpper, med förstoringsglas')
+        # markera och ta bort en punkt
+        pg.locator('.drag-handle.border').nth(3).click(); pg.wait_for_timeout(200)
+        check(pg.locator('.drag-handle.border.sel').count()==1 and pg.is_visible('#drawDel') and 'markerad' in pg.inner_text('#drawText'), f'{name}: tryck på en punkt markerar den')
+        pg.click('#drawDel'); pg.wait_for_timeout(200)
+        P3=pg.evaluate('__fk.drawingPts()')
+        check(len(P3)==5 and P3==P2[:3]+P2[4:] and pg.is_hidden('#drawDel'), f'{name}: Ta bort punkt tar bort just den punkten')
+        pg.click('#drawUndo'); pg.wait_for_timeout(150)
+        check(pg.evaluate('__fk.drawingPts()')==P2, f'{name}: Ångra tar tillbaka den borttagna punkten')
+        pg.click('#drawUndo'); pg.click('#drawUndo'); pg.wait_for_timeout(150)
+        check(pg.evaluate('__fk.drawingPts()')==P0 and pg.is_disabled('#drawUndo'), f'{name}: Ångra flera gånger går tillbaka till den sparade gränsen')
+        # en markerad punkt avmarkeras av ett tryck i kartan, som inte lägger till någon punkt
+        pg.locator('.drag-handle.border').nth(0).click(); pg.wait_for_timeout(150)
+        tap(box['x']+W*0.45, box['y']+H*0.6); pg.wait_for_timeout(250)
+        check(pg.locator('.drag-handle.border.sel').count()==0 and len(pg.evaluate('__fk.drawingPts()'))==4, f'{name}: tryck i kartan tar bort markeringen utan att lägga till en punkt')
+        pg.locator('.drag-handle.mid').nth(2).click(); pg.wait_for_timeout(200)
+        pg.click('#drawCancel'); pg.wait_for_timeout(200)
+        check([x for x in pg.evaluate('__fk.state().areas') if x['id']==aid][0]['border'].split(';')==orig, f'{name}: Avbryt lämnar gränsen orörd')
+        pg.evaluate(f'__fk.openAreaForm("{aid}")'); pg.wait_for_timeout(200); pg.click('#afDraw'); pg.wait_for_timeout(400)
+        pg.locator('.drag-handle.mid').nth(0).click(); pg.wait_for_timeout(200); pg.click('#drawOk'); pg.wait_for_timeout(300)
+        nb=[x for x in pg.evaluate('__fk.state().areas') if x['id']==aid][0]['border'].split(';')
+        check(len(nb)==5 and nb[0]==orig[0] and nb[2:]==orig[1:], f'{name}: Klar sparar gränsen med den inlagda punkten, resten oförändrad')
+        pg.evaluate(f'(() => {{ const a=__fk.state().areas.find(x => x.id === "{aid}"); a.border="{";".join(orig)}"; __fk.renderAll(); }})()')
         # import från KML
         pg.evaluate(f'__fk.openAreaForm("{aid}")'); pg.wait_for_timeout(200)
         with pg.expect_file_chooser() as fc: pg.click('#afImport')

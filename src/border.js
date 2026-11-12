@@ -107,20 +107,38 @@ function startLine(areaId, kind, name, lid){
   if(!canEditArea(a)){ toast('Du har inte rättighet att ändra det området.'); return; }
   closeModal(); map.closePopup(); if(placing) endPlacing();
   if(a.visible === false){ a.visible = true; save(); renderAll(); }
-  drawing = {mode:'line', id:areaId, kind, name, lid:lid || null, pts:lid && a.lines && a.lines[lid] ? parseBorder(a.lines[lid].p) : []};
+  drawing = {mode:'line', id:areaId, kind, name, lid:lid || null, pts:lid && a.lines && a.lines[lid] ? parseBorder(a.lines[lid].p) : [], hist:[], sel:null};
   $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
   if(drawing.pts.length >= 2) map.fitBounds(L.latLngBounds(drawing.pts), {paddingTopLeft:[40,70], paddingBottomRight:[40, bottomPad() + 190], maxZoom:17});
   renderBorders(); drawDraft();
 }
 /* Hörnen går att dra med fingret (med förstoringsglas). Linjen ritas om under dragningen. */
+/* Varje ändring sparas först så att Ångra kan ta tillbaka den. */
+function drawPush(){ drawing.hist.push(drawing.pts.map(p => p.slice())); if(drawing.hist.length > 200) drawing.hist.shift(); }
+/* Punkterna: tryck för att markera (och ta bort), dra för att flytta.
+   Mellan två punkter finns ett +: tryck för att lägga in en punkt där, eller dra det dit punkten ska. */
 function drawHandlesRender(){
   drawHandles.clearLayers(); if(!drawing) return;
-  const cls = drawing.mode === 'line' ? (drawing.kind === 'path' ? 'path' : 'road') : 'border';
-  drawing.pts.forEach((pt, i) => {
-    const m = dragHandle(pt, cls + (i === drawing.pts.length - 1 ? ' last' : ''));
-    loupeDrag(m, ll => { drawing.pts[i] = [ll.lat, ll.lng]; drawShape(); }, ll => { drawing.pts[i] = [ll.lat, ll.lng]; drawDraft(); });
+  const P = drawing.pts, cls = drawing.mode === 'line' ? (drawing.kind === 'path' ? 'path' : 'road') : 'border';
+  P.forEach((pt, i) => {
+    const m = dragHandle(pt, cls + (i === P.length - 1 ? ' last' : '') + (drawing.sel === i ? ' sel' : ''));
+    m.on('dragstart', () => { drawPush(); drawing.sel = i; });
+    loupeDrag(m, ll => { P[i] = [ll.lat, ll.lng]; drawShape(); }, ll => { P[i] = [ll.lat, ll.lng]; drawDraft(); });
+    m.on('click', () => { drawing.sel = drawing.sel === i ? null : i; drawDraft(); });
     m.addTo(drawHandles);
   });
+  // + mitt på varje kant (för en gräns även kanten mellan sista och första punkten)
+  const edges = P.length < 2 ? 0 : drawing.mode === 'border' && P.length >= 3 ? P.length : P.length - 1;
+  for(let i = 0; i < edges; i++){
+    const a = P[i], b = P[(i + 1) % P.length], at = i + 1;
+    const mid = map.unproject(map.project(a).add(map.project(b)).divideBy(2));
+    const m = dragHandle(mid, 'mid'); let added = false;
+    const add = ll => { drawPush(); P.splice(at, 0, [ll.lat, ll.lng]); drawing.sel = at; added = true; };
+    m.on('dragstart', () => add(m.getLatLng()));
+    loupeDrag(m, ll => { if(added) P[at] = [ll.lat, ll.lng]; drawShape(); }, () => drawDraft());
+    m.on('click', () => { add(m.getLatLng()); drawDraft(); loupeFlash(m.getLatLng()); });
+    m.addTo(drawHandles);
+  }
 }
 function drawShape(){
   drawLayer.clearLayers(); const p = drawing.pts;
@@ -129,32 +147,41 @@ function drawShape(){
   else if(p.length === 2) L.polyline(p, {color:'#d9520e', weight:3, interactive:false}).addTo(drawLayer);
 }
 function drawDraft(){
-  const p = drawing.pts; drawShape(); drawHandlesRender();
+  const p = drawing.pts; if(drawing.sel != null && drawing.sel >= p.length) drawing.sel = null;
+  drawShape(); drawHandlesRender();
+  $('#drawUndo').disabled = !drawing.hist.length;
+  $('#drawDel').hidden = drawing.sel == null;
+  $('#drawDel').disabled = drawing.sel == null || p.length <= (drawing.mode === 'line' ? 2 : 3);
   if(drawing.mode === 'line'){
     const what = LINE_KIND[drawing.kind].toLowerCase();
-    $('#drawText').textContent = p.length < 2 ? `Tryck på kartan längs ${what}en, eller gå den och tryck på positionsknappen. ${p.length} av minst 2 punkter.` : `${p.length} punkter · ${fmtDist(lineLen(p))}. Fortsätt längs ${what}en, dra en punkt för att flytta den, eller tryck Klar.`;
-    $('#drawOk').disabled = p.length < 2; $('#drawUndo').disabled = !p.length;
+    $('#drawText').textContent = p.length < 2 ? `Tryck på kartan längs ${what}en, eller gå den och tryck på positionsknappen. ${p.length} av minst 2 punkter.` : `${p.length} punkter · ${fmtDist(lineLen(p))}. ${drawing.sel != null ? 'Punkten är markerad.' : `Fortsätt längs ${what}en. Dra en punkt för att flytta den, tryck på den för att ta bort den, eller dra ett + för att lägga till en punkt.`}`;
+    $('#drawOk').disabled = p.length < 2;
     return;
   }
-  $('#drawText').textContent = p.length < 3 ? `Tryck på kartan i varje hörn av marken. ${p.length} av minst 3 punkter.` : `${p.length} punkter · ${fmtHa(areaHa(p))}. Fortsätt runt marken, dra en punkt för att flytta den, eller tryck Klar.`;
-  $('#drawOk').disabled = p.length < 3; $('#drawUndo').disabled = !p.length;
+  $('#drawText').textContent = p.length < 3 ? `Tryck på kartan i varje hörn av marken. ${p.length} av minst 3 punkter.` : `${p.length} punkter · ${fmtHa(areaHa(p))}. ${drawing.sel != null ? 'Punkten är markerad.' : 'Dra en punkt för att flytta den, tryck på den för att ta bort den, eller dra ett + för att lägga till en punkt mellan två andra.'}`;
+  $('#drawOk').disabled = p.length < 3;
 }
 function startDrawing(id){
   const a = areaById(id); if(!a) return;
   if(!canEditArea(a)){ toast('Du har inte rättighet att ändra det området.'); return; }
   closeModal(); map.closePopup(); if(placing) endPlacing();
-  drawing = {mode:'border', id, pts:parseBorder(a.border)};
+  drawing = {mode:'border', id, pts:parseBorder(a.border), hist:[], sel:null};
   $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
   if(drawing.pts.length) map.fitBounds(L.latLngBounds(drawing.pts), {paddingTopLeft:[40,70], paddingBottomRight:[40, bottomPad() + 190], maxZoom:17});
   renderBorders(); drawDraft();
 }
 function endDrawing(){ drawing = null; drawLayer.clearLayers(); drawHandles.clearLayers(); loupeHide(); $('#drawbar').hidden = true; $('#btnAdd').hidden = false; renderBorders(); sheetRestore(); }
-map.on('click', e => { if(!drawing) return; drawing.pts.push([e.latlng.lat, e.latlng.lng]); drawDraft(); loupeFlash(e.latlng); });
-$('#drawUndo').addEventListener('click', () => { drawing.pts.pop(); drawDraft(); });
+map.on('click', e => {
+  if(!drawing) return;
+  if(drawing.sel != null){ drawing.sel = null; drawDraft(); return; }   // ett tryck bredvid tar bort markeringen
+  drawPush(); drawing.pts.push([e.latlng.lat, e.latlng.lng]); drawDraft(); loupeFlash(e.latlng);
+});
+$('#drawUndo').addEventListener('click', () => { if(!drawing.hist.length) return; drawing.pts = drawing.hist.pop(); drawing.sel = null; drawDraft(); });
+$('#drawDel').addEventListener('click', () => { const i = drawing.sel; if(i == null) return; drawPush(); drawing.pts.splice(i, 1); drawing.sel = null; drawDraft(); });
 $('#drawCancel').addEventListener('click', endDrawing);
 $('#drawGps').addEventListener('click', () => {
   if(!('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); return; }
-  navigator.geolocation.getCurrentPosition(pos => { if(!drawing) return; showMe(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0); drawing.pts.push([pos.coords.latitude, pos.coords.longitude]); map.panTo([pos.coords.latitude, pos.coords.longitude]); drawDraft(); },
+  navigator.geolocation.getCurrentPosition(pos => { if(!drawing) return; showMe(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0); drawPush(); drawing.pts.push([pos.coords.latitude, pos.coords.longitude]); map.panTo([pos.coords.latitude, pos.coords.longitude]); drawDraft(); },
     () => toast('Kunde inte läsa din position.'), {enableHighAccuracy:true, timeout:15000, maximumAge:2000});
 });
 $('#drawOk').addEventListener('click', () => {
