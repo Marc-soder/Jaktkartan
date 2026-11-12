@@ -121,7 +121,7 @@ function startDrawing(id){
 function endDrawing(){ drawing = null; drawLayer.clearLayers(); $('#drawbar').hidden = true; $('#btnAdd').hidden = false; renderBorders(); }
 map.on('click', e => { if(!drawing) return; drawing.pts.push([e.latlng.lat, e.latlng.lng]); drawDraft(); });
 $('#drawUndo').addEventListener('click', () => { drawing.pts.pop(); drawDraft(); });
-$('#drawCancel').addEventListener('click', endDrawing);
+$('#drawCancel').addEventListener('click', () => { endDrawing(); overlayDrawEnded(false); });
 $('#drawGps').addEventListener('click', () => {
   if(!('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); return; }
   navigator.geolocation.getCurrentPosition(pos => { if(!drawing) return; showMe(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0); drawing.pts.push([pos.coords.latitude, pos.coords.longitude]); map.panTo([pos.coords.latitude, pos.coords.longitude]); drawDraft(); },
@@ -138,7 +138,7 @@ $('#drawOk').addEventListener('click', () => {
     return;
   }
   a.border = fmtBorder(pts); a.updated = Date.now(); delete a.example;
-  save(); renderAll(); toast(`Gränsen för ${a.name} är sparad, ${fmtHa(areaHa(pts))}.`);
+  save(); renderAll(); overlayDrawEnded(true); toast(`Gränsen för ${a.name} är sparad, ${fmtHa(areaHa(pts))}.`);
 });
 function parseRing(text){
   const ring = c => c.map(x => [+x[1], +x[0]]);

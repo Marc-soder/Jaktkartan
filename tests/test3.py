@@ -96,6 +96,56 @@ with sync_playwright() as p:
         pg.evaluate("(() => { const r = document.getElementById('trailMin'); r.value = 0; r.dispatchEvent(new Event('input', {bubbles:true})); })()"); pg.wait_for_timeout(400)
         check(own()==0 and pg.inner_text('#trailMinTxt')=='Av', f'{name}: reglaget på Av döljer spåret')
         pg.keyboard.press('Escape')
+        # skärmdump ovanpå kartan
+        pg.evaluate(f'__fk.openAreaForm("{aid}")'); pg.wait_for_timeout(200)
+        with pg.expect_file_chooser() as fc: pg.click('#afShot')
+        fc.value.set_files(os.path.join(B,'tile_osm.png')); pg.wait_for_timeout(600)
+        check(pg.is_visible('#ovImg') and pg.is_disabled('#ovNext'), f'{name}: skärmdumpen visas för att välja punkt 1')
+        def img_click(u, v):
+            bb=pg.locator('#ovImg').bounding_box(); pg.locator('#ovImg').click(position={'x':u/256*bb['width'], 'y':v/256*bb['height']}); pg.wait_for_timeout(150)
+        img_click(32, 32); pg.click('#ovNext'); pg.wait_for_timeout(300)
+        check(pg.is_visible('#ovbar') and 'korset' in pg.inner_text('#ovbar') and pg.locator('#map .crosshair:not([hidden])').count()==1, f'{name}: steg 1 i kartan med kors')
+        A=(box['x']+W*0.3, box['y']+H*0.25); Bp=(box['x']+W*0.65, box['y']+H*0.4)
+        cl=lambda P: pg.evaluate(f"(() => {{ const r=__fk.map.getContainer().getBoundingClientRect(); const ll=__fk.map.containerPointToLatLng([{P[0]}-r.left, {P[1]}-r.top]); return {{lat:ll.lat, lng:ll.lng}}; }})()")
+        llA=cl(A); llB=cl(Bp)
+        tap(*A); pg.wait_for_timeout(900)
+        c=pg.evaluate('__fk.map.getCenter()')
+        check(abs(c['lat']-llA['lat']) < 2e-4 and abs(c['lng']-llA['lng']) < 2e-4, f'{name}: tryck i kartan flyttar korset dit')
+        pg.evaluate(f"__fk.map.setView([{llA['lat']}, {llA['lng']}], __fk.map.getZoom(), {{animate:false}})")
+        pg.click('#ovMapOk'); pg.wait_for_timeout(300)
+        check(pg.is_visible('#ovImg') and pg.locator('.shot-mark.first').count()==1, f'{name}: punkt 2 väljs i bilden, punkt 1 är markerad')
+        img_click(224, 160); pg.click('#ovNext'); pg.wait_for_timeout(300)
+        pg.evaluate(f"__fk.map.setView([{llB['lat']}, {llB['lng']}], __fk.map.getZoom(), {{animate:false}})")
+        pg.click('#ovMapOk'); pg.wait_for_timeout(900)
+        check(pg.locator('img.shot-img').count()==1 and pg.is_visible('#ovDraw'), f'{name}: bilden ligger på kartan')
+        g1=pg.evaluate('__fk.ovImgToLatLng(32, 32)'); g2=pg.evaluate('__fk.ovImgToLatLng(224, 160)')
+        e1=max(abs(g1['lat']-llA['lat']), abs(g1['lng']-llA['lng'])); e2=max(abs(g2['lat']-llB['lat']), abs(g2['lng']-llB['lng']))
+        check(e1 < 2e-4 and e2 < 2e-4 and pg.locator('#map .crosshair:not([hidden])').count()==0, f'{name}: bildens punkter hamnar där de pekades ut i kartan (fel {e1:.1e}, {e2:.1e} grader)')
+        # bildens hörn på skärmen ska stämma med avbildningen
+        ok=pg.evaluate("""(() => { const img=document.querySelector('img.shot-img'), r=img.getBoundingClientRect(), m=__fk.map, c=m.getContainer().getBoundingClientRect();
+          const pts=[[0,0],[256,0],[256,256],[0,256]].map(([u,v]) => m.latLngToContainerPoint(__fk.ovImgToLatLng(u,v)));
+          const xs=pts.map(p=>p.x+c.left), ys=pts.map(p=>p.y+c.top);
+          return Math.abs(Math.min(...xs)-r.left) < 3 && Math.abs(Math.max(...xs)-r.right) < 3 && Math.abs(Math.min(...ys)-r.top) < 3 && Math.abs(Math.max(...ys)-r.bottom) < 3; })()""")
+        check(ok, f'{name}: bilden ritas med rätt skala och vridning på skärmen')
+        third=pg.evaluate("""(() => { const o=__fk.ov(), m=__fk.map, save=o.pts.map(p => p.ll);
+          const th=0.35, sc=1.7, T=(u,v) => L.point(sc*(Math.cos(th)*u - Math.sin(th)*v) + 100, sc*(Math.sin(th)*u + Math.cos(th)*v) + 50);
+          o.pts[0].ll=m.layerPointToLatLng(T(o.pts[0].u, o.pts[0].v)); o.pts[1].ll=m.layerPointToLatLng(T(o.pts[1].u, o.pts[1].v));
+          const got=__fk.ovImgToLatLng(200, 40), want=m.layerPointToLatLng(T(200, 40));
+          o.pts.forEach((p, i) => { p.ll=save[i]; });
+          return Math.max(Math.abs(got.lat-want.lat), Math.abs(got.lng-want.lng)); })()""")
+        check(third < 1e-9, f'{name}: en tredje punkt hamnar rätt vid känd vridning och skala (fel {third:.1e})')
+        pg.evaluate("(() => { const r=document.getElementById('ovOpacity'); r.value=30; r.dispatchEvent(new Event('input', {bubbles:true})); })()")
+        check(pg.evaluate("document.querySelector('img.shot-img').style.opacity") == '0.3', f'{name}: genomskinligheten går att ändra')
+        pg.click('#ovDraw'); pg.wait_for_timeout(300)
+        check(pg.is_visible('#drawbar') and pg.is_hidden('#ovbar') and pg.locator('img.shot-img').count()==1, f'{name}: ritläge med bilden kvar under')
+        pg.click('#drawCancel'); pg.wait_for_timeout(300)
+        check(pg.is_visible('#ovDraw') and pg.locator('img.shot-img').count()==1, f'{name}: Avbryt i ritläget behåller bilden')
+        pg.click('#ovDraw'); pg.wait_for_timeout(300)
+        for fx,fy in ((0.3,0.25),(0.65,0.25),(0.65,0.4)): tap(box['x']+W*fx, box['y']+H*fy); pg.wait_for_timeout(250)
+        pg.click('#drawOk'); pg.wait_for_timeout(400)
+        ar=[x for x in pg.evaluate('__fk.state().areas') if x['id']==aid][0]
+        check(len((ar.get('border') or '').split(';'))==3 and pg.locator('img.shot-img').count()==0 and pg.is_hidden('#ovbar') and pg.evaluate('__fk.ov()') is None, f'{name}: gränsen sparad och skärmdumpen borttagen')
+        pg.evaluate(f'(() => {{ const a=__fk.state().areas.find(x => x.id === "{aid}"); delete a.border; }})()')
         # skogsvägar
         over.clear(); pg.evaluate('__fk.map.setView([58.715,14.61],14)'); pg.wait_for_timeout(700)
         check(len(over)==0, f'{name}: inga vägar hämtas när lagret är av')
