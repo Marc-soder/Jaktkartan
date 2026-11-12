@@ -70,6 +70,13 @@ a{color:var(--accent)}
 
 .layer-pop{position:fixed;z-index:1200;top:calc(64px + env(safe-area-inset-top,0px));right:calc(64px + env(safe-area-inset-right,0px));width:min(290px,calc(100vw - 88px));background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:10px}
 .layer-pop h3{margin:4px 6px 8px}
+.shot-pick{position:relative;overflow:auto;max-height:55vh;max-height:55dvh;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);-webkit-overflow-scrolling:touch}
+.shot-inner{position:relative;width:100%}
+.shot-inner img{display:block;width:100%;height:auto;cursor:crosshair;user-select:none;-webkit-user-select:none}
+.shot-mark{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;border:3px solid #fff;background:var(--accent);box-shadow:0 0 0 1px rgba(0,0,0,.4);pointer-events:none}
+.shot-mark.first{background:#1a73e8}
+.shot-hint{display:flex;gap:10px;align-items:center}
+.shot-hint canvas{flex:none;border-radius:8px;border:1px solid var(--line)}
 .trail-range{padding:4px 8px 8px}
 .trail-range label{display:flex;justify-content:space-between;gap:8px;font-size:14px}
 .trail-range input{width:100%;accent-color:var(--accent);margin:8px 0 2px}
@@ -316,6 +323,8 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
   </div>
 </div>
 <input type="file" id="fileBorder" accept=".json,.geojson,.kml,.gpx" hidden>
+<input type="file" id="fileOverlay" accept="image/*" hidden>
+<div class="placebar" id="ovbar" hidden></div>
 
 <div class="placebar" id="placebar" hidden>
   <p id="placeText">Flytta kartan så att korset hamnar där nålen ska sitta.</p>
@@ -1135,13 +1144,14 @@ function openAreaForm(id){
     ${mine.length || a.gid ? `<label class="field"><span>Delas med</span><select class="input" id="afShare" ${canMove ? '' : 'disabled'}><option value="">Bara jag (privat)</option>${mine.map(g => `<option value="${g.id}"${a.gid === g.id ? ' selected' : ''}>${esc(gname(g))}</option>`).join('')}</select></label>
     <p class="note" style="margin:-4px 0 0">${canMove ? `Delar du området ser alla i jaktlaget dess ${n} ${n === 1 ? 'nål' : 'nålar'}, och medlemmar kan ändra dem.` : 'Bara en admin kan sluta dela området.'}</p>` : '<p class="note" style="margin:-4px 0 0">Logga in under Jakt och skapa ett jaktlag för att kunna dela området.</p>'}
     <div class="field" style="margin-top:14px"><span>Gräns</span><div class="small">${parseBorder(a.border).length >= 3 ? `${parseBorder(a.border).length} punkter · ${fmtHa(areaHa(parseBorder(a.border)))}` : 'Ingen gräns är ritad.'}</div>
-      <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afDraw">${a.border ? 'Ändra gräns' : 'Rita gräns'}</button><button class="btn sm" type="button" id="afImport">Importera från fil</button>${a.border ? '<button class="btn sm danger" type="button" id="afBorderDel">Ta bort gräns</button>' : ''}</div></div>
+      <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afDraw">${a.border ? 'Ändra gräns' : 'Rita gräns'}</button><button class="btn sm" type="button" id="afImport">Importera från fil</button><button class="btn sm" type="button" id="afShot">Från skärmdump</button>${a.border ? '<button class="btn sm danger" type="button" id="afBorderDel">Ta bort gräns</button>' : ''}</div></div>
     <div class="field" style="margin-top:14px"><span>Egna vägar och stigar</span>${areaLines(a).length ? areaLines(a).map(([lid, l]) => `<div class="frow"><span class="fname">${esc(l.n || LINE_KIND[l.k])}<br><span class="small muted">${LINE_KIND[l.k]} · ${fmtDist(lineLen(parseBorder(l.p)))}</span></span><button class="btn sm" type="button" data-line-edit="${lid}">Ändra</button></div>`).join('') : '<div class="small">Inga egna vägar eller stigar.</div>'}
       <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afLine">Rita väg eller stig</button></div></div>
     <div class="actions"><button class="btn primary grow" type="submit">Spara</button><button class="btn ghost" type="button" id="afCancel">Avbryt</button></div></form>`, m => {
     m.querySelector('#afCancel').addEventListener('click', closeModal);
     m.querySelector('#afDraw').addEventListener('click', () => startDrawing(id));
     m.querySelector('#afImport').addEventListener('click', () => { borderTarget = id; $('#fileBorder').click(); });
+    m.querySelector('#afShot').addEventListener('click', () => startOverlay(id));
     m.querySelector('#afLine').addEventListener('click', () => openLineForm({areaId:id}));
     m.querySelectorAll('[data-line-edit]').forEach(b => b.addEventListener('click', () => openLineForm({areaId:id, lid:b.dataset.lineEdit})));
     const bd = m.querySelector('#afBorderDel'); if(bd) bd.addEventListener('click', () => confirmClick(bd, 'Bekräfta', () => { const cur = areaById(id); if(cur){ delete cur.border; cur.updated = Date.now(); save(); } closeModal(); renderAll(); toast('Gränsen är borttagen'); }));
@@ -1488,7 +1498,7 @@ let rz = null;
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {ov:() => ov, ovImgToLatLng, removeOverlay, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

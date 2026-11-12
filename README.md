@@ -26,8 +26,9 @@ Efter merge klistrar du in den nya filen i Firebase-konsolen under Realtime Data
 | `database.rules.json` | Säkerhetsregler för Firebase, byggda från `src/rules.js`. Ändra inte direkt. |
 | `src/src.html` | Sidans HTML, CSS och huvudsakliga JavaScript. |
 | `src/vilt.js` | Jakttider per art och län. |
-| `src/cloud.js` | Jaktlag, inbjudningar, gäster och synk mot Firebase. |
-| `src/border.js` | Gränser för jaktmarken och skogsvägar. |
+| `src/cloud.js` | Jaktlag, inbjudningar, gäster, positioner, spår och synk mot Firebase. |
+| `src/border.js` | Gränser för jaktmarken, skogsvägar och egna vägar och stigar. |
+| `src/overlay.js` | Skärmdump ovanpå kartan, som hjälp att rita en gräns. |
 | `src/rules.js` | Säkerhetsreglerna för Firebase. |
 | `src/build.py` | Bygger `index.html` och `database.rules.json`. |
 | `tests/` | Webbläsartester med Playwright, och testfiler. |
