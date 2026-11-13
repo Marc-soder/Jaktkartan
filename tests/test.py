@@ -64,6 +64,20 @@ with sync_playwright() as p:
     check('8 nålar' in pg.inner_text('#pStat'), 'statusrad visar 8 nålar')
     pg.screenshot(path=f'{SHOTS}/d1_start.png')
 
+    # Namn på nålarna
+    lab = lambda: pg.evaluate("[...document.querySelectorAll('.pin-label')].filter(e => e.offsetParent !== null).map(e => e.textContent)")
+    pg.evaluate('__fk.map.setView([58.7205, 14.61], 15, {animate:false})'); pg.wait_for_timeout(400)
+    check('Tornet vid mossen' in lab(), f'namnen syns under nålarna när man zoomat in ({len(lab())} st)')
+    pg.evaluate('__fk.map.setZoom(12, {animate:false})'); pg.wait_for_timeout(400)
+    check(lab() == [], 'namnen döljs när man zoomat ut')
+    pg.evaluate('__fk.map.setZoom(15, {animate:false})'); pg.wait_for_timeout(300)
+    pg.click('#btnLayers'); pg.wait_for_timeout(200)
+    check(pg.is_checked('#popLabels'), 'Namn på nålar är påslaget från början')
+    pg.uncheck('#popLabels'); pg.wait_for_timeout(200)
+    check(lab() == [] and pg.evaluate('__fk.state().settings.pinLabels') is False, 'namnen går att stänga av, och valet sparas')
+    pg.check('#popLabels'); pg.keyboard.press('Escape'); pg.wait_for_timeout(200)
+    check('Tornet vid mossen' in lab(), 'och slås på igen')
+
     # Områdesfilter
     pg.click('#tab-filter')
     pg.click('label[for="ar-a-ex-svamp"]', force=True) if False else pg.locator('#paneFilter .frow:nth-child(2) input[data-act="area-toggle"]').click()
