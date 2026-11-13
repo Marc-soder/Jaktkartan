@@ -13,6 +13,10 @@ def offline(r):
     if 'gstatic.com/firebasejs' in u:
         r.fulfill(status=200, content_type='text/javascript', body=FIREBASE_STUB if 'firebase-app-compat' in u else '')
         return True
+    if 'api.open-meteo.com' in u:   # vinden är påslagen från början
+        r.fulfill(status=200, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'},
+                  body='{"current":{"time":"2026-11-13T07:00","wind_speed_10m":3,"wind_direction_10m":270,"wind_gusts_10m":5}}')
+        return True
     if 'fonts.googleapis' in u or 'fonts.gstatic' in u:
         r.fulfill(status=200, content_type='text/css', body='')
         return True

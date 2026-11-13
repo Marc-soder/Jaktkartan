@@ -55,6 +55,7 @@ async function mkPage(browser, who, hash, opts){
   await ctx.route('**/*', r => { const u = r.request().url();
     if(u.includes('firebase-app-compat')) return r.fulfill({status:200, contentType:'text/javascript', body:FAKE});
     if(u.includes('gstatic.com/firebasejs')) return r.fulfill({status:200, contentType:'text/javascript', body:''});
+    if(u.includes('api.open-meteo.com')) return r.fulfill({status:200, contentType:'application/json', headers:{'Access-Control-Allow-Origin':'*'}, body:JSON.stringify({current:{wind_speed_10m:3, wind_direction_10m:270, wind_gusts_10m:5}})});
     if(u.startsWith('file:') || u.includes('localhost:8765')) return r.continue();
     if(u.includes('fonts.')) return r.abort();
     return r.fulfill({status:200, contentType:'image/png', body:tile}); });
@@ -116,7 +117,7 @@ const gids = () => Object.keys(data.groups || {});
   await B.click('[data-j="login-google"]'); await W(B, 800);
   check(data.groups[gid].members.bob && data.groups[gid].members.bob.role === 'editor', 'Bob blev medlem med rätt roll');
   let sb = await st(B);
-  check((sb.areas.find(a => a.id === aid) || {}).border === data.groups[gid].areas[aid].border && await B.evaluate(() => { let n = 0; __fk.map.eachLayer(l => { if(l instanceof L.Polygon) n++; }); return n; }) === 2, 'Bob ser lagets gräns på kartan');
+  check((sb.areas.find(a => a.id === aid) || {}).border === data.groups[gid].areas[aid].border && await B.evaluate(() => { let n = 0; __fk.map.eachLayer(l => { if(l instanceof L.Polygon && l.options.className !== 'wind-sector') n++; }); return n; }) === 2, 'Bob ser lagets gräns på kartan');
   check((((sb.areas.find(a => a.id === aid) || {}).lines || {})['l-2'] || {}).k === 'road' && await B.evaluate(() => { let n = 0; __fk.map.eachLayer(l => { if(l instanceof L.Polyline && !(l instanceof L.Polygon) && l.options.color === '#8a4b12') n++; }); return n; }) === 1, 'Bob ser lagets egna väg på kartan');
   check(sb.pins.length === 13 && sb.areas.length === 3, `Bob ser sina 8 egna + 5 delade nålar (${sb.pins.length}) och 3 områden`);
   // Bob lägger till en nål i det delade området

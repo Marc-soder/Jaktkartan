@@ -10,12 +10,12 @@ def check(c, m):
     if not c: fails.append(m)
 def route(r):
     u = r.request.url
-    if offline(r): return
-    if u.startswith('file:'): return r.continue_()
     if 'api.open-meteo.com' in u:
         meteo.append(u)
         return r.fulfill(status=200, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'},
                          body=json.dumps({'current': {'time': '2026-11-13T07:00', 'wind_speed_10m': 4.2, 'wind_direction_10m': 225, 'wind_gusts_10m': 7.5}}))
+    if offline(r): return
+    if u.startswith('file:'): return r.continue_()
     return r.fulfill(status=200, body=tile, content_type='image/png')
 lines = lambda pg, c: pg.evaluate("c => { let n=0; __fk.map.eachLayer(l => { if(l instanceof L.Polyline && !(l instanceof L.Polygon) && l.options.color === c) n++; }); return n; }", c)
 
@@ -28,8 +28,13 @@ with sync_playwright() as p:
         pg.evaluate('__fk.map.setView([58.72, 14.61], 15, {animate:false})'); pg.wait_for_timeout(3000)
 
         # ---- Vind ----
-        meteo.clear()
-        pg.click('#btnLayers'); pg.wait_for_timeout(200); pg.check('#popWind'); pg.wait_for_timeout(800)
+        check(pg.is_visible('#windChip') and len(meteo) >= 1 and pg.locator('path.wind-sector').count() == 1, f'{name}: vinden är påslagen från början')
+        pg.click('#btnLayers'); pg.wait_for_timeout(200)
+        check(pg.is_checked('#popWind'), f'{name}: Vindriktning är ibockad från början')
+        pg.uncheck('#popWind'); pg.wait_for_timeout(300)
+        check(not pg.is_visible('#windChip') and pg.evaluate('__fk.state().settings.wind') is False, f'{name}: vinden går att stänga av och valet sparas')
+        meteo.clear(); pg.evaluate('__fk.wind.data = null')
+        pg.check('#popWind'); pg.wait_for_timeout(800)
         chip = pg.inner_text('#windChip')
         check(len(meteo) == 1 and 'current=wind_speed_10m,wind_direction_10m,wind_gusts_10m' in meteo[0] and 'wind_speed_unit=ms' in meteo[0], f'{name}: vinden hämtas från Open-Meteo i m/s')
         check(pg.is_visible('#windChip') and 'SV' in chip and '4,2 m/s' in chip and 'byar 7,5' in chip, f'{name}: vindetiketten visar riktning, styrka och byar: {chip}')
@@ -41,8 +46,8 @@ with sync_playwright() as p:
         b = pg.evaluate("([a, f]) => __fk.bearingDeg(L.latLng(a.lat, a.lng), L.latLng(f.lat, f.lng))", [sec['o'], sec['far']])
         d = pg.evaluate("([a, f]) => __fk.distM(a, f)", [sec['o'], sec['far']])
         check(abs(sec['axis'] - 45) < 1e-9 and abs(b - 45) < 1 and abs(d - 600) < 10 and sec['half'] == 20, f'{name}: vind från SV ger ett område mot NO, 600 m långt (riktning {b:.1f}°, {d:.0f} m)')
-        cross = pg.evaluate('__fk.crossLatLng()')
-        check(abs(sec['o']['lat'] - cross['lat']) < 1e-6 and abs(sec['o']['lng'] - cross['lng']) < 1e-6, f'{name}: utan känd position utgår området från krysset')
+        cross = pg.evaluate('__fk.map.getCenter()')
+        check(abs(sec['o']['lat'] - cross['lat']) < 1e-6 and abs(sec['o']['lng'] - cross['lng']) < 1e-6, f'{name}: utan känd position utgår området från kartans mitt')
         check(pg.locator('path.wind-sector').count() == 1, f'{name}: det gula området ritas')
         # pilarna rör sig
         f0 = pg.evaluate('__fk.wind.frames || 0'); h0 = pg.evaluate("(() => { const c = document.querySelector('canvas.wind-arrows'); return c.toDataURL().length + ':' + c.toDataURL().slice(-200); })()")
@@ -63,8 +68,8 @@ with sync_playwright() as p:
         # ---- Kryss med avståndsringar ----
         pg.evaluate('__fk.map.panBy([60, 40], {animate:false})'); pg.wait_for_timeout(200)
         check(pg.is_visible('.pancross .pc-x') and pg.locator('.pc-ring').count() == 3, f'{name}: krysset med tre avståndsringar visas när kartan flyttas')
-        cp = pg.evaluate('__fk.crossPoint()'); mb = pg.locator('#map').bounding_box(); xb = pg.locator('.pc-x').bounding_box()
-        check(abs(xb['x'] + xb['width'] / 2 - (mb['x'] + cp['x'])) < 2 and abs(xb['y'] + xb['height'] / 2 - (mb['y'] + cp['y'])) < 2, f'{name}: krysset sitter i mitten av den synliga kartan')
+        mb = pg.locator('#map').bounding_box(); xb = pg.locator('.pc-x').bounding_box()
+        check(abs(xb['x'] + xb['width'] / 2 - (mb['x'] + mb['width'] / 2)) < 2 and abs(xb['y'] + xb['height'] / 2 - (mb['y'] + mb['height'] / 2)) < 2, f'{name}: krysset sitter mitt på kartan')
         rl = pg.locator('.pc-rl').all_inner_texts()
         # ringarnas radie ska stämma med kartans skala: avståndet till en punkt på ringen = etiketten
         ok = pg.evaluate("""(() => { const r = document.querySelectorAll('.pc-ring')[0], b = r.getBoundingClientRect(), c = __fk.map.getContainer().getBoundingClientRect();
@@ -73,7 +78,8 @@ with sync_playwright() as p:
         lab = rl[0].replace(' ', ' ')
         want = float(lab.split()[0].replace(',', '.')) * (1000 if 'km' in lab else 1)
         check(abs(ok - want) / want < 0.03, f'{name}: första ringen är {lab} (uppmätt {ok:.0f} m)')
-        lbl = pg.inner_text('.pc-label'); dist = pg.evaluate('__fk.distM({lat:58.72, lng:14.60}, __fk.crossLatLng())')
+        lbl = pg.inner_text('.pc-label'); dist = pg.evaluate('__fk.distM({lat:58.72, lng:14.60}, __fk.map.getCenter())')
+        check(lbl.startswith(pg.evaluate("m => (m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toLocaleString('sv-SE', {maximumFractionDigits: m < 10000 ? 1 : 0})} km`).replace(/\u00a0/g, ' ')", dist)), f'{name}: avståndet från dig gäller punkten i mitten')
         check('från dig' in lbl, f'{name}: avståndet från din position visas: {lbl} (exakt {dist:.0f} m)')
         pg.wait_for_timeout(3000)
         check(not pg.is_visible('.pancross .pc-x'), f'{name}: krysset försvinner en stund efter att kartan stannat')
@@ -84,6 +90,8 @@ with sync_playwright() as p:
         # ---- Mäta ----
         pg.click('#btnMeasure'); pg.wait_for_timeout(500)
         check(pg.is_visible('#measurebar') and pg.is_visible('.pancross .pc-x') and pg.get_attribute('#btnMeasure', 'aria-pressed') == 'true' and pg.is_disabled('#mUndo'), f'{name}: mätläget öppnas med kryss')
+        cp = pg.evaluate('__fk.crossPoint()'); mb = pg.locator('#map').bounding_box(); xb = pg.locator('.pc-x').bounding_box(); bb = pg.locator('#measurebar').bounding_box()
+        check(abs(xb['y'] + xb['height'] / 2 - (mb['y'] + cp['y'])) < 2 and xb['y'] + xb['height'] < bb['y'], f'{name}: i mätläget ligger krysset ovanför mätfältet')
         a = pg.evaluate('__fk.crossLatLng()'); pg.click('#mAdd'); pg.wait_for_timeout(150)
         pg.evaluate('__fk.map.panBy([120, -80], {animate:false})'); pg.wait_for_timeout(200)
         c = pg.evaluate('__fk.crossLatLng()'); d1 = pg.evaluate('([a, b]) => __fk.distM(a, b)', [a, c])
