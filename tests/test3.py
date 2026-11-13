@@ -47,6 +47,22 @@ with sync_playwright() as p:
         n=pg.evaluate('(() => { let n=0; __fk.map.eachLayer(l => { if(l instanceof L.Polygon && l.options.className !== "wind-sector") n++; }); return n; })()')
         check(n==2, f'{name}: gränsen ritas på kartan ({n} lager)')
         aid=a[0]['id']
+        # tryck i området: ruta med Zooma till området
+        pg.evaluate('__fk.map.setView([62, 15], 6, {animate:false})'); pg.wait_for_timeout(300)
+        pg.evaluate(f'__fk.zoomToArea("{aid}")'); pg.wait_for_timeout(900)
+        inb=pg.evaluate(f'(() => {{ const b=__fk.map.getBounds(), a=__fk.state().areas.find(x => x.id==="{aid}"); return a.border.split(";").every(p => b.contains(p.split(",").map(Number))); }})()')
+        check(inb and pg.evaluate('__fk.map.getZoom()') >= 12, f'{name}: Zooma till området visar hela gränsen')
+        c=pg.evaluate(f'(() => {{ const a=__fk.state().areas.find(x => x.id==="{aid}"), p=a.border.split(";").map(q => q.split(",").map(Number)); const lat=p.reduce((s,q)=>s+q[0],0)/p.length, lng=p.reduce((s,q)=>s+q[1],0)/p.length; const r=__fk.map.getContainer().getBoundingClientRect(), pt=__fk.map.latLngToContainerPoint([lat,lng]); return [r.left+pt.x, r.top+pt.y]; }})()')
+        tap(c[0], c[1]); pg.wait_for_timeout(400)
+        check(pg.is_visible('.leaflet-popup') and 'Zooma till området' in pg.inner_text('.leaflet-popup') and ' ha' in pg.inner_text('.leaflet-popup') and 'Ändra' in pg.inner_text('.leaflet-popup'), f'{name}: tryck i området visar namn, storlek och Zooma till området')
+        pg.evaluate('__fk.map.setZoom(__fk.map.getZoom() - 3, {animate:false})'); pg.wait_for_timeout(300)
+        pg.click('.leaflet-popup [data-a="zoom"]'); pg.wait_for_timeout(900)
+        inb=pg.evaluate(f'(() => {{ const b=__fk.map.getBounds(), a=__fk.state().areas.find(x => x.id==="{aid}"); return a.border.split(";").every(p => b.contains(p.split(",").map(Number))); }})()')
+        check(inb and not pg.is_visible('.leaflet-popup'), f'{name}: knappen i rutan zoomar till området')
+        pg.evaluate('__fk.map.setView([62, 15], 6, {animate:false})'); pg.wait_for_timeout(300)
+        pg.click('#tab-filter'); pg.wait_for_timeout(400); pg.click(f'[data-act="area-zoom"][data-id="{aid}"]'); pg.wait_for_timeout(1000)
+        inb=pg.evaluate(f'(() => {{ const b=__fk.map.getBounds(), a=__fk.state().areas.find(x => x.id==="{aid}"); return a.border.split(";").every(p => b.contains(p.split(",").map(Number))); }})()')
+        check(inb, f'{name}: zoomknappen under Filter zoomar till området')
         # dölj området -> gränsen försvinner
         pg.click('#tab-filter'); pg.wait_for_timeout(500); pg.evaluate(f'document.getElementById("ar-{aid}").click()'); pg.wait_for_timeout(200)
         n=pg.evaluate('(() => { let n=0; __fk.map.eachLayer(l => { if(l instanceof L.Polygon && l.options.className !== "wind-sector") n++; }); return n; })()')
