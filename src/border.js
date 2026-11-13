@@ -146,7 +146,7 @@ function drawPush(){ drawing.hist.push(drawing.pts.map(p => p.slice())); if(draw
    Mellan två punkter finns ett +: tryck för att lägga in en punkt där, eller dra det dit punkten ska. */
 function drawHandlesRender(){
   drawHandles.clearLayers(); if(!drawing) return;
-  const P = drawing.pts, cls = drawing.mode === 'line' ? (drawing.kind === 'path' ? 'path' : 'road') : 'border';
+  const P = drawing.pts, cls = drawing.custom ? drawing.custom.cls : drawing.mode === 'line' ? (drawing.kind === 'path' ? 'path' : 'road') : 'border';
   P.forEach((pt, i) => {
     const m = dragHandle(pt, cls + (i === P.length - 1 ? ' last' : '') + (drawing.sel === i ? ' sel' : ''));
     m.on('dragstart', () => { drawPush(); drawing.sel = i; });
@@ -169,6 +169,7 @@ function drawHandlesRender(){
 }
 function drawShape(){
   drawLayer.clearLayers(); const p = drawing.pts;
+  if(drawing.custom){ drawing.custom.style(p).forEach(l => l.addTo(drawLayer)); return; }
   if(drawing.mode === 'line'){ if(p.length >= 2) lineStyle(drawing.kind, p, false).forEach(pl => pl.addTo(drawLayer)); return; }
   if(p.length >= 3) L.polygon(p, {color:'#d9520e', weight:3, fillColor:'#d9520e', fillOpacity:.14, interactive:false}).addTo(drawLayer);
   else if(p.length === 2) L.polyline(p, {color:'#d9520e', weight:3, interactive:false}).addTo(drawLayer);
@@ -179,6 +180,12 @@ function drawDraft(){
   $('#drawUndo').disabled = !drawing.hist.length;
   $('#drawDel').hidden = drawing.sel == null;
   $('#drawDel').disabled = drawing.sel == null || p.length <= (drawing.mode === 'line' ? 2 : 3);
+  if(drawing.custom){
+    const c = drawing.custom, need = c.poly ? 3 : 2;
+    $('#drawText').textContent = p.length < need ? `${c.hint} ${p.length} av minst ${need} punkter.` : `${p.length} punkter · ${c.poly ? fmtHa(areaHa(p)) : fmtDist(lineLen(p))}. ${drawing.sel != null ? 'Punkten är markerad.' : 'Dra en punkt för att flytta den, tryck på den för att ta bort den, eller dra ett + för att lägga till en.'}`;
+    $('#drawOk').disabled = p.length < need;
+    return;
+  }
   if(drawing.mode === 'line'){
     const what = LINE_KIND[drawing.kind].toLowerCase();
     $('#drawText').textContent = p.length < 2 ? `Tryck på kartan längs ${what}en, eller gå den och tryck på positionsknappen. ${p.length} av minst 2 punkter.` : `${p.length} punkter · ${fmtDist(lineLen(p))}. ${drawing.sel != null ? 'Punkten är markerad.' : `Fortsätt längs ${what}en. Dra en punkt för att flytta den, tryck på den för att ta bort den, eller dra ett + för att lägga till en punkt.`}`;
@@ -187,6 +194,16 @@ function drawDraft(){
   }
   $('#drawText').textContent = p.length < 3 ? `Tryck på kartan i varje hörn av marken. ${p.length} av minst 3 punkter.` : `${p.length} punkter · ${fmtHa(areaHa(p))}. ${drawing.sel != null ? 'Punkten är markerad.' : 'Dra en punkt för att flytta den, tryck på den för att ta bort den, eller dra ett + för att lägga till en punkt mellan två andra.'}`;
   $('#drawOk').disabled = p.length < 3;
+}
+/* Ritar en yta eller linje som inte hör till ett område, t.ex. en såt eller en väg i jaktplanen.
+   c = {poly, cls, pts, hint, style(pts) => [lager], done(pts), cancel()}. */
+function startCustomDrawing(c){
+  closeModal(); map.closePopup(); if(placing) endPlacing();
+  drawing = {mode:c.poly ? 'border' : 'line', id:null, kind:c.poly ? null : 'path', custom:c, pts:(c.pts || []).map(p => p.slice()), hist:[], sel:null};
+  $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
+  const fit = drawing.pts.length >= 2 ? drawing.pts : (c.fit || []);
+  if(fit.length >= 2) map.fitBounds(L.latLngBounds(fit), {paddingTopLeft:[40,70], paddingBottomRight:[40, bottomPad() + 190], maxZoom:17});
+  drawDraft();
 }
 /* Ritar en gränsdel. ring = index för en befintlig del som ska ändras, eller utelämnas för en ny del. */
 function startDrawing(id, ring){
@@ -207,7 +224,7 @@ map.on('click', e => {
 });
 $('#drawUndo').addEventListener('click', () => { if(!drawing.hist.length) return; drawing.pts = drawing.hist.pop(); drawing.sel = null; drawDraft(); });
 $('#drawDel').addEventListener('click', () => { const i = drawing.sel; if(i == null) return; drawPush(); drawing.pts.splice(i, 1); drawing.sel = null; drawDraft(); });
-$('#drawCancel').addEventListener('click', endDrawing);
+$('#drawCancel').addEventListener('click', () => { const c = drawing && drawing.custom; endDrawing(); if(c && c.cancel) c.cancel(); });
 $('#drawGps').addEventListener('click', () => {
   if(!('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); return; }
   navigator.geolocation.getCurrentPosition(pos => { if(!drawing) return; showMe(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0); drawPush(); drawing.pts.push([pos.coords.latitude, pos.coords.longitude]); map.panTo([pos.coords.latitude, pos.coords.longitude]); drawDraft(); },
@@ -215,6 +232,7 @@ $('#drawGps').addEventListener('click', () => {
 });
 $('#drawOk').addEventListener('click', () => {
   const d = drawing, a = areaById(d.id), pts = d.pts; endDrawing();
+  if(d.custom){ d.custom.done(pts); return; }
   if(!a){ toast('Området finns inte längre.'); return; }
   if(d.mode === 'line'){
     if(!a.lines || typeof a.lines !== 'object') a.lines = {};

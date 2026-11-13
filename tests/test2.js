@@ -181,6 +181,70 @@ const gids = () => Object.keys(data.groups || {});
   check(g1.every(x => x === 'denied'), 'gästen nekas läsa medlemmar, alla jakter, andra gäster och övriga områden');
   const g2 = await C.evaluate(([g, a]) => firebase.database().ref('groups/' + g + '/pins/' + a + '/zz').set({lat:1, lng:1, typeId:'t'}).then(() => 'ok', () => 'denied'), [gid, aid]);
   check(g2 === 'denied', 'gästen kan inte skriva nålar');
+  // ---- Jaktplan ----
+  await B.evaluate(([g, a]) => firebase.database().ref('groups/' + g + '/pins/' + a + '/pass1').set({name:'Pass 1 – bäcken', note:'', typeId:'t-pass', lat:58.7228, lng:14.6045, created:1, updated:1, by:'bob'}), [gid, aid]); await W(B, 500);
+  const passIds = Object.entries(data.groups[gid].pins[aid]).filter(([, p]) => p.typeId === 't-pass').map(([k]) => k);
+  await B.click('#tab-jakt'); await W(B, 200); await C.click('#tab-jakt'); await W(C, 200);
+  check(await B.locator('[data-j="plan"]').count() === 1 && await A.locator('[data-j="plan"]').count() === 1 && await C.locator('[data-j="plan"]').count() === 0, 'jaktledare och admin kan planera jakten, gästen kan inte');
+  await B.click('[data-j="plan"]'); await W(B, 300);
+  check(await B.locator('#planBody select[data-pl="who"]').count() === passIds.length && passIds.length === 2, `planen listar jaktens ${passIds.length} pass`);
+  const pA = passIds.find(k => k === 'pass1'), pB = passIds.find(k => k !== 'pass1');
+  const opts = await B.locator(`select[data-pl="who"][data-p="${pA}"] option`).allInnerTexts();
+  check(opts.some(o => o.includes('Carl Gäst (gäst)')) && opts.some(o => o.includes('Alice')) && opts.includes('Annat namn …'), `man kan välja medlemmar, jaktens gäster eller skriva ett namn: ${opts.join(' | ')}`);
+  await B.selectOption(`select[data-pl="who"][data-p="${pA}"]`, 'u:anon-carl'); await W(B, 400);
+  const plan = () => ((data.groups[gid].huntPlan || {})[hid] || {});
+  check((plan().stands || {})[pA] && plan().stands[pA].who === 'Carl Gäst' && plan().stands[pA].uid === 'anon-carl', 'Carl tilldelas Pass 1');
+  await B.selectOption(`select[data-pl="who"][data-p="${pB}"]`, '__name'); await W(B, 100);
+  await B.fill('#planBody input[data-pl="who-name"]', 'Kalle utan app'); await B.press('#planBody input[data-pl="who-name"]', 'Tab'); await W(B, 400);
+  check(plan().stands[pB] && plan().stands[pB].who === 'Kalle utan app' && !plan().stands[pB].uid, 'ett pass kan få ett eget namn för någon utan appen');
+  await B.click(`[data-pl="dirs"][data-p="${pA}"]`); await W(B, 200);
+  check(await B.locator('.rose .rose-w').count() === 16, 'kompassrosen har 16 riktningar');
+  for(const i of [15, 0, 1]) await B.click(`.rose-w[data-i="${i}"]`);
+  check((await B.innerText('#roseTxt')).includes('NNV, N, NNO'), `valda riktningar visas: ${await B.innerText('#roseTxt')}`);
+  await B.screenshot({path:shot('b_rose.png')});
+  await B.click('#roseOk'); await W(B, 400);
+  check(plan().stands[pA].no === (1 | 2 | 32768) && await B.isVisible('#planBody'), `förbjudna riktningar sparas (${plan().stands[pA].no}) och planen öppnas igen`);
+  check(JSON.stringify(await B.evaluate(n => __fk.maskRuns(n), plan().stands[pA].no)) === '[[15,3]]', 'riktningarna över norr ritas som en sammanhängande sektor');
+  // såt
+  await B.click('[data-pl="drive-draw"]'); await W(B, 300);
+  check(await B.isVisible('#drawbar') && !(await B.isVisible('#planBody')), 'Rita såt: ritläget öppnas');
+  await B.evaluate(() => [[58.7240, 14.6000], [58.7245, 14.6150], [58.7200, 14.6150], [58.7195, 14.6010]].forEach(p => __fk.map.fire('click', {latlng:L.latLng(p[0], p[1])}))); await W(B, 200);
+  await B.click('#drawOk'); await W(B, 500);
+  const drives = () => Object.values(plan().drives || {});
+  check(drives().length === 1 && drives()[0].name === 'Såt 1' && drives()[0].ring.split(';').length === 4 && await B.isVisible('#planBody'), 'såten sparas med namn och fyra hörn, och planen öppnas igen');
+  await B.fill('#planBody input[data-pl="dname"]', 'Mossen'); await B.press('#planBody input[data-pl="dname"]', 'Tab'); await W(B, 400);
+  check(drives()[0].name === 'Mossen', 'såten kan byta namn');
+  // väg för hundförare
+  await B.click('[data-pl="route-draw"][data-k="hund"]'); await W(B, 300);
+  await B.evaluate(() => [[58.7238, 14.6020], [58.7215, 14.6080], [58.7205, 14.6140]].forEach(p => __fk.map.fire('click', {latlng:L.latLng(p[0], p[1])}))); await W(B, 200);
+  await B.click('#drawOk'); await W(B, 500);
+  const rid = Object.keys(plan().routes || {})[0];
+  check(rid && plan().routes[rid].kind === 'hund' && plan().routes[rid].pts.split(';').length === 3, 'hundförarens väg sparas');
+  await B.selectOption(`select[data-pl="rwho"][data-r="${rid}"]`, 'u:alice'); await W(B, 400);
+  check(plan().routes[rid].uid === 'alice' && plan().routes[rid].pts.split(';').length === 3, 'Alice blir hundförare, vägen ligger kvar');
+  await B.click('[data-pl="route-draw"][data-k="drev"]'); await W(B, 300);
+  await B.evaluate(() => [[58.7242, 14.6140], [58.7198, 14.6145]].forEach(p => __fk.map.fire('click', {latlng:L.latLng(p[0], p[1])}))); await W(B, 200);
+  await B.click('#drawCancel'); await W(B, 300);
+  check(Object.keys(plan().routes).length === 1 && await B.isVisible('#planBody'), 'Avbryt sparar ingen väg och går tillbaka till planen');
+  await B.screenshot({path:shot('b_plan.png')});
+  await B.click('#plClose'); await W(B, 300);
+  // det deltagarna ser
+  const cnt = (P, cls) => P.evaluate(c => document.querySelectorAll('path.' + c).length, cls);
+  await W(C, 300);
+  check(await cnt(C, 'plan-nofire') === 1 && await cnt(C, 'plan-drive') === 1 && await cnt(C, 'plan-route') === 1, 'gästen ser den förbjudna sektorn, såten och vägen på kartan');
+  const ctxt = await C.innerText('#paneJakt');
+  check(ctxt.includes('Ditt pass: Pass 1 – bäcken') && ctxt.includes('Skjut inte mot NNV, N, NNO') && ctxt.includes('Kalle utan app'), 'gästen ser sitt pass, förbjudna riktningar och vem som står var');
+  check(await C.locator('.plan-lbl.who.me').count() === 1 && await C.locator('.plan-lbl.who').count() === 2, 'gästens namn är markerat vid hans pass på kartan');
+  check((await A.innerText('#paneJakt')).includes('Du går som hundförare'), 'Alice ser att hon går som hundförare');
+  const sec = await C.evaluate(() => { let r = null; __fk.map.eachLayer(l => { if(l instanceof L.Polygon && l.options.className === 'plan-nofire') r = l.getLatLngs()[0].map(p => [p.lat, p.lng]); }); return r; });
+  const pp = data.groups[gid].pins[aid][pA], north = sec && sec.reduce((m, p) => Math.max(m, p[0]), -90);
+  check(sec && Math.abs(sec[0][0] - pp.lat) < 1e-9 && Math.abs(north - pp.lat - 150 / 111320) < 2e-6, 'sektorn utgår från passet och pekar mot norr, 150 m lång');
+  await C.evaluate(() => __fk.map.setView([58.7225, 14.607], 16, {animate:false})); await W(C, 400); await C.screenshot({path:shot('c_plan.png')});
+  const cw2 = await C.evaluate(([g, h]) => Promise.all([
+    firebase.database().ref('groups/' + g + '/huntPlan/' + h + '/stands/x').set({who:'Carl'}).then(() => 'ok', () => 'denied'),
+    firebase.database().ref('groups/' + g + '/huntPlan/' + h).get().then(() => 'ok', () => 'denied'),
+    firebase.database().ref('groups/' + g + '/huntPlan').get().then(() => 'ok', () => 'denied')]), [gid, hid]);
+  check(cw2.join() === 'denied,ok,denied', `gästen kan läsa sin jakts plan men inte ändra den eller läsa andra jakters (${cw2})`);
   // ---- Positioner ----
   await A.click('#tab-jakt'); await A.locator('#shareToggle').check({force:true}); await W(A, 900);
   const hp = () => ((data.groups[gid].huntPos || {})[hid] || {});
@@ -230,7 +294,7 @@ const gids = () => Object.keys(data.groups || {});
   // ---- Avsluta jakten ----
   await B.click('[data-j="hunt-end"]'); await B.click('[data-j="hunt-end"]'); await W(B, 900);
   check(!data.groups[gid].hunts && !data.huntCodes && !(data.groups[gid].guests || {})['anon-carl'], 'jakten, koden och gästposten är borta');
-  check(!data.groups[gid].huntPos && !data.groups[gid].huntTrail && !data.groups[gid].huntObs, 'jaktens positioner, spår och observationer raderades när jakten avslutades');
+  check(!data.groups[gid].huntPos && !data.groups[gid].huntTrail && !data.groups[gid].huntObs && !data.groups[gid].huntPlan, 'jaktens positioner, spår, observationer och plan raderades när jakten avslutades');
   const arch = Object.values(data.groups[gid].obsArchive || {});
   check(arch.length === 2 && arch.every(o => !o.by && !o.name && !o.note && o.hid === hid) && arch.map(o => o.sp + o.n).sort().join() === 'Rådjur2,Vildsvin1', 'observationerna arkiverades utan namn när jakten avslutades');
   // ---- Värmekarta ----
@@ -317,6 +381,13 @@ const gids = () => Object.keys(data.groups || {});
   check(!D('a2').write('/groups/g/obsArchive/a2x', Object.assign({by:'e'}, AR)).allowed && !D('a2').write('/groups/g/obsArchive/a2x', Object.assign({name:'Eva'}, AR)).allowed && !D('a2').write('/groups/g/obsArchive/a2x', Object.assign({note:'x'}, AR)).allowed, 'regel: arkivet tar inte emot namn eller andra uppgifter om personen');
   check(D('a2', t0 + 2000).read('/groups/g/huntObs/h').allowed && !D('e', t0 + 2000).read('/groups/g/huntObs/h').allowed, 'regel: jaktledare och admin kan läsa en avslutad jakts observationer för att arkivera dem');
   check(!D('e').write('/groups/g/huntTrail/h/e/k3', {lat:1, lng:1, t:t0 + 3600000}).allowed && D('a2').write('/groups/g/huntTrail/h', null).allowed && !D('e').write('/groups/g/huntTrail/h', null).allowed, 'regel: spårpunkter kan inte framtidsdateras, bara jaktledare raderar jaktens spår');
+  const PL = {stands:{p:{who:'O', uid:'o', no:3}}, drives:{d1:{name:'Såt 1', ring:'1,1;1,2;2,2'}}, routes:{r1:{kind:'hund', who:'E', pts:'1,1;1,2'}}};
+  check(D('a2').write('/groups/g/huntPlan/h2', PL).allowed && D('a2').write('/groups/g/huntPlan/h/stands/p/no', 5).allowed, 'regel: jaktledare och admin planerar, även innan jakten startat');
+  check(!D('e').write('/groups/g/huntPlan/h2', PL).allowed && !D('v').write('/groups/g/huntPlan/h/stands/p', {who:'V'}).allowed && !D('gu').write('/groups/g/huntPlan/h/stands/p', {who:'G'}).allowed && !D('x').write('/groups/g/huntPlan/h2', PL).allowed, 'regel: medlemmar, gäster och utomstående kan inte ändra planen');
+  check(D('v').read('/groups/g/huntPlan').allowed && D('gu').read('/groups/g/huntPlan/h').allowed && !D('gu').read('/groups/g/huntPlan/h2').allowed && !D('gu').read('/groups/g/huntPlan').allowed && !D('x').read('/groups/g/huntPlan/h').allowed && !D('gu', t0 + 2000).read('/groups/g/huntPlan/h').allowed, 'regel: lagets medlemmar och jaktens gäster läser planen, ingen annan');
+  check(!D('a2').write('/groups/g/huntPlan/nojakt', PL).allowed && D('a2').write('/groups/g/huntPlan/nojakt', null).allowed, 'regel: plan kan bara finnas för en jakt som finns');
+  const bad = [{stands:{p:{who:'O', note:'x'}}}, {stands:{p:{no:70000}}}, {stands:{p:{no:1.5}}}, {stands:{p:{who:'x'.repeat(61)}}}, {routes:{r:{kind:'bil', pts:'1,1;1,2'}}}, {routes:{r:{kind:'hund'}}}, {drives:{d:{ring:'1,1;1,2;2,2'}}}, {drives:{d:{name:'S', ring:'1,1;1,2;2,2', by:'x'}}}, {foo:1}];
+  check(bad.every(b => !D('a2').write('/groups/g/huntPlan/h2', b).allowed), 'regel: planen tar bara emot kända fält med rätt typ');
   check(!D('x').write('/groups/n2/meta', {name:'N', owner:'x'}).allowed && !D('e').write('/groups/n2/meta', {name:'N', owner:'e'}).allowed && D('o').write('/groups/n2/meta', {name:'N', owner:'o'}).allowed && D('c1').write('/groups/n2/meta', {name:'N', owner:'c1'}).allowed, 'regel: bara ägaren och godkända kan skapa jaktlag');
   check(!D('x').write('/owner', 'x').allowed && !D('o').write('/owner', 'x').allowed && !D('x').write('/creators/x', true).allowed && D('o').write('/creators/x', true).allowed, 'regel: ägarskapet kan inte tas över, bara ägaren godkänner fler');
   { const e0 = targaryen.database(rules, {}, t0); check(e0.as(tok('first')).write('/owner', 'first', undefined, t0).allowed && !e0.as(tok('anon-z')).write('/owner', 'anon-z', undefined, t0).allowed && !e0.as(tok('first')).write('/owner', 'other', undefined, t0).allowed, 'regel: första Google-inloggade blir ägare, inte en gäst och inte åt någon annan'); }
