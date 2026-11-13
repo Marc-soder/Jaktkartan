@@ -273,6 +273,34 @@ with sync_playwright() as p:
     pg.click('#pfDel'); check(pg.is_visible('#pinForm'), 'första klick på Ta bort raderar inte')
     pg.click('#pfDel'); pg.wait_for_timeout(200)
     check(not any(x['id'] == pid for x in pg.evaluate('__fk.state().pins')), 'andra klick raderar nålen')
+    # Numrera om passen från söder till norr (påhittade platser i Tiveden)
+    rest = pg.evaluate("['Pass 3 – kalhygget','Pass 12','3. Bäcken','Pass vid ån','Granpasset','pass nr 4: Myren',''].map(__fk.passRest)")
+    check(rest == ['kalhygget', '', 'Bäcken', 'vid ån', 'Granpasset', 'Myren', ''], f'beskrivningen efter passnumret tas fram {rest}')
+    pg.evaluate("""(() => { const s = __fk.state(), now = Date.now();
+      s.areas.push({id:'a-rn', name:'Testmarken', visible:true}, {id:'a-rn2', name:'Andra marken', visible:true});
+      const P = (id, name, area, lat, lng, typeId) => s.pins.push({id, name, typeId:typeId || 't-pass', areaId:area, lat, lng, note:'', created:now, updated:now});
+      P('rn1', 'Granpasset', 'a-rn', 58.73, 14.60); P('rn2', 'Pass 2', 'a-rn', 58.69, 14.61); P('rn3', 'Pass 7 – stora stenen', 'a-rn', 58.70, 14.62);
+      P('rn4', '3. Bäcken', 'a-rn', 58.71, 14.58); P('rn5', 'Tornet', 'a-rn', 58.68, 14.60, 't-torn');
+      P('rn6', 'Pass 1', 'a-rn2', 58.75, 14.60); P('rn7', 'Pass 2', 'a-rn2', 58.74, 14.60);
+      s.settings.svampMode = false; __fk.renderAll(); })()""")
+    pg.click('#tab-list'); pg.wait_for_timeout(200)
+    check(pg.is_visible('#btnRenumber'), 'knappen Numrera om passen finns under Nålar')
+    pg.click('#btnRenumber'); pg.wait_for_timeout(200)
+    pg.select_option('#rnArea', 'a-rn'); pg.select_option('#rnDir', 'sn'); pg.wait_for_timeout(100)
+    prev = pg.locator('#rnPreview .rn-new').all_inner_texts()
+    check(prev == ['Pass 1', 'Pass 2 – stora stenen', 'Pass 3 – Bäcken', 'Pass 4 – Granpasset'], f'förhandsvisning söder till norr, tornet ingår inte {prev}')
+    pg.screenshot(path=f'{SHOTS}/renumber.png')
+    pg.click('#rnOk'); pg.wait_for_timeout(300)
+    names = pg.evaluate("Object.fromEntries(__fk.state().pins.filter(p => p.id.startsWith('rn')).map(p => [p.id, p.name]))")
+    check(names == {'rn1': 'Pass 4 – Granpasset', 'rn2': 'Pass 1', 'rn3': 'Pass 2 – stora stenen', 'rn4': 'Pass 3 – Bäcken', 'rn5': 'Tornet', 'rn6': 'Pass 1', 'rn7': 'Pass 2'},
+          f'passen numrerade söder till norr, andra marken och tornet orörda {names}')
+    pg.click('#btnRenumberUndo'); pg.wait_for_timeout(300)
+    names = pg.evaluate("Object.fromEntries(__fk.state().pins.filter(p => p.id.startsWith('rn')).map(p => [p.id, p.name]))")
+    check(names['rn1'] == 'Granpasset' and names['rn3'] == 'Pass 7 – stora stenen' and not pg.is_visible('#btnRenumberUndo'), f'numreringen kan ångras {names}')
+    plan = pg.evaluate("__fk.renumberPlan('*', 'ns').filter(x => x.pin.id.startsWith('rn')).map(x => x.pin.id + '=' + x.name).sort()")
+    check(plan == ['rn1=Pass 1 – Granpasset', 'rn2=Pass 4', 'rn3=Pass 3 – stora stenen', 'rn4=Pass 2 – Bäcken', 'rn6=Pass 1', 'rn7=Pass 2'], f'alla marker var för sig, norr till söder {plan}')
+    plan = pg.evaluate("__fk.renumberPlan('a-rn', 'wo').map(x => x.pin.id)")
+    check(plan == ['rn4', 'rn1', 'rn2', 'rn3'], f'väster till öster {plan}')
     check(not errors, f'inga JS-fel på dator: {errors[:3]}')
     ctx.close()
 
@@ -313,6 +341,20 @@ with sync_playwright() as p:
             check(pg.evaluate('__fk.sheet()') == 'min' and pg.is_visible('.loupe'), 'vid placering går lådan ned till handtaget och förstoringsglaset visas')
             pg.click('#placeCancel'); pg.wait_for_timeout(400)
             check(pg.evaluate('__fk.sheet()') == 'peek' and not pg.is_visible('.loupe'), 'efter placering kommer flikarna tillbaka')
+            # sidan ska aldrig gå att scrolla på telefon, i något lådläge
+            for st in ('min', 'peek', 'half', 'full'):
+                pg.evaluate(f"__fk.setSheet('{st}', true)"); pg.wait_for_timeout(350)
+                dims = pg.evaluate('[document.documentElement.scrollHeight, document.documentElement.scrollWidth, innerHeight, innerWidth]')
+                check(dims[0] <= dims[2] and dims[1] <= dims[3], f'mobil, låda {st}: sidan ryms på skärmen {dims}')
+            pg.evaluate("__fk.setSheet('peek', true)"); pg.wait_for_timeout(350)
+            pg.evaluate('window.scrollTo(0, 400); document.body.scrollTop = 400; document.documentElement.scrollTop = 400')
+            pg.wait_for_timeout(100)
+            sc = pg.evaluate('[scrollX, scrollY, document.body.scrollTop, document.documentElement.scrollTop]')
+            check(sc == [0, 0, 0, 0], f'mobil: sidan går inte att scrolla {sc}')
+            css = pg.evaluate("(() => { const h = getComputedStyle(document.documentElement), b = getComputedStyle(document.body); return [h.overflowY, b.position, b.touchAction, h.overscrollBehaviorY]; })()")
+            check(css == ['hidden', 'fixed', 'manipulation', 'none'], f'mobil: html/body är låsta mot scroll och dubbeltryckszoom {css}')
+            small = pg.evaluate("""[...document.querySelectorAll('input,select,textarea')].filter(e => !['checkbox','radio','range','file','color','hidden'].includes(e.type) && parseFloat(getComputedStyle(e).fontSize) < 16).map(e => e.id || e.className)""")
+            check(not small, f'mobil: inga fält under 16 px som får iPhone att zooma in {small}')
         check(not errs, f'mobil {scheme}: inga JS-fel {errs[:2]}')
         ctx.close()
     br.close()

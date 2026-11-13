@@ -601,9 +601,16 @@ $('#paneJakt').addEventListener('click', e => {
   else if(act === 'obs-go'){ const o = ((g.huntObs || {})[hid] || {})[b.dataset.o]; if(o){ map.setView([o.lat, o.lng], Math.max(map.getZoom(), 16)); if(!isDesktop()) setSheet('peek'); } }
   else if(act === 'hunt-new') openHuntForm(g);
   else if(act === 'hunt-link'){ const hunt = g.hunts[hid]; copyText(`${hunt.name}: gå med i jakten med kod ${hunt.code}\n${shareLink('j', hunt.code)}`, 'Länken är kopierad'); }
-  else if(act === 'hunt-end') confirmClick(b, 'Bekräfta', () => { const hunt = g.hunts[hid], up = {}; up[`groups/${g.id}/hunts/${hid}`] = null; up[`groups/${g.id}/huntPos/${hid}`] = null; up[`groups/${g.id}/huntTrail/${hid}`] = null; up[`groups/${g.id}/huntObs/${hid}`] = null; if(hunt && hunt.code) up[`huntCodes/${hunt.code}`] = null;
+  else if(act === 'hunt-end') confirmClick(b, 'Bekräfta', async () => { const hunt = g.hunts[hid], up = {};
+    // Viltobservationerna sparas utan namn i lagets arkiv, för värmekartan. Bara jaktledare och admin kan läsa arkivet.
+    let obs = {}; try { obs = (await fb.db.ref(`groups/${g.id}/huntObs/${hid}`).get()).val() || {}; } catch(e){}
+    let na = 0;
+    for(const [oid, o] of Object.entries(obs)) if(o && typeof o.lat === 'number' && typeof o.lng === 'number' && typeof o.sp === 'string' && o.n >= 1){
+      up[`groups/${g.id}/obsArchive/${oid}`] = {sp:o.sp.slice(0, 40), n:Math.min(999, Math.round(o.n)), lat:o.lat, lng:o.lng, t:Math.min(o.t || Date.now(), Date.now()), hid:String(hid).slice(0, 40)}; na++;
+    }
+    up[`groups/${g.id}/hunts/${hid}`] = null; up[`groups/${g.id}/huntPos/${hid}`] = null; up[`groups/${g.id}/huntTrail/${hid}`] = null; up[`groups/${g.id}/huntObs/${hid}`] = null; if(hunt && hunt.code) up[`huntCodes/${hunt.code}`] = null;
     for(const [gu, v] of Object.entries(g.guests || {})) if(v && v.hid === hid) up[`groups/${g.id}/guests/${gu}`] = null;
-    fb.db.ref().update(up).then(() => toast('Jakten är avslutad. Gästernas åtkomst är borttagen.')).catch(fail()); });
+    fb.db.ref().update(up).then(() => toast('Jakten är avslutad. Gästernas åtkomst är borttagen.' + (na ? ` ${na === 1 ? 'En observation' : na + ' observationer'} sparades till värmekartan.` : ''), 5000)).catch(fail()); });
   else if(act === 'guest-del') fb.db.ref(`groups/${g.id}/guests/${u}`).remove().catch(fail());
   else if(act === 'member-del') confirmClick(b, 'Bekräfta', () => fb.db.ref(`groups/${g.id}/members/${u}`).remove().then(() => toast('Medlemmen är borttagen')).catch(fail()));
   else if(act === 'invite') openInvite(g);

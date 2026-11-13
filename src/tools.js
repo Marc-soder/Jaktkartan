@@ -238,3 +238,157 @@ $('#btnLocate').addEventListener('click', startCompass);
 $('#popTrailRec').addEventListener('change', startCompass);
 $('#paneJakt').addEventListener('change', e => { if(e.target.id === 'shareToggle') startCompass(); });
 $('#btnObs').addEventListener('click', () => { if(!blocked() && !measure) startPlacing({mode:'obs'}); });
+
+/* ---------- Värmekarta över tidigare viltobservationer ----------
+   Observationerna arkiveras utan namn när en jakt avslutas (groups/<lag>/obsArchive). Bara jaktledare och admin
+   kan läsa arkivet, så värmekartan visas bara för dem. Den kan filtreras på art, jaktår och område. */
+map.createPane('heat'); map.getPane('heat').style.zIndex = 380; map.getPane('heat').style.pointerEvents = 'none';
+const heat = {refs:{}, data:{}, canvas:null, count:0};
+const heatGroups = () => Object.values(cloud.groups).filter(g => g.kind === 'member' && g.meta && canLeadGroup(g));
+const heatOn = () => !!state.settings.heat;
+const heatFilter = () => Object.assign({sp:'', period:'season', area:''}, state.settings.heatFilter || {});
+/* Jaktåret börjar 1 juli. */
+function seasonStart(offset){ const d = new Date(), y = d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1; return new Date(y - (offset || 0), 6, 1).getTime(); }
+function heatRange(p){
+  if(p === 'season') return [seasonStart(0), Infinity];
+  if(p === 'last') return [seasonStart(1), seasonStart(0)];
+  if(p === '365') return [Date.now() - 365 * 86400000, Infinity];
+  return [0, Infinity];
+}
+function inRing(pt, ring){
+  let inside = false;
+  for(let i = 0, j = ring.length - 1; i < ring.length; j = i++){
+    const [yi, xi] = ring[i], [yj, xj] = ring[j];
+    if(((yi > pt.lat) !== (yj > pt.lat)) && (pt.lng < (xj - xi) * (pt.lat - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+function heatAll(){ const out = []; for(const [gid, d] of Object.entries(heat.data)) for(const o of Object.values(d || {})) if(o && typeof o.lat === 'number') out.push(Object.assign({gid}, o)); return out; }
+function heatPoints(){
+  const f = heatFilter(), [t0, t1] = heatRange(f.period), area = f.area && areaById(f.area), rings = area ? areaRings(area) : null;
+  return heatAll().filter(o => (!f.sp || o.sp === f.sp) && o.t >= t0 && o.t < t1 && (!rings || rings.some(r => inRing(o, r))));
+}
+function heatSync(){
+  const want = new Set(heatOn() && fb && cloud.user ? heatGroups().map(g => g.id) : []);
+  for(const gid of Object.keys(heat.refs)) if(!want.has(gid)){ heat.refs[gid].off(); delete heat.refs[gid]; delete heat.data[gid]; }
+  for(const gid of want) if(!heat.refs[gid]){
+    const r = fb.db.ref(`groups/${gid}/obsArchive`);
+    r.on('value', s => { if(heat.refs[gid] === r){ heat.data[gid] = s.val() || {}; heatRender(); renderHeatControls(); } }, () => { if(heat.refs[gid] === r){ delete heat.refs[gid]; delete heat.data[gid]; heatRender(); } });
+    heat.refs[gid] = r;
+  }
+  renderHeatControls(); heatRender();
+}
+function renderHeatControls(){
+  const box = $('#heatBox'); if(!box) return;
+  const groups = heatGroups(); box.hidden = !groups.length; if(!groups.length) return;
+  $('#popHeat').checked = heatOn(); $('#heatFilters').hidden = !heatOn();
+  if(!heatOn()){ $('#heatNote').textContent = 'Var vilt har setts på tidigare jakter'; return; }
+  const f = heatFilter(), all = heatAll(), sps = [...new Set(all.map(o => o.sp))].sort((a, b) => a.localeCompare(b, 'sv'));
+  const areas = state.areas.filter(a => a.gid && groups.some(g => g.id === a.gid) && areaRings(a).length);
+  const opt = (v, l, cur) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(l)}</option>`;
+  $('#heatSp').innerHTML = opt('', 'Allt vilt', f.sp) + sps.map(s => opt(s, s, f.sp)).join('');
+  $('#heatPeriod').innerHTML = [['season', 'Det här jaktåret'], ['last', 'Förra jaktåret'], ['365', 'Senaste 12 månaderna'], ['all', 'Alla år']].map(([v, l]) => opt(v, l, f.period)).join('');
+  $('#heatArea').innerHTML = opt('', 'Alla jaktmarker', f.area) + areas.map(a => opt(a.id, a.name, f.area)).join('');
+  const n = heatPoints().reduce((s, o) => s + (o.n || 1), 0);
+  $('#heatNote').textContent = !all.length ? 'Inga observationer i arkivet ännu. De sparas när en jakt avslutas.' : `${n} ${n === 1 ? 'djur' : 'djur'} i ${heatPoints().length} observationer`;
+}
+/* Ritar värmekartan: suddiga fläckar som läggs på varandra, sedan färgade från blått (få) till rött (många). */
+const HEAT_COLORS = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = 1; const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 256, 0);
+  [[0, '#2563eb'], [.35, '#06b6d4'], [.55, '#84cc16'], [.75, '#facc15'], [1, '#dc2626']].forEach(([o, col]) => gr.addColorStop(o, col)); g.fillStyle = gr; g.fillRect(0, 0, 256, 1); return g.getImageData(0, 0, 256, 1).data; })();
+function heatRender(){
+  if(!heat.canvas){ heat.canvas = L.DomUtil.create('canvas', 'heat-canvas leaflet-zoom-hide', map.getPane('heat')); }
+  const cv = heat.canvas, pts = heatOn() ? heatPoints() : [];
+  heat.count = pts.length; cv.hidden = !pts.length; if(!pts.length) return;
+  const size = map.getSize(); cv.width = size.x; cv.height = size.y;
+  L.DomUtil.setPosition(cv, map.containerPointToLayerPoint([0, 0]));
+  const g = cv.getContext('2d'), c = map.getCenter(), r = Math.max(14, Math.min(90, 70 / metersPerPixel(c.lat, map.getZoom())));
+  for(const o of pts){
+    const p = map.latLngToContainerPoint([o.lat, o.lng]);
+    if(p.x < -r || p.y < -r || p.x > size.x + r || p.y > size.y + r) continue;
+    const gr = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+    gr.addColorStop(0, `rgba(0,0,0,${Math.min(.9, .25 + .12 * (o.n || 1))})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(p.x - r, p.y - r, 2 * r, 2 * r);
+  }
+  const img = g.getImageData(0, 0, size.x, size.y), d = img.data;
+  for(let i = 0; i < d.length; i += 4){ const a = d[i + 3]; if(!a) continue; const k = a * 4; d[i] = HEAT_COLORS[k]; d[i + 1] = HEAT_COLORS[k + 1]; d[i + 2] = HEAT_COLORS[k + 2]; d[i + 3] = Math.min(200, 60 + a); }
+  g.putImageData(img, 0, 0);
+}
+map.on('moveend zoomend resize', () => { if(heatOn() && heat.count) heatRender(); });
+$('#popHeat').addEventListener('change', e => { state.settings.heat = e.target.checked; save(); heatSync(); });
+for(const [id, k] of [['#heatSp', 'sp'], ['#heatPeriod', 'period'], ['#heatArea', 'area']])
+  $(id).addEventListener('change', e => { state.settings.heatFilter = Object.assign(heatFilter(), {[k]: e.target.value}); save(); renderHeatControls(); heatRender(); });
+
+/* ---------- Numrera om passen ----------
+   Passen i en jaktmark får nummer i ordning efter läge, t.ex. från söder till norr.
+   En beskrivning efter numret behålls: "Pass 3 – kalhygget" kan bli "Pass 1 – kalhygget". */
+var renumberUndo = null;   /* var: listan kan ritas innan den här filen har körts klart */
+const RENUM_DIRS = {sn:'Söder till norr', ns:'Norr till söder', wo:'Väster till öster', ow:'Öster till väster'};
+function isPassType(t){ return !!t && (t.id === 't-pass' || /^pass$/i.test((t.name || '').trim())); }
+function passPins(){ return state.pins.filter(p => isPassType(typeById(p.typeId)) && canEditPin(p)); }
+function passRest(name){
+  const s = (name || '').trim();
+  const m = s.match(/^(?:pass\s*)?(?:nr\.?\s*)?\d+\s*[–—\-:.,)]*\s*(.*)$/i);
+  if(m) return m[1].trim();
+  return s.replace(/^pass\b[\s–—\-:.,]*/i, '').trim();
+}
+function passName(n, rest){ return 'Pass ' + n + (rest ? ' – ' + rest : ''); }
+/* Grupperar per område och sorterar. Returnerar [{pin, name}] med de nya namnen. */
+function renumberPlan(areaKey, dir){
+  const pins = passPins().filter(p => areaKey === '*' || (p.areaId || '') === areaKey);
+  const groups = {};
+  for(const p of pins) (groups[p.areaId || ''] = groups[p.areaId || ''] || []).push(p);
+  const cmp = {sn:(a,b) => a.lat - b.lat || a.lng - b.lng, ns:(a,b) => b.lat - a.lat || a.lng - b.lng,
+               wo:(a,b) => a.lng - b.lng || a.lat - b.lat, ow:(a,b) => b.lng - a.lng || a.lat - b.lat}[dir] || ((a,b) => a.lat - b.lat);
+  const out = [];
+  for(const list of Object.values(groups)) list.slice().sort(cmp).forEach((p, i) => out.push({pin:p, name:passName(i + 1, passRest(p.name))}));
+  return out;
+}
+function renumberAreas(){
+  const counts = {};
+  for(const p of passPins()) counts[p.areaId || ''] = (counts[p.areaId || ''] || 0) + 1;
+  return Object.entries(counts).map(([id, n]) => ({id, n, name:id ? ((areaById(id) || {}).name || 'Okänt område') : 'Utan område'}))
+    .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, 'sv'));
+}
+function openRenumber(){
+  const areas = renumberAreas();
+  if(!passPins().length){ toast('Det finns inga pass som du kan ändra.'); return; }
+  const set = state.settings.renumber || {};
+  let areaKey = areas.some(a => a.id === set.area) ? set.area : areas[0].id, dir = RENUM_DIRS[set.dir] ? set.dir : 'sn';
+  openModal(`<h2>Numrera om passen</h2>
+    <p class="note" style="margin-top:0">Passen får nummer i ordning efter var de ligger. Varje jaktmark numreras för sig, från 1. Text efter numret behålls.</p>
+    <div class="row2">
+      <label class="field"><span>Jaktmark</span><select class="input" id="rnArea">${areas.map(a => `<option value="${esc(a.id)}"${a.id === areaKey ? ' selected' : ''}>${esc(a.name)} (${a.n})</option>`).join('')}${areas.length > 1 ? `<option value="*"${areaKey === '*' ? ' selected' : ''}>Alla, var för sig</option>` : ''}</select></label>
+      <label class="field"><span>Ordning</span><select class="input" id="rnDir">${Object.entries(RENUM_DIRS).map(([k, v]) => `<option value="${k}"${k === dir ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+    </div>
+    <div class="field"><span>Så här blir det</span><div id="rnPreview" class="rn-preview"></div></div>
+    <div class="actions"><button class="btn primary grow" type="button" id="rnOk">Numrera om</button><button class="btn ghost" type="button" id="rnCancel">Avbryt</button></div>`, m => {
+    const preview = () => {
+      const plan = renumberPlan(areaKey, dir);
+      m.querySelector('#rnPreview').innerHTML = plan.map(({pin, name}) => {
+        const same = (pin.name || '') === name;
+        return `<div class="rn-row${same ? ' same' : ''}"><span class="rn-old">${esc(pin.name || 'Pass')}</span><span class="rn-arrow" aria-hidden="true">→</span><span class="rn-new">${esc(name)}</span></div>`;
+      }).join('');
+      const changed = plan.filter(x => (x.pin.name || '') !== x.name).length;
+      const ok = m.querySelector('#rnOk'); ok.disabled = !changed; ok.textContent = changed ? `Numrera om ${changed} pass` : 'Redan i ordning';
+    };
+    m.querySelector('#rnArea').addEventListener('change', e => { areaKey = e.target.value; preview(); });
+    m.querySelector('#rnDir').addEventListener('change', e => { dir = e.target.value; preview(); });
+    m.querySelector('#rnCancel').addEventListener('click', closeModal);
+    m.querySelector('#rnOk').addEventListener('click', () => {
+      const plan = renumberPlan(areaKey, dir), now = Date.now();
+      const undo = plan.map(({pin}) => [pin.id, pin.name, pin.updated]);
+      let changed = 0;
+      for(const {pin, name} of plan){ if((pin.name || '') === name) continue; pin.name = name; pin.updated = now; delete pin.example; changed++; }
+      state.settings.renumber = {area:areaKey, dir};
+      renumberUndo = changed ? undo : null;
+      save(); closeModal(); renderAll();
+      toast(changed ? `${changed} pass har numrerats om. Ångra under Nålar.` : 'Passen var redan i ordning.', 4500);
+    });
+    preview();
+  });
+}
+function undoRenumber(){
+  if(!renumberUndo) return;
+  for(const [id, name, upd] of renumberUndo){ const p = pinById(id); if(p && canEditPin(p)){ p.name = name; p.updated = Date.now(); } }
+  renumberUndo = null; save(); renderAll(); toast('Numreringen är ångrad.');
+}
