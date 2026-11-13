@@ -29,6 +29,25 @@ function renderBorders(){
   renderLines();
 }
 
+/* Alla punkter som hör till ett område: gränsdelar, egna vägar och nålar */
+function areaPoints(a){
+  const pts = [];
+  areaRings(a).forEach(r => r.forEach(p => pts.push(p)));
+  areaLines(a).forEach(([, l]) => parseBorder(l.p).forEach(p => pts.push(p)));
+  state.pins.filter(p => p.areaId === a.id).forEach(p => pts.push([p.lat, p.lng]));
+  return pts;
+}
+function zoomToArea(id){
+  const a = areaById(id); if(!a) return;
+  const pts = areaPoints(a);
+  if(!pts.length){ toast(`${a.name} har ingen gräns, väg eller nål att visa.`); return; }
+  if(a.visible === false){ a.visible = true; save(); renderAll(); }
+  map.closePopup(); if(!isDesktop()) setSheet('peek');
+  setTimeout(() => {
+    if(pts.length === 1) map.setView(pts[0], Math.max(map.getZoom(), 16));
+    else map.fitBounds(L.latLngBounds(pts), {paddingTopLeft:[30, 30], paddingBottomRight:[70, bottomPad() + 30], maxZoom:17});
+  }, isDesktop() ? 0 : 280);
+}
 /* ---------- Egna vägar och stigar ----------
    Sparas per område som a.lines = {id: {k:'road'|'path', p:'lat,lng;lat,lng', n:'namn'}} och delas med jaktlaget tillsammans med området. */
 const lineLayer = L.layerGroup().addTo(map);
