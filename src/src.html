@@ -99,6 +99,9 @@ a{color:var(--accent)}
 .drag-handle.shot.move span::after{content:"✥";position:absolute;inset:0;display:grid;place-items:center;color:#d9520e;font-size:18px;line-height:1}
 .shot-row{display:flex;align-items:center;gap:6px}
 .shot-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.heat-filters{display:grid;gap:6px;padding:0 8px 8px}
+.heat-filters .input{min-height:38px;padding:6px 10px;font-size:14px}
+.heat-canvas{position:absolute;left:0;top:0;pointer-events:none}
 .obs-icon{background:none;border:0;overflow:visible}
 .obs-dot{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#7c3f00;color:#fff;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45);font:700 12px/1 var(--font-body)}
 .obs-dot.sm{width:24px;height:24px;font-size:10px;flex:none}
@@ -343,6 +346,10 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
   <label class="base-opt"><input type="checkbox" id="popWind"><span><strong>Vindriktning</strong><small id="windNote">Gult område där vittringen driver, med pilar som visar vinden</small></span></label>
   <label class="base-opt"><input type="checkbox" id="popLabels"><span><strong>Namn på nålar</strong><small>Visas när du zoomat in</small></span></label>
   <label class="base-opt"><input type="checkbox" id="popSvamp"><span><strong>Svampkarta</strong><small>Dina svampställen och andras fynd</small></span></label>
+  <div id="heatBox" hidden><div class="pop-sep"></div>
+  <h3 class="sec">Värmekarta</h3>
+  <label class="base-opt"><input type="checkbox" id="popHeat"><span><strong>Var vilt har setts</strong><small id="heatNote"></small></span></label>
+  <div class="heat-filters" id="heatFilters" hidden><select class="input" id="heatSp" aria-label="Vilt"></select><select class="input" id="heatPeriod" aria-label="Tidsperiod"></select><select class="input" id="heatArea" aria-label="Jaktmark"></select></div></div>
   <div class="pop-sep"></div>
   <h3 class="sec">Skärmdumpar</h3>
   <div id="shotList"></div>
@@ -1054,7 +1061,7 @@ function renderLayerPop(){
   $('#popSvamp').checked = !!state.settings.svampMode;
   $('#popRoads').checked = !!state.settings.roads;
   $('#popLabels').checked = pinLabelsOn();
-  renderTrailControls(); renderShotList(); renderWindNote();
+  renderTrailControls(); renderShotList(); renderWindNote(); heatSync();
 }
 function renderAll(){
   renderMarkers(); renderExternal(); renderList(); renderFilter(); renderSvampPane(); renderData(); renderStatus(); renderLayerPop(); renderJakt(); renderVilt(); renderBorders();
@@ -1607,7 +1614,7 @@ let rz = null;
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

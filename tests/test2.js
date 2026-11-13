@@ -218,7 +218,7 @@ const gids = () => Object.keys(data.groups || {});
   check((await A.innerText('#paneJakt')).includes('Get och kid'), 'observationen listas i jaktkortet');
   const bobOid = Object.keys(data.groups[gid].huntObs[hid])[0];
   const cw = await C.evaluate(([g, h, o]) => Promise.all([
-    firebase.database().ref('groups/' + g + '/huntObs/' + h).push({sp:'Vildsvin', n:1, lat:58.72, lng:14.6, t:Date.now(), by:'anon-carl', name:'Carl'}).then(() => 'ok', () => 'denied'),
+    firebase.database().ref('groups/' + g + '/huntObs/' + h).push({sp:'Vildsvin', n:1, lat:58.722, lng:14.61, t:Date.now(), by:'anon-carl', name:'Carl'}).then(() => 'ok', () => 'denied'),
     firebase.database().ref('groups/' + g + '/huntObs/' + h + '/' + o).remove().then(() => 'ok', () => 'denied'),
     firebase.database().ref('groups/' + g + '/huntObs/' + h).push({sp:'Älg', n:1, lat:58.72, lng:14.6, t:Date.now(), by:'bob'}).then(() => 'ok', () => 'denied')]), [gid, hid, bobOid]);
   check(cw.join() === 'ok,denied,denied', `gästen kan lägga in egna observationer men inte ta bort andras eller skriva i någon annans namn (${cw})`);
@@ -231,6 +231,32 @@ const gids = () => Object.keys(data.groups || {});
   await B.click('[data-j="hunt-end"]'); await B.click('[data-j="hunt-end"]'); await W(B, 900);
   check(!data.groups[gid].hunts && !data.huntCodes && !(data.groups[gid].guests || {})['anon-carl'], 'jakten, koden och gästposten är borta');
   check(!data.groups[gid].huntPos && !data.groups[gid].huntTrail && !data.groups[gid].huntObs, 'jaktens positioner, spår och observationer raderades när jakten avslutades');
+  const arch = Object.values(data.groups[gid].obsArchive || {});
+  check(arch.length === 2 && arch.every(o => !o.by && !o.name && !o.note && o.hid === hid) && arch.map(o => o.sp + o.n).sort().join() === 'Rådjur2,Vildsvin1', 'observationerna arkiverades utan namn när jakten avslutades');
+  // ---- Värmekarta ----
+  await A.click('#btnLayers'); await W(A, 200);
+  check(await A.isVisible('#heatBox') && !(await A.isChecked('#popHeat')), 'admin ser värmekartan i lagermenyn, avstängd från början');
+  await A.check('#popHeat'); await W(A, 600);
+  const heatPx = () => A.evaluate(() => { const c = document.querySelector('canvas.heat-canvas'); if(!c || c.hidden || !c.width) return 0; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for(let i = 3; i < d.length; i += 4) if(d[i]) n++; return n; });
+  check((await A.innerText('#heatNote')).includes('3 djur i 2 observationer') && await heatPx() > 100, `värmekartan visar arkivet: ${await A.innerText('#heatNote')}`);
+  await A.evaluate(() => __fk.map.setZoom(15, {animate:false})); await W(A, 400); await A.screenshot({path:shot('a_heat.png')});
+  await A.selectOption('#heatSp', 'Rådjur'); await W(A, 300);
+  check((await A.innerText('#heatNote')).includes('2 djur i 1 observationer') && await A.evaluate(() => __fk.heatPoints().length) === 1, 'filter på art');
+  await A.selectOption('#heatPeriod', 'last'); await W(A, 300);
+  check(await A.evaluate(() => __fk.heatPoints().length) === 0 && await heatPx() === 0, 'filter på förra jaktåret visar inga');
+  await A.selectOption('#heatPeriod', 'season'); await A.selectOption('#heatSp', ''); await A.selectOption('#heatArea', aid); await W(A, 300);
+  { // Förväntat antal räknas med barycentriska koordinater (oberoende av appens metod). Punkter på kanten räknas inte.
+    const tri = data.groups[gid].areas[aid].border.split(';').map(q => q.split(',').map(Number));
+    const inside = o => { const [[y1, x1], [y2, x2], [y3, x3]] = tri, d = (y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3);
+      const a = ((y2 - y3) * (o.lng - x3) + (x3 - x2) * (o.lat - y3)) / d, b = ((y3 - y1) * (o.lng - x3) + (x1 - x3) * (o.lat - y3)) / d, c = 1 - a - b;
+      return a > 1e-9 && b > 1e-9 && c > 1e-9; };
+    const want = Object.values(data.groups[gid].obsArchive).filter(inside).length, got = await A.evaluate(() => __fk.heatPoints().length);
+    check(got === want && want === 1, `filter på jaktmark: ${got} av 2 observationer ligger inom gränsen (väntat ${want})`); }
+  await A.selectOption('#heatArea', ''); await A.keyboard.press('Escape'); await W(A, 200);
+  // Bob är jaktledare och ser också arkivet, en vanlig medlem skulle inte göra det (se regeltesterna)
+  await B.click('#btnLayers'); await W(B, 200);
+  check(await B.isVisible('#heatBox'), 'jaktledaren ser värmekartan');
+  await B.keyboard.press('Escape');
   await W(A, 300);
   check(await A.locator('.obs-icon').count() === 0 && !(await A.isVisible('#btnObs')), 'efter jakten syns inga observationer och ingen kikare');
   await W(B, 300);
@@ -252,7 +278,7 @@ const gids = () => Object.keys(data.groups || {});
   const t0 = Date.now();
   const base = {owner:'o', creators:{c1:true}, groups:{g:{meta:{name:'L', owner:'o'}, members:{o:{role:'admin', name:'O'}, a2:{role:'admin', name:'A2'}, e:{role:'editor', name:'E'}, v:{role:'viewer', name:'V'}},
     areas:{ar:{name:'A'}}, pins:{ar:{p:{lat:1, lng:2, typeId:'t'}}}, hunts:{h:{name:'J', expires:t0 + 1000, code:'HUNTCODE', areas:{ar:true}}, h2:{name:'J2', starts:t0 + 500, expires:t0 + 1000, code:'HUNTCOD2'}}, guests:{gu:{hid:'h', code:'HUNTCODE', name:'G', expires:t0 + 1000}},
-      huntPos:{h:{e:{lat:1, lng:1, t:1}}, h2:{}}, huntTrail:{h:{e:{k1:{lat:1, lng:1, t:1}}}}, huntObs:{h:{o1:{sp:'Rådjur', n:1, lat:1, lng:1, t:1, by:'e'}}}}},
+      huntPos:{h:{e:{lat:1, lng:1, t:1}}, h2:{}}, huntTrail:{h:{e:{k1:{lat:1, lng:1, t:1}}}}, huntObs:{h:{o1:{sp:'Rådjur', n:1, lat:1, lng:1, t:1, by:'e'}}}, obsArchive:{a1:{sp:'Älg', n:2, lat:1, lng:1, t:1, hid:'h'}}}},
     invites:{INVITECODE1:{gid:'g', role:'editor', expires:t0 + 1000}, OLDINVITE01:{gid:'g', role:'editor', expires:t0 - 1}}, huntCodes:{HUNTCODE:{gid:'g', hid:'h', expires:t0 + 1000}}};
   const D = (uid, now) => { const d = targaryen.database(rules, base, now || t0).as(uid ? tok(uid) : null);
     return {read: p => d.read(p, now || t0), write: (p, v) => d.write(p, v, undefined, now || t0)}; };
@@ -285,6 +311,11 @@ const gids = () => Object.keys(data.groups || {});
   check(D('e').write('/groups/g/huntObs/h/o1', Object.assign(O('e'), {n:3})).allowed && D('e').write('/groups/g/huntObs/h/o1', null).allowed && D('a2').write('/groups/g/huntObs/h/o1', null).allowed && D('a2').write('/groups/g/huntObs/h', null).allowed && !D('e').write('/groups/g/huntObs/h', null).allowed, 'regel: egna observationer ändras och tas bort, jaktledare och admin tar bort alla');
   check(!D('e').write('/groups/g/huntObs/h2/n1', O('e')).allowed && !D('e', t0 + 2000).write('/groups/g/huntObs/h/n1', O('e')).allowed && !D('v', t0 + 2000).read('/groups/g/huntObs/h').allowed && D('v').read('/groups/g/huntObs/h').allowed && D('gu').read('/groups/g/huntObs/h').allowed && !D('gu').read('/groups/g/huntObs/h2').allowed && !D('x').read('/groups/g/huntObs/h').allowed, 'regel: observationer finns bara medan jakten pågår och bara för dess deltagare');
   check(!D('e').write('/groups/g/huntObs/h/n1', Object.assign(O('e'), {n:0})).allowed && !D('e').write('/groups/g/huntObs/h/n1', Object.assign(O('e'), {sp:'x'.repeat(41)})).allowed && !D('e').write('/groups/g/huntObs/h/n1', Object.assign(O('e'), {t:t0 + 3600000})).allowed && !D('e').write('/groups/g/huntObs/h/n1', {sp:'Älg', n:1, by:'e'}).allowed, 'regel: ogiltiga observationer nekas');
+  const AR = {sp:'Älg', n:1, lat:1, lng:1, t:t0, hid:'h'};
+  check(D('a2').read('/groups/g/obsArchive').allowed && !D('e').read('/groups/g/obsArchive').allowed && !D('v').read('/groups/g/obsArchive').allowed && !D('gu').read('/groups/g/obsArchive').allowed && !D('x').read('/groups/g/obsArchive').allowed, 'regel: bara jaktledare och admin läser observationsarkivet');
+  check(D('a2').write('/groups/g/obsArchive/a2x', AR).allowed && !D('e').write('/groups/g/obsArchive/a2x', AR).allowed && D('a2').write('/groups/g/obsArchive/a1', null).allowed && !D('e').write('/groups/g/obsArchive/a1', null).allowed, 'regel: bara jaktledare och admin skriver och tar bort i arkivet');
+  check(!D('a2').write('/groups/g/obsArchive/a2x', Object.assign({by:'e'}, AR)).allowed && !D('a2').write('/groups/g/obsArchive/a2x', Object.assign({name:'Eva'}, AR)).allowed && !D('a2').write('/groups/g/obsArchive/a2x', Object.assign({note:'x'}, AR)).allowed, 'regel: arkivet tar inte emot namn eller andra uppgifter om personen');
+  check(D('a2', t0 + 2000).read('/groups/g/huntObs/h').allowed && !D('e', t0 + 2000).read('/groups/g/huntObs/h').allowed, 'regel: jaktledare och admin kan läsa en avslutad jakts observationer för att arkivera dem');
   check(!D('e').write('/groups/g/huntTrail/h/e/k3', {lat:1, lng:1, t:t0 + 3600000}).allowed && D('a2').write('/groups/g/huntTrail/h', null).allowed && !D('e').write('/groups/g/huntTrail/h', null).allowed, 'regel: spårpunkter kan inte framtidsdateras, bara jaktledare raderar jaktens spår');
   check(!D('x').write('/groups/n2/meta', {name:'N', owner:'x'}).allowed && !D('e').write('/groups/n2/meta', {name:'N', owner:'e'}).allowed && D('o').write('/groups/n2/meta', {name:'N', owner:'o'}).allowed && D('c1').write('/groups/n2/meta', {name:'N', owner:'c1'}).allowed, 'regel: bara ägaren och godkända kan skapa jaktlag');
   check(!D('x').write('/owner', 'x').allowed && !D('o').write('/owner', 'x').allowed && !D('x').write('/creators/x', true).allowed && D('o').write('/creators/x', true).allowed, 'regel: ägarskapet kan inte tas över, bara ägaren godkänner fler');
@@ -318,6 +349,7 @@ const gids = () => Object.keys(data.groups || {});
   await M.evaluate(() => { document.getElementById('handle').click; });
   await M.locator('#handle').tap(); await W(M, 400); await M.screenshot({path:shot('m_jakt.png')});
   check(await M.evaluate(() => document.documentElement.scrollWidth) <= 390, 'mobil: Jakt-fliken utan sidscroll');
+  check(await M.evaluate(() => document.getElementById('heatBox').hidden), 'den som inte är jaktledare eller admin ser ingen värmekarta');
   await browser.close(); server.close();
   console.log(`\n${passes} PASS, ${fails.length} FAIL` + (fails.length ? '\n' + fails.join('\n') : ''));
   process.exitCode = fails.length ? 1 : 0;
