@@ -729,7 +729,7 @@ a{color:var(--accent)}
 .fab svg{width:28px;height:28px}
 @media (min-width:860px){.fab{bottom:28px}}
 
-.layer-pop{position:fixed;z-index:1200;top:calc(64px + env(safe-area-inset-top,0px));right:calc(64px + env(safe-area-inset-right,0px));width:min(290px,calc(100vw - 88px));background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:10px}
+.layer-pop{position:fixed;z-index:1200;top:calc(64px + env(safe-area-inset-top,0px));right:calc(64px + env(safe-area-inset-right,0px));width:min(290px,calc(100vw - 88px));background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:10px;max-height:calc(100vh - 80px - env(safe-area-inset-top,0px));max-height:calc(100dvh - 80px - env(safe-area-inset-top,0px));overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y}
 .layer-pop h3{margin:4px 6px 8px}
 .shot-pick{position:relative;overflow:auto;max-height:55vh;max-height:55dvh;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);-webkit-overflow-scrolling:touch}
 .shot-inner{position:relative;width:100%}
@@ -755,6 +755,15 @@ a{color:var(--accent)}
 .drag-handle.shot.move span::after{content:"✥";position:absolute;inset:0;display:grid;place-items:center;color:#d9520e;font-size:18px;line-height:1}
 .shot-row{display:flex;align-items:center;gap:6px}
 .shot-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wind-chip{position:fixed;z-index:900;left:calc(14px + env(safe-area-inset-left,0px));bottom:calc(var(--sheet-h) + 14px);display:flex;align-items:center;gap:6px;padding:8px 12px 8px 8px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg);box-shadow:0 2px 10px rgba(0,0,0,.18);font:500 14px/1 var(--font-body)}
+.wind-chip svg{width:22px;height:22px;color:#1a73e8;flex:none}
+@media (min-width:860px){.wind-chip{left:calc(var(--panel-w) + 14px)}}
+.wind-arrows{position:absolute;left:0;top:0;pointer-events:none;opacity:.55}
+.pancross{position:absolute;z-index:820;width:0;height:0;pointer-events:none}
+.pc-x{position:absolute;left:-15px;top:-15px;width:30px;height:30px}
+.pc-ring{position:absolute;border-radius:50%;border:1.5px solid rgba(22,35,28,.55);box-shadow:0 0 0 1px rgba(255,255,255,.6),inset 0 0 0 1px rgba(255,255,255,.6)}
+.pc-rl{position:absolute;left:0;transform:translate(-50%,-50%);font:600 10px/1 var(--font-body);color:#16231c;background:rgba(255,255,255,.85);padding:1px 4px;border-radius:4px;white-space:nowrap}
+.pc-label{position:absolute;left:0;top:22px;transform:translateX(-50%);font:600 12px/1.2 var(--font-body);color:#fff;background:rgba(22,35,28,.82);padding:3px 7px;border-radius:6px;white-space:nowrap}
 .trail-range{padding:4px 8px 8px}
 .trail-range label{display:flex;justify-content:space-between;gap:8px;font-size:14px}
 .trail-range input{width:100%;accent-color:var(--accent);margin:8px 0 2px}
@@ -968,6 +977,7 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
   </button>
   <div class="ctrl-gap"></div>
+  <button class="ctrl" id="btnMeasure" type="button" title="Mät avstånd" aria-label="Mät avstånd" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/></svg></button>
   <button class="ctrl" id="btnZoomIn" type="button" title="Zooma in" aria-label="Zooma in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
   <button class="ctrl" id="btnZoomOut" type="button" title="Zooma ut" aria-label="Zooma ut"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
 </div>
@@ -980,6 +990,7 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
   <label class="base-opt"><input type="checkbox" id="popRoads"><span><strong>Skogsvägar och stigar</strong><small id="roadNote">Från OpenStreetMap, syns när du zoomat in</small></span></label>
   <button class="base-opt" type="button" id="popDrawLine" style="width:100%;border:0;background:none;text-align:left;color:inherit;font:inherit"><span style="width:18px;text-align:center;font-weight:700;color:var(--accent)">+</span><span><strong>Rita egen väg eller stig</strong><small>Saknas en väg? Rita den så syns den för jaktlaget</small></span></button>
   <a class="base-opt" href="https://minkarta.lantmateriet.se/" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><span style="width:18px"></span><span><strong>Fastighetsgränser</strong><small>Öppnas i Lantmäteriets Min karta</small></span></a>
+  <label class="base-opt"><input type="checkbox" id="popWind"><span><strong>Vindriktning</strong><small id="windNote">Gult område där vittringen driver, med pilar som visar vinden</small></span></label>
   <label class="base-opt"><input type="checkbox" id="popSvamp"><span><strong>Svampkarta</strong><small>Dina svampställen och andras fynd</small></span></label>
   <div class="pop-sep"></div>
   <h3 class="sec">Skärmdumpar</h3>
@@ -994,6 +1005,15 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
 </button>
 
+<button class="wind-chip" id="windChip" type="button" hidden></button>
+<div class="placebar" id="measurebar" hidden>
+  <p id="measureText"></p>
+  <div class="btnrow">
+    <button class="btn primary" id="mAdd" type="button">Sätt punkt</button>
+    <button class="btn" id="mUndo" type="button">Ångra</button>
+    <button class="btn ghost" id="mClose" type="button">Klar</button>
+  </div>
+</div>
 <div class="placebar" id="drawbar" hidden>
   <p id="drawText"></p>
   <div class="btnrow">
@@ -1680,7 +1700,7 @@ function renderLayerPop(){
   $('#satLabelsRow').hidden = state.settings.base !== 'sat';
   $('#popSvamp').checked = !!state.settings.svampMode;
   $('#popRoads').checked = !!state.settings.roads;
-  renderTrailControls(); renderShotList();
+  renderTrailControls(); renderShotList(); renderWindNote();
 }
 function renderAll(){
   renderMarkers(); renderExternal(); renderList(); renderFilter(); renderSvampPane(); renderData(); renderStatus(); renderLayerPop(); renderJakt(); renderVilt(); renderBorders();
@@ -1832,17 +1852,18 @@ function openAreaForm(id){
   const a = areaById(id); if(!a) return;
   const mine = Object.values(cloud.groups).filter(g => g.kind === 'member' && canEditGroup(g));
   const canMove = !a.gid || (cloud.groups[a.gid] && isAdminGroup(cloud.groups[a.gid]));
-  const n = state.pins.filter(p => p.areaId === id).length;
+  const n = state.pins.filter(p => p.areaId === id).length, rings = areaRings(a);
   openModal(`<h2>Ändra område</h2><form id="afForm"><label class="field"><span>Namn</span><input class="input" id="afName" maxlength="60" value="${esc(a.name)}"></label>
     ${mine.length || a.gid ? `<label class="field"><span>Delas med</span><select class="input" id="afShare" ${canMove ? '' : 'disabled'}><option value="">Bara jag (privat)</option>${mine.map(g => `<option value="${g.id}"${a.gid === g.id ? ' selected' : ''}>${esc(gname(g))}</option>`).join('')}</select></label>
     <p class="note" style="margin:-4px 0 0">${canMove ? `Delar du området ser alla i jaktlaget dess ${n} ${n === 1 ? 'nål' : 'nålar'}, och medlemmar kan ändra dem.` : 'Bara en admin kan sluta dela området.'}</p>` : '<p class="note" style="margin:-4px 0 0">Logga in under Jakt och skapa ett jaktlag för att kunna dela området.</p>'}
-    <div class="field" style="margin-top:14px"><span>Gräns</span><div class="small">${parseBorder(a.border).length >= 3 ? `${parseBorder(a.border).length} punkter · ${fmtHa(areaHa(parseBorder(a.border)))}` : 'Ingen gräns är ritad.'}</div>
-      <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afDraw">${a.border ? 'Ändra gräns' : 'Rita gräns'}</button><button class="btn sm" type="button" id="afImport">Importera från fil</button><button class="btn sm" type="button" id="afShot">Från skärmdump</button>${a.border ? '<button class="btn sm danger" type="button" id="afBorderDel">Ta bort gräns</button>' : ''}</div></div>
+    <div class="field" style="margin-top:14px"><span>Gräns</span>${rings.length ? rings.map((r, k) => `<div class="frow"><span class="fname">${rings.length > 1 ? `Del ${k + 1}` : 'Gränsen'}<br><span class="small muted">${r.length} punkter · ${fmtHa(areaHa(r))}</span></span><button class="btn sm" type="button" data-ring-edit="${k}">Ändra</button><button class="btn sm danger" type="button" data-ring-del="${k}">Ta bort</button></div>`).join('') + (rings.length > 1 ? `<div class="small" style="margin-top:4px">Totalt ${fmtHa(ringsHa(rings))} i ${rings.length} delar.</div>` : '') : '<div class="small">Ingen gräns är ritad.</div>'}
+      <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afDraw">${rings.length ? 'Rita en till del' : 'Rita gräns'}</button><button class="btn sm" type="button" id="afImport">Importera från fil</button><button class="btn sm" type="button" id="afShot">Från skärmdump</button></div>
+      ${rings.length ? '<p class="note" style="margin:6px 0 0">Består marken av flera skiften? Rita en del för varje. Alla delar hör till samma område och delas med samma jaktlag.</p>' : ''}</div>
     <div class="field" style="margin-top:14px"><span>Egna vägar och stigar</span>${areaLines(a).length ? areaLines(a).map(([lid, l]) => `<div class="frow"><span class="fname">${esc(l.n || LINE_KIND[l.k])}<br><span class="small muted">${LINE_KIND[l.k]} · ${fmtDist(lineLen(parseBorder(l.p)))}</span></span><button class="btn sm" type="button" data-line-edit="${lid}">Ändra</button></div>`).join('') : '<div class="small">Inga egna vägar eller stigar.</div>'}
       <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afLine">Rita väg eller stig</button></div></div>
     ${moveTargets(a).length && (a.border || areaLines(a).length || n) ? `<details class="field" style="margin-top:14px" id="afMoveBox"><summary><span>Flytta till ett annat område</span></summary>
-      <label class="field" style="margin-top:8px"><span>Till</span><select class="input" id="afMoveTo">${moveTargets(a).map(t => `<option value="${t.id}">${esc(t.name)}${t.border ? ' (har gräns)' : ''}</option>`).join('')}</select></label>
-      ${a.border ? '<label class="checkline"><input type="checkbox" id="afMvBorder" checked><span>Gränsen</span></label>' : ''}
+      <label class="field" style="margin-top:8px"><span>Till</span><select class="input" id="afMoveTo">${moveTargets(a).map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></label>
+      ${rings.length ? `<label class="checkline"><input type="checkbox" id="afMvBorder" checked><span>${rings.length > 1 ? `Gränsen (${rings.length} delar)` : 'Gränsen'}</span></label>` : ''}
       ${areaLines(a).length ? `<label class="checkline"><input type="checkbox" id="afMvLines" checked><span>Vägar och stigar (${areaLines(a).length})</span></label>` : ''}
       ${n ? `<label class="checkline"><input type="checkbox" id="afMvPins" checked><span>Nålar och pass (${n})</span></label>` : ''}
       <div class="btnrow"><button class="btn sm" type="button" id="afMove">Flytta</button></div></details>` : ''}
@@ -1857,11 +1878,13 @@ function openAreaForm(id){
       const to = areaById(m.querySelector('#afMoveTo').value), chk = s => { const c = m.querySelector(s); return !!(c && c.checked); };
       const what = {border:chk('#afMvBorder'), lines:chk('#afMvLines'), pins:chk('#afMvPins')};
       if(!to || !(what.border || what.lines || what.pins)){ toast('Välj vad som ska flyttas.'); return; }
-      const go = () => { closeModal(); toast(moveAreaContent(id, to.id, what)); };
-      if(what.border && to.border) confirmClick(mv, `Tryck igen: ersätter gränsen i ${to.name}`, go); else go();
+      closeModal(); toast(moveAreaContent(id, to.id, what));
     });
     m.querySelectorAll('[data-line-edit]').forEach(b => b.addEventListener('click', () => openLineForm({areaId:id, lid:b.dataset.lineEdit})));
-    const bd = m.querySelector('#afBorderDel'); if(bd) bd.addEventListener('click', () => confirmClick(bd, 'Bekräfta', () => { const cur = areaById(id); if(cur){ delete cur.border; cur.updated = Date.now(); save(); } closeModal(); renderAll(); toast('Gränsen är borttagen'); }));
+    m.querySelectorAll('[data-ring-edit]').forEach(b => b.addEventListener('click', () => startDrawing(id, +b.dataset.ringEdit)));
+    m.querySelectorAll('[data-ring-del]').forEach(b => b.addEventListener('click', () => confirmClick(b, 'Bekräfta', () => {
+      const cur = areaById(id); if(cur){ const r = areaRings(cur); r.splice(+b.dataset.ringDel, 1); setRings(cur, r); cur.updated = Date.now(); save(); }
+      closeModal(); renderAll(); toast(rings.length > 1 ? 'Gränsdelen är borttagen' : 'Gränsen är borttagen'); })));
     m.querySelector('#afForm').addEventListener('submit', e => { e.preventDefault(); const v = m.querySelector('#afName').value.trim(); if(!v) return; const cur = areaById(id); if(!cur){ closeModal(); return; }
       cur.name = v; cur.updated = Date.now(); delete cur.example;
       const sh = m.querySelector('#afShare');
@@ -1929,7 +1952,7 @@ let placing = null; let crossEl = null;
 function crossPoint(){
   const c = map.getContainer(), r = c.getBoundingClientRect();
   let bottom = r.bottom;
-  for(const id of ['placebar', 'ovbar', 'drawbar']){ const el = document.getElementById(id); if(el && !el.hidden){ const b = el.getBoundingClientRect(); if(b.height) bottom = Math.min(bottom, b.top - 8); } }
+  for(const id of ['placebar', 'ovbar', 'drawbar', 'measurebar']){ const el = document.getElementById(id); if(el && !el.hidden){ const b = el.getBoundingClientRect(); if(b.height) bottom = Math.min(bottom, b.top - 8); } }
   if(!isDesktop()) bottom = Math.min(bottom, $('#panel').getBoundingClientRect().top);
   const y = Math.round((r.top + bottom) / 2 - r.top);
   return L.point(Math.round(c.clientWidth / 2), Math.max(80, Math.min(y, Math.round(c.clientHeight / 2))));
@@ -1969,7 +1992,7 @@ $('#placeOk').addEventListener('click', () => {
 $('#placeCancel').addEventListener('click', endPlacing);
 $('#placeGps').addEventListener('click', () => locate(true));
 $('#btnAdd').addEventListener('click', () => { if(!drawing) startPlacing({mode:'new'}); });
-map.on('contextmenu', e => { if(placing || drawing) return; openPinForm({lat:e.latlng.lat, lng:e.latlng.lng}); });
+map.on('contextmenu', e => { if(placing || drawing || (typeof cal !== 'undefined' && cal) || (typeof adj !== 'undefined' && adj) || (typeof measure !== 'undefined' && measure)) return; openPinForm({lat:e.latlng.lat, lng:e.latlng.lng}); });
 
 /* ---------- Position ---------- */
 function showMe(lat, lng, acc){
@@ -1979,6 +2002,7 @@ function showMe(lat, lng, acc){
   else { meMarker.setLatLng([lat,lng]); meCircle.setLatLng([lat,lng]).setRadius(acc); }
   $('#btnLocate').setAttribute('aria-pressed','true');
   trailAdd(lat, lng, acc);
+  if(windOn() && wind.data) windRender();
 }
 function locate(fly){
   if(!('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); return; }
@@ -1998,7 +2022,7 @@ $('#btnLocate').addEventListener('click', () => locate(true));
 function fitAll(){
   const pts = state.pins.filter(pinVisible).map(p => [p.lat,p.lng]);
   if(state.settings.svampMode) state.external.forEach(s => { if(s.visible !== false) s.points.forEach(pt => pts.push([pt.lat,pt.lng])); });
-  state.areas.forEach(a => { if(a.visible !== false){ parseBorder(a.border).forEach(pt => pts.push(pt)); areaLines(a).forEach(([, l]) => parseBorder(l.p).forEach(pt => pts.push(pt))); } });
+  state.areas.forEach(a => { if(a.visible !== false){ areaRings(a).forEach(r => r.forEach(pt => pts.push(pt))); areaLines(a).forEach(([, l]) => parseBorder(l.p).forEach(pt => pts.push(pt))); } });
   if(!pts.length){ toast('Inga nålar visas just nu.'); return; }
   map.closePopup();
   if(pts.length === 1){ map.setView(pts[0], 15); return; }
@@ -2905,8 +2929,8 @@ function loupeBase(){
 function loupeLayers(){
   loupe.vec.clearLayers(); loupe.shots.clearLayers();
   for(const a of state.areas){
-    if(a.visible === false || (drawing && drawing.mode === 'border' && drawing.id === a.id)) continue;
-    const pts = parseBorder(a.border); if(pts.length >= 3) L.polygon(pts, {color:'#d9520e', weight:3, fill:false, dashArray:'10 6', interactive:false}).addTo(loupe.vec);
+    if(a.visible === false) continue;
+    areaRings(a).forEach((pts, k) => { if(!(drawing && drawing.mode === 'border' && drawing.id === a.id && drawing.ring === k)) L.polygon(pts, {color:'#d9520e', weight:3, fill:false, dashArray:'10 6', interactive:false}).addTo(loupe.vec); });
     for(const [, l] of areaLines(a)) L.polyline(parseBorder(l.p), {color:l.k === 'path' ? '#7a2e8f' : '#8a4b12', weight:3, interactive:false}).addTo(loupe.vec);
   }
   if(drawing && drawing.pts.length >= 2){
@@ -2953,6 +2977,12 @@ const borderLayer = L.layerGroup().addTo(map), drawLayer = L.layerGroup().addTo(
 let drawing = null;
 const parseBorder = s => typeof s === 'string' && s ? s.split(';').map(p => p.split(',').map(Number)).filter(p => p.length === 2 && isFinite(p[0]) && isFinite(p[1]) && Math.abs(p[0]) <= 90 && Math.abs(p[1]) <= 180) : [];
 const fmtBorder = pts => pts.map(p => p[0].toFixed(5) + ',' + p[1].toFixed(5)).join(';');
+/* Ett område kan ha flera gränsdelar (skiften). De sparas i samma sträng, avskilda med |. */
+const parseRings = s => typeof s === 'string' && s ? s.split('|').map(parseBorder).filter(r => r.length >= 3) : [];
+const fmtRings = rings => rings.filter(r => r.length >= 3).map(fmtBorder).join('|');
+const areaRings = a => parseRings(a && a.border);
+const ringsHa = rings => rings.reduce((s, r) => s + areaHa(r), 0);
+function setRings(a, rings){ const s = fmtRings(rings); if(s) a.border = s; else delete a.border; }
 function areaHa(pts){
   if(pts.length < 3) return 0;
   const q = pts.map(p => toSweref99TM(p[0], p[1])); let s = 0;
@@ -2963,10 +2993,12 @@ const fmtHa = ha => (ha >= 100 ? fmtInt(ha) : ha.toLocaleString('sv-SE', {maximu
 function renderBorders(){
   borderLayer.clearLayers();
   for(const a of state.areas){
-    if(a.visible === false || (drawing && drawing.mode === 'border' && drawing.id === a.id)) continue;
-    const pts = parseBorder(a.border); if(pts.length < 3) continue;
-    L.polygon(pts, {color:'#ffffff', weight:6, opacity:.7, fill:false, interactive:false}).addTo(borderLayer);
-    L.polygon(pts, {color:'#d9520e', weight:3, fillColor:'#d9520e', fillOpacity:.06, dashArray:'10 6', interactive:false}).addTo(borderLayer);
+    if(a.visible === false) continue;
+    areaRings(a).forEach((pts, k) => {
+      if(drawing && drawing.mode === 'border' && drawing.id === a.id && drawing.ring === k) return;   // delen som ritas visas som utkast
+      L.polygon(pts, {color:'#ffffff', weight:6, opacity:.7, fill:false, interactive:false}).addTo(borderLayer);
+      L.polygon(pts, {color:'#d9520e', weight:3, fillColor:'#d9520e', fillOpacity:.06, dashArray:'10 6', interactive:false}).addTo(borderLayer);
+    });
   }
   renderLines();
 }
@@ -3014,7 +3046,7 @@ function moveAreaContent(fromId, toId, what){
   const from = areaById(fromId), to = areaById(toId); if(!from || !to) return 'Området finns inte längre.';
   if(!canEditArea(from) || !canEditArea(to)) return 'Du har inte rättighet att ändra något av områdena.';
   const done = [], now = Date.now();
-  if(what.border && from.border){ to.border = from.border; delete from.border; done.push('gränsen'); }
+  if(what.border && areaRings(from).length){ const r = areaRings(from); setRings(to, areaRings(to).concat(r)); delete from.border; done.push(r.length === 1 ? 'gränsen' : `${r.length} gränsdelar`); }
   if(what.lines && areaLines(from).length){ const n = areaLines(from).length; to.lines = Object.assign({}, to.lines || {}, from.lines); delete from.lines; done.push(n === 1 ? '1 väg eller stig' : `${n} vägar och stigar`); }
   if(what.pins){ const ps = state.pins.filter(p => p.areaId === fromId); ps.forEach(p => { p.areaId = toId; p.updated = now; }); if(ps.length) done.push(ps.length === 1 ? '1 nål' : `${ps.length} nålar`); }
   if(!done.length) return 'Det fanns inget att flytta.';
@@ -3111,11 +3143,13 @@ function drawDraft(){
   $('#drawText').textContent = p.length < 3 ? `Tryck på kartan i varje hörn av marken. ${p.length} av minst 3 punkter.` : `${p.length} punkter · ${fmtHa(areaHa(p))}. ${drawing.sel != null ? 'Punkten är markerad.' : 'Dra en punkt för att flytta den, tryck på den för att ta bort den, eller dra ett + för att lägga till en punkt mellan två andra.'}`;
   $('#drawOk').disabled = p.length < 3;
 }
-function startDrawing(id){
+/* Ritar en gränsdel. ring = index för en befintlig del som ska ändras, eller utelämnas för en ny del. */
+function startDrawing(id, ring){
   const a = areaById(id); if(!a) return;
   if(!canEditArea(a)){ toast('Du har inte rättighet att ändra det området.'); return; }
   closeModal(); map.closePopup(); if(placing) endPlacing();
-  drawing = {mode:'border', id, pts:parseBorder(a.border), hist:[], sel:null};
+  const rings = areaRings(a), k = ring != null && rings[ring] ? ring : null;
+  drawing = {mode:'border', id, ring:k, pts:k != null ? rings[k] : [], hist:[], sel:null};
   $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
   if(drawing.pts.length) map.fitBounds(L.latLngBounds(drawing.pts), {paddingTopLeft:[40,70], paddingBottomRight:[40, bottomPad() + 190], maxZoom:17});
   renderBorders(); drawDraft();
@@ -3144,8 +3178,11 @@ $('#drawOk').addEventListener('click', () => {
     save(); renderAll(); toast(`${d.name || LINE_KIND[d.kind]} är sparad, ${fmtDist(lineLen(pts))}.`);
     return;
   }
-  a.border = fmtBorder(pts); a.updated = Date.now(); delete a.example;
-  save(); renderAll(); toast(`Gränsen för ${a.name} är sparad, ${fmtHa(areaHa(pts))}.`);
+  const rings = areaRings(a);
+  if(d.ring != null && rings[d.ring]) rings[d.ring] = pts; else rings.push(pts);
+  setRings(a, rings); a.updated = Date.now(); delete a.example;
+  save(); renderAll();
+  toast(rings.length > 1 ? `Gränsen för ${a.name} är sparad. ${rings.length} delar, totalt ${fmtHa(ringsHa(rings))}.` : `Gränsen för ${a.name} är sparad, ${fmtHa(areaHa(pts))}.`);
 });
 function parseRing(text){
   const ring = c => c.map(x => [+x[1], +x[0]]);
@@ -3174,10 +3211,11 @@ $('#fileBorder').addEventListener('change', async e => {
     if(pts.length > 1 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1]) pts.pop();
     if(pts.length < 3){ toast('Hittade ingen yta eller linje med minst tre punkter i filen.', 5000); return; }
     if(pts.length > 2000){ const step = Math.ceil(pts.length / 2000); pts = pts.filter((p, i) => i % step === 0); }
-    a.border = fmtBorder(pts); a.updated = Date.now(); delete a.example;
+    const rings = areaRings(a).concat([pts]);
+    setRings(a, rings); a.updated = Date.now(); delete a.example;
     closeModal(); save(); renderAll();
     map.fitBounds(L.latLngBounds(pts), {paddingTopLeft:[40,70], paddingBottomRight:[40, bottomPad() + 40], maxZoom:16});
-    toast(`Gränsen för ${a.name} är importerad, ${fmtHa(areaHa(pts))}.`);
+    toast(rings.length > 1 ? `En ny gränsdel är importerad till ${a.name}, ${fmtHa(areaHa(pts))}.` : `Gränsen för ${a.name} är importerad, ${fmtHa(areaHa(pts))}.`);
   } catch(err){ toast('Filen kunde inte läsas som en gräns.', 5000); }
 });
 
@@ -3320,7 +3358,7 @@ function openBorderPick(areaId){
   const editable = state.areas.filter(a => canEditArea(a));
   if(!editable.length){ toast('Skapa ett område under Filter först.'); return; }
   const sel = areaId || (cal && cal.areaId) || (editable.find(a => !a.example) || editable[0]).id;
-  openModal(`<h2>Rita gräns</h2><label class="field"><span>Område</span><select class="input" id="obArea">${editable.map(a => `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.border ? ' (har en gräns, ersätts)' : ''}</option>`).join('')}</select></label>
+  openModal(`<h2>Rita gräns</h2><label class="field"><span>Område</span><select class="input" id="obArea">${editable.map(a => `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.border ? ' (en ny gränsdel läggs till)' : ''}</option>`).join('')}</select></label>
     <div class="actions"><button class="btn primary grow" type="button" id="obGo">Börja rita</button><button class="btn ghost" type="button" id="obCancel">Avbryt</button></div>`, m => {
     m.querySelector('#obCancel').addEventListener('click', closeModal);
     m.querySelector('#obGo').addEventListener('click', () => { const id = m.querySelector('#obArea').value; endAdjust(); cal = null; endCalBar(); startDrawing(id); });
@@ -3491,6 +3529,208 @@ function endAdjust(){
 
 loadShots();
 
+/* ---------- Vind, kryss med avståndsringar och mätning ---------- */
+
+/* Gemensamt: riktning och avstånd */
+const DIR16 = ['N', 'NNO', 'NO', 'ONO', 'O', 'OSO', 'SO', 'SSO', 'S', 'SSV', 'SV', 'VSV', 'V', 'VNV', 'NV', 'NNV'];
+const dirName = deg => DIR16[Math.round((((deg % 360) + 360) % 360) / 22.5) % 16];
+function bearingDeg(a, b){
+  const r = Math.PI / 180, f1 = a.lat * r, f2 = b.lat * r, dl = (b.lng - a.lng) * r;
+  const y = Math.sin(dl) * Math.cos(f2), x = Math.cos(f1) * Math.sin(f2) - Math.sin(f1) * Math.cos(f2) * Math.cos(dl);
+  return (Math.atan2(y, x) / r + 360) % 360;
+}
+/* Punkt d meter från p i riktningen b grader (tillräckligt noggrant för några kilometer). */
+function destPoint(p, d, b){
+  const r = Math.PI / 180;
+  return L.latLng(p.lat + d * Math.cos(b * r) / 111320, p.lng + d * Math.sin(b * r) / (111320 * Math.cos(p.lat * r)));
+}
+const metersPerPixel = (lat, z) => 40075016.686 * Math.cos(lat * Math.PI / 180) / Math.pow(2, z + 8);
+const blocked = () => placing || drawing || (typeof cal !== 'undefined' && cal) || (typeof adj !== 'undefined' && adj);
+
+/* ---------- Vindriktning ----------
+   Vinden hämtas från Open-Meteo (gratis, utan nyckel). Det gula området visar vart vittringen driver,
+   från din position (eller korset om positionen inte är känd), och de blå pilarna rör sig med vinden. */
+const WIND_LEN = 600;
+map.createPane('wind'); map.getPane('wind').style.zIndex = 450; map.getPane('wind').style.pointerEvents = 'none';
+const wind = {data:null, at:0, from:null, busy:false, layer:L.layerGroup().addTo(map), canvas:null, raf:0, sector:null, timer:null};
+const windOn = () => !!state.settings.wind;
+function windOrigin(){ return myPos ? L.latLng(myPos.lat, myPos.lng) : crossLatLng(); }
+/* Hur brett området är: svag vind vänder mer, så då blir det bredare. */
+const windHalf = s => s < 1.5 ? 45 : s < 4 ? 30 : 20;
+async function windFetch(force){
+  if(!windOn() || wind.busy) return;
+  const o = windOrigin();
+  if(!force && wind.data && Date.now() - wind.at < 10 * 60000 && wind.from && distM(wind.from, o) < 3000) return;
+  wind.busy = true; windChip();
+  try {
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${o.lat.toFixed(3)}&longitude=${o.lng.toFixed(3)}&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=ms&timezone=auto`);
+    if(!r.ok) throw new Error('http');
+    const c = (await r.json()).current || {};
+    if(typeof c.wind_direction_10m !== 'number' || typeof c.wind_speed_10m !== 'number') throw new Error('data');
+    wind.data = {dir:c.wind_direction_10m, speed:c.wind_speed_10m, gust:typeof c.wind_gusts_10m === 'number' ? c.wind_gusts_10m : null, time:c.time || ''};
+    wind.at = Date.now(); wind.from = o;
+  } catch(e){ if(!wind.data) toast('Vinden kunde inte hämtas just nu.'); }
+  wind.busy = false; windRender();
+}
+/* Det gula området: spets i origo, öppning mot det håll vinden blåser. */
+function windSector(){
+  const o = windOrigin(), d = wind.data; if(!d) return null;
+  const axis = (d.dir + 180) % 360, half = windHalf(d.speed), pts = [o];
+  for(let a = -half; a <= half + 1e-9; a += half / 8) pts.push(destPoint(o, WIND_LEN, axis + a));
+  return {o, axis, half, pts};
+}
+function windRender(){
+  wind.layer.clearLayers(); wind.sector = null;
+  if(!windOn() || !wind.data){ windChip(); windAnim(false); renderWindNote(); return; }
+  const s = wind.sector = windSector();
+  L.polygon(s.pts, {color:'#e8b500', weight:2, opacity:.9, fillColor:'#ffd400', fillOpacity:.28, interactive:false, className:'wind-sector'}).addTo(wind.layer);
+  windChip(); windAnim(true); renderWindNote();
+}
+function windChip(){
+  const el = $('#windChip'); if(!el) return;
+  el.hidden = !windOn();
+  if(!windOn()) return;
+  const d = wind.data;
+  el.innerHTML = d ? `<svg viewBox="0 0 24 24" style="transform:rotate(${(d.dir + 180) % 360}deg)" aria-hidden="true"><path d="M12 3l5 9h-3.5v9h-3v-9H7z" fill="currentColor"/></svg><span><b>${dirName(d.dir)}</b> ${fmtNum(d.speed)} m/s${d.gust != null ? ` <span class="muted">byar ${fmtNum(d.gust)}</span>` : ''}</span>`
+    : `<span>${wind.busy ? 'Hämtar vind …' : 'Ingen vinddata'}</span>`;
+  el.title = d ? `Vind från ${dirName(d.dir)} (${Math.round(d.dir)}°). Tryck för att hämta igen.` : '';
+}
+const fmtNum = v => (Math.round(v * 10) / 10).toLocaleString('sv-SE');
+function renderWindNote(){
+  const n = $('#windNote'); if(!n) return;
+  const d = wind.data;
+  n.textContent = !windOn() ? 'Gult område där vittringen driver, med pilar som visar vinden' : d ? `Vind från ${dirName(d.dir)}, ${fmtNum(d.speed)} m/s. Från ${myPos ? 'din position' : 'korset'}. Open-Meteo.` : 'Hämtar …';
+  const c = $('#popWind'); if(c) c.checked = windOn();
+}
+function setWind(on){
+  state.settings.wind = !!on; save();
+  if(on){ windFetch(); clearInterval(wind.timer); wind.timer = setInterval(() => windFetch(), 10 * 60000); }
+  else { clearInterval(wind.timer); }
+  windRender();
+}
+/* Blå pilar som rör sig i vindens riktning inne i det gula området, ritade på en canvas som följer kartan. */
+function windAnim(on){
+  if(!on){ cancelAnimationFrame(wind.raf); wind.raf = 0; if(wind.canvas) wind.canvas.hidden = true; return; }
+  if(!wind.canvas){ wind.canvas = L.DomUtil.create('canvas', 'wind-arrows', map.getPane('wind')); }
+  wind.canvas.hidden = false;
+  if(!wind.raf) wind.raf = requestAnimationFrame(windFrame);
+}
+function windFrame(t){
+  wind.raf = 0;
+  const s = wind.sector, cv = wind.canvas; if(!s || !cv || cv.hidden) return;
+  if(!document.hidden){
+    const size = map.getSize(), dpr = window.devicePixelRatio || 1;
+    if(cv.width !== Math.round(size.x * dpr) || cv.height !== Math.round(size.y * dpr)){ cv.width = Math.round(size.x * dpr); cv.height = Math.round(size.y * dpr); cv.style.width = size.x + 'px'; cv.style.height = size.y + 'px'; }
+    L.DomUtil.setPosition(cv, map.containerPointToLayerPoint([0, 0]));
+    const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, size.x, size.y);
+    const P = s.pts.map(ll => map.latLngToContainerPoint(ll)), A = P[0];
+    g.save(); g.beginPath(); P.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); g.closePath(); g.clip();
+    const r = Math.PI / 180, ax = Math.sin(s.axis * r), ay = -Math.cos(s.axis * r), px = -ay, py = ax;   // axel (nedvind) och tvärs
+    const R = Math.max(...P.map(p => Math.hypot(p.x - A.x, p.y - A.y)));
+    const step = 30, len = 11, speed = 14 + wind.data.speed * 5;                 // pixlar mellan pilarna, pilens längd, fart (px/s)
+    const phase = ((t / 1000) * speed) % step;
+    // Bara den del av rutnätet som syns på skärmen
+    const cs = [[0, 0], [size.x, 0], [size.x, size.y], [0, size.y]].map(([x, y]) => [(x - A.x) * ax + (y - A.y) * ay, (x - A.x) * px + (y - A.y) * py]);
+    const u0 = Math.max(-step, Math.min(...cs.map(c => c[0]))), u1 = Math.min(R, Math.max(...cs.map(c => c[0])));
+    const v0 = Math.max(-R, Math.min(...cs.map(c => c[1]))), v1 = Math.min(R, Math.max(...cs.map(c => c[1])));
+    g.strokeStyle = '#1a73e8'; g.fillStyle = '#1a73e8'; g.lineWidth = 2; g.lineCap = 'round';
+    let n = 0;
+    for(let u = Math.floor(u0 / step) * step; u <= u1 && n < 4000; u += step){
+      const row = Math.round(u / step), off = (row & 1) ? step / 2 : 0;
+      for(let v = Math.floor(v0 / step) * step; v <= v1 && n < 4000; v += step){
+        const uu = u + phase, vv = v + off, x = A.x + ax * uu + px * vv, y = A.y + ay * uu + py * vv;
+        const hx = x + ax * len / 2, hy = y + ay * len / 2;
+        g.beginPath(); g.moveTo(x - ax * len / 2, y - ay * len / 2); g.lineTo(hx, hy); g.stroke();
+        g.beginPath(); g.moveTo(hx + ax * 3, hy + ay * 3); g.lineTo(hx - ax * 3 + px * 3.5, hy - ay * 3 + py * 3.5); g.lineTo(hx - ax * 3 - px * 3.5, hy - ay * 3 - py * 3.5); g.closePath(); g.fill();
+        n++;
+      }
+    }
+    g.restore();
+    wind.frames = (wind.frames || 0) + 1;
+  }
+  wind.raf = requestAnimationFrame(windFrame);
+}
+map.on('move zoom', () => { if(windOn() && wind.data && !myPos) windRender(); });
+map.on('moveend', () => { if(windOn()) windFetch(); });
+$('#popWind').addEventListener('change', e => setWind(e.target.checked));
+$('#windChip').addEventListener('click', () => { windFetch(true); toast('Hämtar vinden igen …', 1500); });
+
+/* ---------- Kryss med avståndsringar ----------
+   Visas i mitten av den synliga kartan medan man panorerar och zoomar, och en stund efteråt.
+   Visar också avståndet från din position till krysset. Ligger kvar hela tiden när man mäter. */
+const NICE = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000, 20000, 50000];
+const pan = {el:null, timer:null, ready:false};
+function panInit(){
+  if(pan.el) return;
+  pan.el = h(`<div class="pancross" hidden aria-hidden="true"><div class="pc-rings"></div><svg class="pc-x" viewBox="0 0 30 30"><path d="M15 3v9M15 18v9M3 15h9M18 15h9" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M15 3v9M15 18v9M3 15h9M18 15h9" stroke="#16231c" stroke-width="2" stroke-linecap="round"/></svg><div class="pc-label"></div></div>`);
+  map.getContainer().appendChild(pan.el);
+}
+function panShow(stay){
+  if(!pan.ready) return;
+  if(blocked() && !measure) { panHide(); return; }
+  panInit(); pan.el.hidden = false; panUpdate();
+  clearTimeout(pan.timer);
+  if(!stay && !measure) pan.timer = setTimeout(panHide, 2500);
+}
+function panHide(){ clearTimeout(pan.timer); if(pan.el && !measure) pan.el.hidden = true; }
+function panUpdate(){
+  if(!pan.el || pan.el.hidden) return;
+  const p = crossPoint(), ll = map.containerPointToLatLng(p), mpp = metersPerPixel(ll.lat, map.getZoom());
+  pan.el.style.left = p.x + 'px'; pan.el.style.top = p.y + 'px';
+  const step = NICE.find(m => m / mpp >= 38) || NICE[NICE.length - 1];
+  pan.el.querySelector('.pc-rings').innerHTML = [1, 2, 3].map(k => { const rpx = k * step / mpp; return `<span class="pc-ring" style="width:${2 * rpx}px;height:${2 * rpx}px;margin:${-rpx}px 0 0 ${-rpx}px"></span><span class="pc-rl" style="top:${-rpx}px">${fmtDist(k * step)}</span>`; }).join('');
+  const lab = pan.el.querySelector('.pc-label');
+  lab.textContent = myPos ? `${fmtDist(distM(myPos, ll))} från dig · ${dirName(bearingDeg(L.latLng(myPos.lat, myPos.lng), ll))}` : '';
+  lab.hidden = !myPos;
+}
+map.on('movestart zoomstart', () => panShow(true));
+map.on('move zoom', () => { if(pan.el && !pan.el.hidden) panUpdate(); else panShow(true); });
+map.on('moveend zoomend', () => { if(pan.el && !pan.el.hidden){ panUpdate(); if(!measure){ clearTimeout(pan.timer); pan.timer = setTimeout(panHide, 2500); } } });
+
+/* ---------- Mäta avstånd ----------
+   Flytta kartan så att krysset hamnar på en punkt och tryck Sätt punkt. Linjen och avståndet följer krysset
+   till nästa punkt. Man kan sätta flera punkter, då visas hela sträckan. */
+let measure = null;   // {pts:[latlng], layer}
+function startMeasure(){
+  if(drawing || placing || (typeof cal !== 'undefined' && cal) || (typeof adj !== 'undefined' && adj)) return;
+  measure = {pts:[], layer:L.layerGroup().addTo(map)};
+  $('#btnMeasure').setAttribute('aria-pressed', 'true');
+  $('#measurebar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
+  panShow(true); measureRender();
+  setTimeout(() => { syncCross(); panUpdate(); measureRender(); }, 320);
+}
+function endMeasure(){
+  if(!measure) return;
+  map.removeLayer(measure.layer); measure = null;
+  $('#btnMeasure').setAttribute('aria-pressed', 'false');
+  $('#measurebar').hidden = true; $('#btnAdd').hidden = false; panHide(); sheetRestore();
+}
+const pathLen = pts => pts.reduce((s, p, i) => i ? s + distM(pts[i - 1], p) : 0, 0);
+function measureRender(){
+  if(!measure) return;
+  measure.layer.clearLayers();
+  const c = crossLatLng(), P = measure.pts;
+  if(P.length){
+    L.polyline(P.concat([c]), {color:'#ffffff', weight:6, opacity:.8, interactive:false}).addTo(measure.layer);
+    L.polyline(P, {color:'#d9520e', weight:3, interactive:false}).addTo(measure.layer);
+    L.polyline([P[P.length - 1], c], {color:'#d9520e', weight:3, dashArray:'6 6', interactive:false}).addTo(measure.layer);
+    P.forEach(p => L.circleMarker(p, {radius:5, color:'#fff', weight:2, fillColor:'#d9520e', fillOpacity:1, interactive:false}).addTo(measure.layer));
+  }
+  const last = P[P.length - 1], seg = last ? distM(last, c) : 0, tot = pathLen(P);
+  $('#measureText').innerHTML = !P.length ? 'Flytta kartan så att krysset hamnar på den första punkten och tryck <b>Sätt punkt</b>.'
+    : `<b>${fmtDist(tot + seg)}</b> till krysset${P.length > 1 ? ` <span class="muted">(${fmtDist(tot)} mellan punkterna)</span>` : ''}<br><span class="small muted">Senaste delen ${fmtDist(seg)} mot ${dirName(bearingDeg(last, c))}${P.length > 1 ? ` · ${P.length} punkter` : ''}</span>`;
+  $('#mUndo').disabled = !P.length;
+}
+map.on('move zoom', () => { if(measure) measureRender(); });
+map.on('click', e => { if(measure) panToCross(e.latlng, true); });
+$('#btnMeasure').addEventListener('click', () => { if(measure) endMeasure(); else startMeasure(); });
+$('#mAdd').addEventListener('click', () => { const c = crossLatLng(); measure.pts.push(L.latLng(c.lat, c.lng)); measureRender(); });
+$('#mUndo').addEventListener('click', () => { measure.pts.pop(); measureRender(); });
+$('#mClose').addEventListener('click', endMeasure);
+
+/* Starta när kartan har fått sitt första läge */
+map.whenReady(() => setTimeout(() => { pan.ready = true; if(windOn()) setWind(true); }, 400));
+
 
 /* ---------- Start ---------- */
 map.on('moveend', () => { const c = map.getCenter(); state.settings.view = {lat:+c.lat.toFixed(5), lng:+c.lng.toFixed(5), z:map.getZoom()}; save(); });
@@ -3509,7 +3749,7 @@ let rz = null;
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

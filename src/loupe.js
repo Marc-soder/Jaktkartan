@@ -25,8 +25,8 @@ function loupeBase(){
 function loupeLayers(){
   loupe.vec.clearLayers(); loupe.shots.clearLayers();
   for(const a of state.areas){
-    if(a.visible === false || (drawing && drawing.mode === 'border' && drawing.id === a.id)) continue;
-    const pts = parseBorder(a.border); if(pts.length >= 3) L.polygon(pts, {color:'#d9520e', weight:3, fill:false, dashArray:'10 6', interactive:false}).addTo(loupe.vec);
+    if(a.visible === false) continue;
+    areaRings(a).forEach((pts, k) => { if(!(drawing && drawing.mode === 'border' && drawing.id === a.id && drawing.ring === k)) L.polygon(pts, {color:'#d9520e', weight:3, fill:false, dashArray:'10 6', interactive:false}).addTo(loupe.vec); });
     for(const [, l] of areaLines(a)) L.polyline(parseBorder(l.p), {color:l.k === 'path' ? '#7a2e8f' : '#8a4b12', weight:3, interactive:false}).addTo(loupe.vec);
   }
   if(drawing && drawing.pts.length >= 2){

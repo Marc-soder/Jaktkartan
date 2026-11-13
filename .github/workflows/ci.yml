@@ -36,6 +36,8 @@ jobs:
         run: npm run test:app
       - name: Tester av gränser och skogsvägar
         run: npm run test:border
+      - name: Tester av vind, avståndsringar och mätning
+        run: npm run test:tools
       - name: Tester av jaktlag och säkerhetsregler
         run: npm run test:cloud
       - name: Spara skärmbilder

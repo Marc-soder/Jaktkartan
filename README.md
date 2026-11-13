@@ -29,6 +29,7 @@ Efter merge klistrar du in den nya filen i Firebase-konsolen under Realtime Data
 | `src/cloud.js` | Jaktlag, inbjudningar, gäster, positioner, spår och synk mot Firebase. |
 | `src/border.js` | Gränser för jaktmarken, skogsvägar och egna vägar och stigar. |
 | `src/loupe.js` | Förstoringsglas som visas när man placerar eller drar en punkt. |
+| `src/tools.js` | Vindriktning, kryss med avståndsringar och mätning av avstånd. |
 | `src/overlay.js` | Skärmdumpar ovanpå kartan, som hjälp att rita gränser och lägga ut pass. Sparas bara i webbläsaren. |
 | `src/rules.js` | Säkerhetsreglerna för Firebase. |
 | `src/build.py` | Bygger `index.html` och `database.rules.json`. |
