@@ -80,6 +80,7 @@ with sync_playwright() as p:
 
         # ---- Kryss med avståndsringar (utan känd position) ----
         pg.evaluate('__fk.forgetMe()')
+        check(pg.locator('path.me-ring').count() == 0, f'{name}: inga ringar runt mig utan känd position')
         pg.evaluate('__fk.map.panBy([60, 40], {animate:false})'); pg.wait_for_timeout(200)
         check(pg.is_visible('.pancross .pc-x') and pg.locator('.pc-ring').count() == 3, f'{name}: krysset med tre avståndsringar visas när kartan flyttas')
         mb = pg.locator('#map').bounding_box(); xb = pg.locator('.pc-x').bounding_box()
@@ -108,6 +109,29 @@ with sync_playwright() as p:
         check(fd == ['7 m', '348 m', '1 234 m', '9 999 m', '12,3 km'], f'{name}: avstånd avrundas till hela meter {fd}')
         pg.wait_for_timeout(3000)
         check(not pg.is_visible('.pancross .pc-x') and pg.evaluate('__fk.panLine()') is None, f'{name}: krysset och linjen försvinner en stund efter att kartan stannat')
+        # ---- Avståndsringar runt min position, hela tiden ----
+        r16 = pg.evaluate('__fk.meRings()')
+        check(len(r16) >= 2 and max(r16) <= 500 and pg.locator('path.me-ring').count() == len(r16), f'{name}: ringar runt min position ligger kvar när krysset försvunnit {r16}')
+        ring = pg.evaluate("""(() => { const p = document.querySelector('path.me-ring').getBoundingClientRect(), c = __fk.map.getContainer().getBoundingClientRect();
+            const ctr = __fk.map.containerPointToLatLng([p.left + p.width / 2 - c.left, p.top + p.height / 2 - c.top]), edge = __fk.map.containerPointToLatLng([p.right - c.left, p.top + p.height / 2 - c.top]);
+            return {d: __fk.distM({lat:58.72, lng:14.60}, ctr), r: __fk.distM(ctr, edge)}; })()""")
+        check(ring['d'] < 3 and abs(ring['r'] - r16[0]) / r16[0] < 0.05, f'{name}: första ringen ligger runt min position med rätt radie {ring} (väntat {r16[0]} m)')
+        labels = [t.replace(' ', ' ') for t in pg.locator('.me-rl').all_inner_texts()]
+        check(labels == [f'{r} m' for r in r16], f'{name}: ringarna har avstånd utskrivet {labels}')
+        pg.evaluate('__fk.map.setZoom(18, {animate:false})'); pg.wait_for_timeout(200)
+        r18 = pg.evaluate('__fk.meRings()')
+        pg.evaluate('__fk.map.setZoom(13, {animate:false})'); pg.wait_for_timeout(200)
+        r13 = pg.evaluate('__fk.meRings()')
+        check(max(r18) < max(r16) and r18[0] < r16[0] and r13 and max(r13) == 500 and r13[0] >= r16[0], f'{name}: ringarna anpassas efter zoomen, högst 500 m: z18 {r18}, z16 {r16}, z13 {r13}')
+        mx = max(max(pg.evaluate(f'__fk.meRingRadii(58.72, {z})') or [0]) for z in range(8, 20))
+        check(mx <= 500, f'{name}: ingen ring längre än 500 m på någon zoomnivå ({mx} m)')
+        pg.evaluate('__fk.map.setZoom(16, {animate:false})'); pg.wait_for_timeout(200)
+        pg.click('#btnLayers'); pg.wait_for_timeout(200)
+        check(pg.is_checked('#popMeRings'), f'{name}: Avståndsringar runt mig är påslaget från början')
+        pg.uncheck('#popMeRings'); pg.wait_for_timeout(100)
+        check(pg.locator('path.me-ring').count() == 0 and pg.evaluate('__fk.meRings()') == [], f'{name}: ringarna går att stänga av i lagermenyn')
+        pg.check('#popMeRings'); pg.keyboard.press('Escape'); pg.wait_for_timeout(200)
+        check(pg.locator('path.me-ring').count() > 0, f'{name}: och slå på igen')
         pg.click('#btnAdd'); pg.wait_for_timeout(400); pg.evaluate('__fk.map.panBy([30, 0], {animate:false})'); pg.wait_for_timeout(200)
         check(not pg.is_visible('.pancross .pc-x'), f'{name}: inget extra kryss när man placerar en nål')
         pg.click('#placeCancel'); pg.wait_for_timeout(300)
