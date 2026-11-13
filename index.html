@@ -785,6 +785,8 @@ a{color:var(--accent)}
 .pancross{position:absolute;z-index:820;width:0;height:0;pointer-events:none}
 .pc-x{position:absolute;left:-15px;top:-15px;width:30px;height:30px}
 .pc-ring{position:absolute;border-radius:50%;border:1.5px solid rgba(22,35,28,.55);box-shadow:0 0 0 1px rgba(255,255,255,.6),inset 0 0 0 1px rgba(255,255,255,.6)}
+.me-rl{width:0;height:0}
+.me-rl span{position:absolute;left:0;top:0;transform:translate(-50%,-50%);font:600 10px/1 var(--font-body);color:#16231c;background:rgba(255,255,255,.85);padding:1px 4px;border-radius:4px;white-space:nowrap;pointer-events:none}
 .pc-rl{position:absolute;left:0;transform:translate(-50%,-50%);font:600 10px/1 var(--font-body);color:#16231c;background:rgba(255,255,255,.85);padding:1px 4px;border-radius:4px;white-space:nowrap}
 .pc-label{position:absolute;left:0;top:22px;transform:translateX(-50%);font:600 12px/1.2 var(--font-body);color:#fff;background:rgba(22,35,28,.82);padding:3px 7px;border-radius:6px;white-space:nowrap}
 .trail-range{padding:4px 8px 8px}
@@ -1015,6 +1017,7 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
   <button class="base-opt" type="button" id="popDrawLine" style="width:100%;border:0;background:none;text-align:left;color:inherit;font:inherit"><span style="width:18px;text-align:center;font-weight:700;color:var(--accent)">+</span><span><strong>Rita egen väg eller stig</strong><small>Saknas en väg? Rita den så syns den för jaktlaget</small></span></button>
   <a class="base-opt" href="https://minkarta.lantmateriet.se/" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><span style="width:18px"></span><span><strong>Fastighetsgränser</strong><small>Öppnas i Lantmäteriets Min karta</small></span></a>
   <label class="base-opt"><input type="checkbox" id="popWind"><span><strong>Vindriktning</strong><small id="windNote">Gult område där vittringen driver, med pilar som visar vinden</small></span></label>
+  <label class="base-opt"><input type="checkbox" id="popMeRings"><span><strong>Avståndsringar runt mig</strong><small>Upp till 500 m, tätare när du zoomar in</small></span></label>
   <label class="base-opt"><input type="checkbox" id="popLabels"><span><strong>Namn på nålar</strong><small>Visas när du zoomat in</small></span></label>
   <label class="base-opt"><input type="checkbox" id="popSvamp"><span><strong>Svampkarta</strong><small>Dina svampställen och andras fynd</small></span></label>
   <div id="heatBox" hidden><div class="pop-sep"></div>
@@ -1738,6 +1741,7 @@ function renderLayerPop(){
   $('#popSvamp').checked = !!state.settings.svampMode;
   $('#popRoads').checked = !!state.settings.roads;
   $('#popLabels').checked = pinLabelsOn();
+  $('#popMeRings').checked = meRingsOn();
   renderTrailControls(); renderShotList(); renderWindNote(); heatSync();
 }
 function renderAll(){
@@ -2048,9 +2052,10 @@ function showMe(lat, lng, acc){
   renderHeading();
   if(windOn() && wind.data) windRender();
   if(typeof panUpdate === 'function') panUpdate();
+  if(typeof meRingsRender === 'function') meRingsRender();
 }
 /* Glöm positionen (används av testerna). */
-function forgetMe(){ myPos = null; if(meMarker){ map.removeLayer(meMarker); map.removeLayer(meCircle); meMarker = meCircle = null; } panLine(null); }
+function forgetMe(){ myPos = null; if(meMarker){ map.removeLayer(meMarker); map.removeLayer(meCircle); meMarker = meCircle = null; } panLine(null); meRingsRender(); }
 function locate(fly){
   if(!('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); return; }
   $('#btnLocate').setAttribute('aria-pressed','true');
@@ -3842,6 +3847,36 @@ map.on('movestart zoomstart', () => panShow(true));
 map.on('move zoom', () => { if(pan.el && !pan.el.hidden) panUpdate(); else panShow(true); });
 map.on('moveend zoomend', () => { if(pan.el && !pan.el.hidden){ panUpdate(); if(!measure){ clearTimeout(pan.timer); pan.timer = setTimeout(panHide, 2500); } } });
 
+/* ---------- Avståndsringar runt min position ----------
+   Ligger kvar hela tiden när positionen är känd. Avståndet mellan ringarna väljs efter zoomen,
+   så att de inte hamnar för tätt, och den yttersta ringen är högst 500 m. */
+const ME_RING_MAX = 500, ME_RING_STEPS = [10, 20, 25, 50, 100, 250, 500];
+const meRings = {layer:null, radii:[]};
+const meRingsOn = () => state.settings.meRings !== false;
+function meRingRadii(lat, zoom){
+  const mpp = metersPerPixel(lat, zoom);
+  let step = ME_RING_STEPS.find(m => m / mpp >= 45);
+  if(!step){ if(ME_RING_MAX / mpp < 14) return []; step = ME_RING_MAX; }   // utzoomat: bara 500 m-ringen, eller inget alls
+  const out = [];
+  for(let k = 1; k <= 5 && k * step <= ME_RING_MAX; k++) out.push(k * step);
+  return out;
+}
+function meRingsRender(){
+  if(!meRings.layer) meRings.layer = L.layerGroup().addTo(map);
+  meRings.layer.clearLayers(); meRings.radii = [];
+  if(!myPos || !meRingsOn()) return;
+  const c = L.latLng(myPos.lat, myPos.lng), radii = meRingRadii(c.lat, map.getZoom());
+  meRings.radii = radii;
+  for(const r of radii){
+    L.circle(c, {radius:r, color:'#ffffff', weight:3, opacity:.55, fill:false, interactive:false, className:'me-ring-halo'}).addTo(meRings.layer);
+    L.circle(c, {radius:r, color:'#16231c', weight:1.2, opacity:.75, fill:false, interactive:false, className:'me-ring'}).addTo(meRings.layer);
+    L.marker([c.lat + r / 111320, c.lng], {icon:L.divIcon({className:'me-rl', html:`<span>${r} m</span>`, iconSize:[0, 0]}), interactive:false, keyboard:false, zIndexOffset:-1000}).addTo(meRings.layer);
+  }
+}
+function setMeRings(on){ state.settings.meRings = !!on; save(); meRingsRender(); const c = $('#popMeRings'); if(c) c.checked = meRingsOn(); }
+map.on('zoomend', meRingsRender);
+$('#popMeRings').addEventListener('change', e => setMeRings(e.target.checked));
+
 /* ---------- Mäta avstånd ----------
    Flytta kartan så att krysset hamnar på en punkt och tryck Sätt punkt. Linjen och avståndet följer krysset
    till nästa punkt. Man kan sätta flera punkter, då visas hela sträckan. */
@@ -4102,7 +4137,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

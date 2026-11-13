@@ -169,6 +169,36 @@ map.on('movestart zoomstart', () => panShow(true));
 map.on('move zoom', () => { if(pan.el && !pan.el.hidden) panUpdate(); else panShow(true); });
 map.on('moveend zoomend', () => { if(pan.el && !pan.el.hidden){ panUpdate(); if(!measure){ clearTimeout(pan.timer); pan.timer = setTimeout(panHide, 2500); } } });
 
+/* ---------- Avståndsringar runt min position ----------
+   Ligger kvar hela tiden när positionen är känd. Avståndet mellan ringarna väljs efter zoomen,
+   så att de inte hamnar för tätt, och den yttersta ringen är högst 500 m. */
+const ME_RING_MAX = 500, ME_RING_STEPS = [10, 20, 25, 50, 100, 250, 500];
+const meRings = {layer:null, radii:[]};
+const meRingsOn = () => state.settings.meRings !== false;
+function meRingRadii(lat, zoom){
+  const mpp = metersPerPixel(lat, zoom);
+  let step = ME_RING_STEPS.find(m => m / mpp >= 45);
+  if(!step){ if(ME_RING_MAX / mpp < 14) return []; step = ME_RING_MAX; }   // utzoomat: bara 500 m-ringen, eller inget alls
+  const out = [];
+  for(let k = 1; k <= 5 && k * step <= ME_RING_MAX; k++) out.push(k * step);
+  return out;
+}
+function meRingsRender(){
+  if(!meRings.layer) meRings.layer = L.layerGroup().addTo(map);
+  meRings.layer.clearLayers(); meRings.radii = [];
+  if(!myPos || !meRingsOn()) return;
+  const c = L.latLng(myPos.lat, myPos.lng), radii = meRingRadii(c.lat, map.getZoom());
+  meRings.radii = radii;
+  for(const r of radii){
+    L.circle(c, {radius:r, color:'#ffffff', weight:3, opacity:.55, fill:false, interactive:false, className:'me-ring-halo'}).addTo(meRings.layer);
+    L.circle(c, {radius:r, color:'#16231c', weight:1.2, opacity:.75, fill:false, interactive:false, className:'me-ring'}).addTo(meRings.layer);
+    L.marker([c.lat + r / 111320, c.lng], {icon:L.divIcon({className:'me-rl', html:`<span>${r} m</span>`, iconSize:[0, 0]}), interactive:false, keyboard:false, zIndexOffset:-1000}).addTo(meRings.layer);
+  }
+}
+function setMeRings(on){ state.settings.meRings = !!on; save(); meRingsRender(); const c = $('#popMeRings'); if(c) c.checked = meRingsOn(); }
+map.on('zoomend', meRingsRender);
+$('#popMeRings').addEventListener('change', e => setMeRings(e.target.checked));
+
 /* ---------- Mäta avstånd ----------
    Flytta kartan så att krysset hamnar på en punkt och tryck Sätt punkt. Linjen och avståndet följer krysset
    till nästa punkt. Man kan sätta flera punkter, då visas hela sträckan. */
