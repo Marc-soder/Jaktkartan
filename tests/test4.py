@@ -65,6 +65,19 @@ with sync_playwright() as p:
         pg.click('#btnLayers'); pg.wait_for_timeout(200); pg.uncheck('#popWind'); pg.keyboard.press('Escape'); pg.wait_for_timeout(300)
         check(not pg.is_visible('#windChip') and pg.locator('path.wind-sector').count() == 0 and pg.evaluate("document.querySelector('canvas.wind-arrows').hidden"), f'{name}: vinden går att stänga av')
 
+        # ---- Riktningen jag tittar åt ----
+        pg.evaluate('__fk.showMe(58.7200, 14.6000, 8)'); pg.wait_for_timeout(200)
+        check(pg.locator('.me-icon .me-cone').count() == 1 and not pg.is_visible('.me-icon .me-cone'), f'{name}: ingen riktningspil innan kompassen ger något')
+        pg.evaluate('__fk.startCompass()')
+        pg.evaluate("window.dispatchEvent(new DeviceOrientationEvent('deviceorientationabsolute', {alpha: 90, beta: 0, gamma: 0, absolute: true}))"); pg.wait_for_timeout(200)
+        rot = pg.evaluate("document.querySelector('.me-icon .me-cone').style.transform")
+        check(pg.is_visible('.me-icon .me-cone') and rot == 'rotate(270deg)', f'{name}: Android-kompass (alpha 90) ger en pil mot väster: {rot}')
+        pg.evaluate("(() => { const e = new Event('deviceorientation'); Object.defineProperty(e, 'webkitCompassHeading', {value: 45}); window.dispatchEvent(e); })()"); pg.wait_for_timeout(200)
+        rot = pg.evaluate("document.querySelector('.me-icon .me-cone').style.transform")
+        check(rot == 'rotate(45deg)', f'{name}: iPhone-kompass (45°) ger en pil mot nordost: {rot}')
+        pg.evaluate('__fk.showMe(58.7201, 14.6001, 8)'); pg.wait_for_timeout(150)
+        check(pg.evaluate("document.querySelector('.me-icon .me-cone').style.transform") == 'rotate(45deg)', f'{name}: pilen ligger kvar när positionen uppdateras')
+
         # ---- Kryss med avståndsringar ----
         pg.evaluate('__fk.map.panBy([60, 40], {animate:false})'); pg.wait_for_timeout(200)
         check(pg.is_visible('.pancross .pc-x') and pg.locator('.pc-ring').count() == 3, f'{name}: krysset med tre avståndsringar visas när kartan flyttas')

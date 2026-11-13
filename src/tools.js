@@ -201,3 +201,40 @@ $('#mClose').addEventListener('click', endMeasure);
 
 /* Starta när kartan har fått sitt första läge */
 map.whenReady(() => setTimeout(() => { pan.ready = true; if(windOn()) setWind(true); }, 400));
+
+/* ---------- Riktningen jag tittar åt ----------
+   En blå kon från positionspricken, efter telefonens kompass. Startas av ett tryck på positionsknappen
+   (på iPhone krävs ett tryck för att få tillåtelse att läsa kompassen). */
+const compass = {on:false, heading:null, raf:0};
+const screenAngle = () => (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (typeof window.orientation === 'number' ? window.orientation : 0);
+function onOrient(e){
+  let hd = null;
+  if(typeof e.webkitCompassHeading === 'number' && e.webkitCompassHeading >= 0) hd = e.webkitCompassHeading;   // iPhone: medsols från norr
+  else if(e.absolute && typeof e.alpha === 'number') hd = 360 - e.alpha;                                            // Android: moturs från norr
+  if(hd == null) return;
+  compass.heading = ((hd + screenAngle()) % 360 + 360) % 360;
+  if(!compass.raf) compass.raf = requestAnimationFrame(() => { compass.raf = 0; renderHeading(); });
+}
+function renderHeading(){
+  const el = typeof meMarker !== 'undefined' && meMarker && meMarker.getElement(), cone = el && el.querySelector('.me-cone');
+  if(!cone) return;
+  // SVG-element har ingen hidden-egenskap, så attributet sätts direkt
+  if(compass.heading == null){ cone.setAttribute('hidden', ''); return; }
+  cone.removeAttribute('hidden'); cone.style.transform = `rotate(${compass.heading}deg)`;
+}
+function startCompass(){
+  if(compass.on) return;
+  const go = () => {
+    compass.on = true;
+    window.addEventListener('deviceorientationabsolute', onOrient);
+    window.addEventListener('deviceorientation', e => { if(typeof e.webkitCompassHeading === 'number' || e.absolute) onOrient(e); });
+  };
+  try {
+    if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') DeviceOrientationEvent.requestPermission().then(r => { if(r === 'granted') go(); }).catch(() => {});
+    else go();
+  } catch(e){}
+}
+$('#btnLocate').addEventListener('click', startCompass);
+$('#popTrailRec').addEventListener('change', startCompass);
+$('#paneJakt').addEventListener('change', e => { if(e.target.id === 'shareToggle') startCompass(); });
+$('#btnObs').addEventListener('click', () => { if(!blocked() && !measure) startPlacing({mode:'obs'}); });

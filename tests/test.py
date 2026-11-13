@@ -107,10 +107,15 @@ with sync_playwright() as p:
     check(len(newp) == 1 and abs(newp[0]['lat'] - cross_ll['lat']) < 1e-6 and abs(newp[0]['lng'] - cross_ll['lng']) < 1e-6, 'ny nål sparad där korset stod')
     check(pg.locator('.pin-icon').count() == 9, 'nio nålar på kartan')
 
-    # Ny nål via högerklick + ny typ från formuläret
+    # Högerklick (långt tryck på mobil) skapar ingen nål, det gör man med +
     box = pg.locator('#map').bounding_box()
     pg.mouse.click(box['x'] + box['width'] * 0.3, box['y'] + box['height'] * 0.4, button='right'); pg.wait_for_timeout(250)
-    check(pg.is_visible('#pinForm'), 'högerklick öppnar nålformulär')
+    check(not pg.is_visible('#pinForm'), 'högerklick i kartan öppnar inte nålformuläret')
+    pg.evaluate('__fk.map.fire("contextmenu", {latlng: __fk.map.getCenter()})'); pg.wait_for_timeout(200)
+    check(not pg.is_visible('#pinForm'), 'långt tryck i kartan öppnar inte nålformuläret')
+    # Ny nål via + och ny typ från formuläret
+    pg.click('#btnAdd'); pg.wait_for_timeout(350); pg.click('#placeOk'); pg.wait_for_timeout(250)
+    check(pg.is_visible('#pinForm'), '+ och Lägg nålen här öppnar nålformuläret')
     pg.fill('#pfName', 'Utkasttest')
     pg.select_option('#pfType', '__new'); pg.wait_for_timeout(200)
     pg.fill('#tfName', 'Gömsle'); pg.click('.icon-opt[data-i="tent"]'); pg.click('#tfForm button[type=submit]'); pg.wait_for_timeout(250)

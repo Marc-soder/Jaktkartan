@@ -91,6 +91,18 @@ const rules = { rules: {
         }
       }
     },
+    // Viltobservationer per jakt. Alla deltagare (medlemmar och jaktens gäster) ser och lägger till under pågående jakt.
+    // Man ändrar och tar bort sina egna. Jaktledare och admin kan ta bort alla.
+    huntObs: {
+      '$hid': {
+        '.read': `(${isMember} || (${isGuest} && ${guest}.child('hid').val() === $hid)) && ${huntLive}`,
+        '.write': `${canLead} && !newData.exists()`,
+        '$oid': {
+          '.write': `${signed} && ${huntLive} && (${me}.exists() || (${isGuest} && ${guest}.child('hid').val() === $hid)) && (newData.exists() ? (newData.child('by').val() === auth.uid && (!data.exists() || data.child('by').val() === auth.uid)) : (data.child('by').val() === auth.uid || ${canLead}))`,
+          '.validate': `newData.hasChildren(['sp','n','lat','lng','t','by']) && newData.child('sp').isString() && newData.child('sp').val().length >= 1 && newData.child('sp').val().length <= 40 && newData.child('n').isNumber() && newData.child('n').val() >= 1 && newData.child('n').val() <= 999 && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000 && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 200)) && (!newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val().length <= 60))`
+        }
+      }
+    },
     // Spår (tidigare positioner) per jakt, med samma åtkomst som positionerna.
     huntTrail: {
       '$hid': {
