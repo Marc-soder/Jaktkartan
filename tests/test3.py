@@ -44,12 +44,12 @@ with sync_playwright() as p:
         pg.click('#drawOk'); pg.wait_for_timeout(400)
         st=pg.evaluate('__fk.state()'); a=[x for x in st['areas'] if x.get('border')]
         check(len(a)==1 and len(a[0]['border'].split(';'))==4 and not pg.is_visible('#drawbar') and pg.is_visible('#btnAdd'), f'{name}: gränsen sparad med 4 punkter, ritläge stängt')
-        n=pg.evaluate('(() => { let n=0; __fk.map.eachLayer(l => { if(l instanceof L.Polygon) n++; }); return n; })()')
+        n=pg.evaluate('(() => { let n=0; __fk.map.eachLayer(l => { if(l instanceof L.Polygon && l.options.className !== "wind-sector") n++; }); return n; })()')
         check(n==2, f'{name}: gränsen ritas på kartan ({n} lager)')
         aid=a[0]['id']
         # dölj området -> gränsen försvinner
         pg.click('#tab-filter'); pg.wait_for_timeout(500); pg.evaluate(f'document.getElementById("ar-{aid}").click()'); pg.wait_for_timeout(200)
-        n=pg.evaluate('(() => { let n=0; __fk.map.eachLayer(l => { if(l instanceof L.Polygon) n++; }); return n; })()')
+        n=pg.evaluate('(() => { let n=0; __fk.map.eachLayer(l => { if(l instanceof L.Polygon && l.options.className !== "wind-sector") n++; }); return n; })()')
         check(n==0, f'{name}: släckt område döljer gränsen')
         pg.evaluate(f'document.getElementById("ar-{aid}").click()')
         # avbryt ändrar inget
@@ -98,13 +98,13 @@ with sync_playwright() as p:
         kml='59.00000,17.00000;59.00000,17.01000;59.01000,17.01000;59.01000,17.00000'
         check(b==";".join(orig)+'|'+kml, f'{name}: KML-yta importerad som en ny gränsdel, den gamla finns kvar: {b[-60:]}')
         # flera gränsdelar i samma område
-        n=pg.evaluate('(() => { let n=0; __fk.map.eachLayer(l => { if(l instanceof L.Polygon) n++; }); return n; })()')
+        n=pg.evaluate('(() => { let n=0; __fk.map.eachLayer(l => { if(l instanceof L.Polygon && l.options.className !== "wind-sector") n++; }); return n; })()')
         check(n==4, f'{name}: båda gränsdelarna ritas på kartan ({n} lager)')
         pg.evaluate(f'__fk.openAreaForm("{aid}")'); pg.wait_for_timeout(200)
         txt=pg.inner_text('.modal')
         check(pg.locator('[data-ring-edit]').count()==2 and 'Del 1' in txt and 'Del 2' in txt and 'Totalt' in txt and 'Rita en till del' in txt, f'{name}: områdesformuläret listar två delar och totalen')
         pg.click('[data-ring-edit="1"]'); pg.wait_for_timeout(400)
-        check(pg.evaluate('__fk.drawingPts()')==[[59,17],[59,17.01],[59.01,17.01],[59.01,17]] and pg.evaluate('(() => { let n=0; __fk.map.eachLayer(l => { if(l instanceof L.Polygon) n++; }); return n; })()')==3, f'{name}: Ändra del 2 laddar just den delen, del 1 syns kvar')
+        check(pg.evaluate('__fk.drawingPts()')==[[59,17],[59,17.01],[59.01,17.01],[59.01,17]] and pg.evaluate('(() => { let n=0; __fk.map.eachLayer(l => { if(l instanceof L.Polygon && l.options.className !== "wind-sector") n++; }); return n; })()')==3, f'{name}: Ändra del 2 laddar just den delen, del 1 syns kvar')
         pg.locator('.drag-handle.mid').nth(0).click(); pg.wait_for_timeout(200); pg.click('#drawOk'); pg.wait_for_timeout(300)
         rs=[x for x in pg.evaluate('__fk.state().areas') if x['id']==aid][0]['border'].split('|')
         check(len(rs)==2 and rs[0]==";".join(orig) and len(rs[1].split(';'))==5, f'{name}: ändringen sparas i del 2, del 1 orörd')

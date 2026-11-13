@@ -55,6 +55,7 @@ async function mkPage(browser, who, hash, opts){
   await ctx.route('**/*', r => { const u = r.request().url();
     if(u.includes('firebase-app-compat')) return r.fulfill({status:200, contentType:'text/javascript', body:FAKE});
     if(u.includes('gstatic.com/firebasejs')) return r.fulfill({status:200, contentType:'text/javascript', body:''});
+    if(u.includes('api.open-meteo.com')) return r.fulfill({status:200, contentType:'application/json', headers:{'Access-Control-Allow-Origin':'*'}, body:JSON.stringify({current:{wind_speed_10m:3, wind_direction_10m:270, wind_gusts_10m:5}})});
     if(u.startsWith('file:') || u.includes('localhost:8765')) return r.continue();
     if(u.includes('fonts.')) return r.abort();
     return r.fulfill({status:200, contentType:'image/png', body:tile}); });
@@ -116,7 +117,7 @@ const gids = () => Object.keys(data.groups || {});
   await B.click('[data-j="login-google"]'); await W(B, 800);
   check(data.groups[gid].members.bob && data.groups[gid].members.bob.role === 'editor', 'Bob blev medlem med rätt roll');
   let sb = await st(B);
-  check((sb.areas.find(a => a.id === aid) || {}).border === data.groups[gid].areas[aid].border && await B.evaluate(() => { let n = 0; __fk.map.eachLayer(l => { if(l instanceof L.Polygon) n++; }); return n; }) === 2, 'Bob ser lagets gräns på kartan');
+  check((sb.areas.find(a => a.id === aid) || {}).border === data.groups[gid].areas[aid].border && await B.evaluate(() => { let n = 0; __fk.map.eachLayer(l => { if(l instanceof L.Polygon && l.options.className !== 'wind-sector') n++; }); return n; }) === 2, 'Bob ser lagets gräns på kartan');
   check((((sb.areas.find(a => a.id === aid) || {}).lines || {})['l-2'] || {}).k === 'road' && await B.evaluate(() => { let n = 0; __fk.map.eachLayer(l => { if(l instanceof L.Polyline && !(l instanceof L.Polygon) && l.options.color === '#8a4b12') n++; }); return n; }) === 1, 'Bob ser lagets egna väg på kartan');
   check(sb.pins.length === 13 && sb.areas.length === 3, `Bob ser sina 8 egna + 5 delade nålar (${sb.pins.length}) och 3 områden`);
   // Bob lägger till en nål i det delade området
@@ -205,12 +206,33 @@ const gids = () => Object.keys(data.groups || {});
   check(await lines(B, aliceColor) === 2 && Math.abs(await minLat(B, aliceColor) - 58.718) < 1e-6 && (await B.innerText('#trailMinTxt')) === '15 min' && (await st(B)).settings.trailMin === 15, 'med 15 minuter syns spåret från 10 minuter sedan, och valet sparas');
   const forged = await B.evaluate(([g, h]) => firebase.database().ref('groups/' + g + '/huntTrail/' + h + '/alice').push({lat:1, lng:1, t:Date.now()}).then(() => 'ok', () => 'denied'), [gid, hid]);
   check(forged === 'denied', 'man kan inte skriva i någon annans spår');
+  // ---- Viltobservationer ----
+  check(await B.isVisible('#btnObs') && await C.isVisible('#btnObs'), 'kikaren syns under pågående jakt, även för gästen');
+  await B.click('#btnObs'); await W(B, 400); await B.click('#placeOk'); await W(B, 300);
+  check(await B.isVisible('#obForm') && (await B.innerText('#obSp')).includes('Rådjur'), 'observationsformuläret öppnas med jaktens vilt');
+  await B.selectOption('#obSp', 'Rådjur'); await B.fill('#obN', '2'); await B.fill('#obNote', 'Get och kid'); await B.click('#obForm button[type=submit]'); await W(B, 700);
+  const obs = () => Object.values(((data.groups[gid].huntObs || {})[hid]) || {});
+  check(obs().length === 1 && obs()[0].sp === 'Rådjur' && obs()[0].n === 2 && obs()[0].by === 'bob' && obs()[0].note === 'Get och kid', 'Bobs observation sparas i jakten');
+  await W(C, 400);
+  check(await A.locator('.obs-icon').count() === 1 && await C.locator('.obs-icon').count() === 1, 'Alice och gästen Carl ser observationen på kartan');
+  check((await A.innerText('#paneJakt')).includes('Get och kid'), 'observationen listas i jaktkortet');
+  const bobOid = Object.keys(data.groups[gid].huntObs[hid])[0];
+  const cw = await C.evaluate(([g, h, o]) => Promise.all([
+    firebase.database().ref('groups/' + g + '/huntObs/' + h).push({sp:'Vildsvin', n:1, lat:58.72, lng:14.6, t:Date.now(), by:'anon-carl', name:'Carl'}).then(() => 'ok', () => 'denied'),
+    firebase.database().ref('groups/' + g + '/huntObs/' + h + '/' + o).remove().then(() => 'ok', () => 'denied'),
+    firebase.database().ref('groups/' + g + '/huntObs/' + h).push({sp:'Älg', n:1, lat:58.72, lng:14.6, t:Date.now(), by:'bob'}).then(() => 'ok', () => 'denied')]), [gid, hid, bobOid]);
+  check(cw.join() === 'ok,denied,denied', `gästen kan lägga in egna observationer men inte ta bort andras eller skriva i någon annans namn (${cw})`);
+  await W(A, 400);
+  check(await A.locator('.obs-icon').count() === 2, 'Alice ser båda observationerna');
+  await A.evaluate(() => { const o = document.querySelector('.obs-icon'); if(o) o.scrollIntoView(); }); await A.screenshot({path:shot('a_obs.png')});
   await A.locator('#shareToggle').uncheck({force:true}); await W(A, 500);
   check(!hp().alice && !Object.keys(tr()).length && await B.locator('.pos-icon').count() === 1, 'Alice slutar dela: hennes position och spår tas bort');
   // ---- Avsluta jakten ----
   await B.click('[data-j="hunt-end"]'); await B.click('[data-j="hunt-end"]'); await W(B, 900);
   check(!data.groups[gid].hunts && !data.huntCodes && !(data.groups[gid].guests || {})['anon-carl'], 'jakten, koden och gästposten är borta');
-  check(!data.groups[gid].huntPos && !data.groups[gid].huntTrail, 'jaktens positioner och spår raderades när jakten avslutades');
+  check(!data.groups[gid].huntPos && !data.groups[gid].huntTrail && !data.groups[gid].huntObs, 'jaktens positioner, spår och observationer raderades när jakten avslutades');
+  await W(A, 300);
+  check(await A.locator('.obs-icon').count() === 0 && !(await A.isVisible('#btnObs')), 'efter jakten syns inga observationer och ingen kikare');
   await W(B, 300);
   check(await A.locator('.pos-icon').count() === 0 && await B.locator('.pos-icon').count() === 0 && await A.locator('#shareToggle').isDisabled(), 'efter jakten syns inga positioner och delningen är avstängd');
   sc = await st(C);
@@ -230,7 +252,7 @@ const gids = () => Object.keys(data.groups || {});
   const t0 = Date.now();
   const base = {owner:'o', creators:{c1:true}, groups:{g:{meta:{name:'L', owner:'o'}, members:{o:{role:'admin', name:'O'}, a2:{role:'admin', name:'A2'}, e:{role:'editor', name:'E'}, v:{role:'viewer', name:'V'}},
     areas:{ar:{name:'A'}}, pins:{ar:{p:{lat:1, lng:2, typeId:'t'}}}, hunts:{h:{name:'J', expires:t0 + 1000, code:'HUNTCODE', areas:{ar:true}}, h2:{name:'J2', starts:t0 + 500, expires:t0 + 1000, code:'HUNTCOD2'}}, guests:{gu:{hid:'h', code:'HUNTCODE', name:'G', expires:t0 + 1000}},
-      huntPos:{h:{e:{lat:1, lng:1, t:1}}, h2:{}}, huntTrail:{h:{e:{k1:{lat:1, lng:1, t:1}}}}}},
+      huntPos:{h:{e:{lat:1, lng:1, t:1}}, h2:{}}, huntTrail:{h:{e:{k1:{lat:1, lng:1, t:1}}}}, huntObs:{h:{o1:{sp:'Rådjur', n:1, lat:1, lng:1, t:1, by:'e'}}}}},
     invites:{INVITECODE1:{gid:'g', role:'editor', expires:t0 + 1000}, OLDINVITE01:{gid:'g', role:'editor', expires:t0 - 1}}, huntCodes:{HUNTCODE:{gid:'g', hid:'h', expires:t0 + 1000}}};
   const D = (uid, now) => { const d = targaryen.database(rules, base, now || t0).as(uid ? tok(uid) : null);
     return {read: p => d.read(p, now || t0), write: (p, v) => d.write(p, v, undefined, now || t0)}; };
@@ -257,6 +279,12 @@ const gids = () => Object.keys(data.groups || {});
   const T = {lat:1, lng:1, t:t0};
   check(D('e').write('/groups/g/huntTrail/h/e/k2', T).allowed && D('gu').write('/groups/g/huntTrail/h/gu/k2', T).allowed && !D('e').write('/groups/g/huntTrail/h/v/k2', T).allowed && !D('x').write('/groups/g/huntTrail/h/x/k2', T).allowed, 'regel: spår skrivs bara av personen själv, med åtkomst till jakten');
   check(D('v').read('/groups/g/huntTrail/h').allowed && D('gu').read('/groups/g/huntTrail/h').allowed && !D('x').read('/groups/g/huntTrail/h').allowed && !D('v', t0 + 2000).read('/groups/g/huntTrail/h').allowed && !D('e', t0 + 2000).write('/groups/g/huntTrail/h/e/k2', T).allowed && !D('e').write('/groups/g/huntTrail/h2/e/k2', T).allowed, 'regel: spår syns och skrivs bara medan jakten pågår');
+  const O = u => ({sp:'Älg', n:1, lat:1, lng:1, t:t0, by:u});
+  check(D('e').write('/groups/g/huntObs/h/n1', O('e')).allowed && D('v').write('/groups/g/huntObs/h/n1', O('v')).allowed && D('gu').write('/groups/g/huntObs/h/n1', O('gu')).allowed && !D('x').write('/groups/g/huntObs/h/n1', O('x')).allowed, 'regel: alla jaktens deltagare kan lägga in observationer, inte utomstående');
+  check(!D('e').write('/groups/g/huntObs/h/n1', O('v')).allowed && !D('v').write('/groups/g/huntObs/h/o1', O('v')).allowed && !D('v').write('/groups/g/huntObs/h/o1', null).allowed, 'regel: man kan inte skriva i någon annans namn eller ändra och ta bort andras observationer');
+  check(D('e').write('/groups/g/huntObs/h/o1', Object.assign(O('e'), {n:3})).allowed && D('e').write('/groups/g/huntObs/h/o1', null).allowed && D('a2').write('/groups/g/huntObs/h/o1', null).allowed && D('a2').write('/groups/g/huntObs/h', null).allowed && !D('e').write('/groups/g/huntObs/h', null).allowed, 'regel: egna observationer ändras och tas bort, jaktledare och admin tar bort alla');
+  check(!D('e').write('/groups/g/huntObs/h2/n1', O('e')).allowed && !D('e', t0 + 2000).write('/groups/g/huntObs/h/n1', O('e')).allowed && !D('v', t0 + 2000).read('/groups/g/huntObs/h').allowed && D('v').read('/groups/g/huntObs/h').allowed && D('gu').read('/groups/g/huntObs/h').allowed && !D('gu').read('/groups/g/huntObs/h2').allowed && !D('x').read('/groups/g/huntObs/h').allowed, 'regel: observationer finns bara medan jakten pågår och bara för dess deltagare');
+  check(!D('e').write('/groups/g/huntObs/h/n1', Object.assign(O('e'), {n:0})).allowed && !D('e').write('/groups/g/huntObs/h/n1', Object.assign(O('e'), {sp:'x'.repeat(41)})).allowed && !D('e').write('/groups/g/huntObs/h/n1', Object.assign(O('e'), {t:t0 + 3600000})).allowed && !D('e').write('/groups/g/huntObs/h/n1', {sp:'Älg', n:1, by:'e'}).allowed, 'regel: ogiltiga observationer nekas');
   check(!D('e').write('/groups/g/huntTrail/h/e/k3', {lat:1, lng:1, t:t0 + 3600000}).allowed && D('a2').write('/groups/g/huntTrail/h', null).allowed && !D('e').write('/groups/g/huntTrail/h', null).allowed, 'regel: spårpunkter kan inte framtidsdateras, bara jaktledare raderar jaktens spår');
   check(!D('x').write('/groups/n2/meta', {name:'N', owner:'x'}).allowed && !D('e').write('/groups/n2/meta', {name:'N', owner:'e'}).allowed && D('o').write('/groups/n2/meta', {name:'N', owner:'o'}).allowed && D('c1').write('/groups/n2/meta', {name:'N', owner:'c1'}).allowed, 'regel: bara ägaren och godkända kan skapa jaktlag');
   check(!D('x').write('/owner', 'x').allowed && !D('o').write('/owner', 'x').allowed && !D('x').write('/creators/x', true).allowed && D('o').write('/creators/x', true).allowed, 'regel: ägarskapet kan inte tas över, bara ägaren godkänner fler');
