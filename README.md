@@ -31,6 +31,7 @@ Efter merge klistrar du in den nya filen i Firebase-konsolen under Realtime Data
 | `src/loupe.js` | Förstoringsglas som visas när man placerar eller drar en punkt. |
 | `src/tools.js` | Vindriktning, kryss med avståndsringar och mätning av avstånd. |
 | `src/overlay.js` | Skärmdumpar ovanpå kartan, som hjälp att rita gränser och lägga ut pass. Sparas bara i webbläsaren. |
+| `src/plan.js` | Jaktplan: vem som står på vilket pass, förbjudna skjutriktningar, såtar och vägar för hundförare och drevkarlar. |
 | `src/rules.js` | Säkerhetsreglerna för Firebase. |
 | `src/build.py` | Bygger `index.html` och `database.rules.json`. |
 | `tests/` | Webbläsartester med Playwright, och testfiler. |

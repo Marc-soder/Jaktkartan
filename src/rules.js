@@ -116,6 +116,37 @@ const rules = { rules: {
         '$other': {'.validate': false}
       }
     },
+    // Plan för en jakt: vem som står på vilket pass, förbjudna skjutriktningar per pass, såtar och vägar för
+    // hundförare och drevkarlar. Görs innan jakten startar, så den kan läsas även före start: av lagets medlemmar
+    // och av jaktens gäster. Bara jaktledare och admin ändrar den. Tas bort när jakten avslutas.
+    huntPlan: {
+      '.read': isMember,
+      '$hid': {
+        '.read': `${isGuest} && ${guest}.child('hid').val() === $hid`,
+        '.write': `${canLead} && (${hunt}.exists() || !newData.exists())`,
+        stands: { '$pid': {
+          who: {'.validate': 'newData.isString() && newData.val().length <= 60'},
+          uid: {'.validate': 'newData.isString() && newData.val().length <= 128'},
+          no: {'.validate': 'newData.isNumber() && newData.val() >= 0 && newData.val() <= 65535 && newData.val() % 1 === 0'},
+          '$other': {'.validate': false}
+        } },
+        drives: { '$did': {
+          '.validate': `newData.hasChildren(['name','ring'])`,
+          name: {'.validate': 'newData.isString() && newData.val().length <= 60'},
+          ring: {'.validate': 'newData.isString() && newData.val().length <= 20000'},
+          '$other': {'.validate': false}
+        } },
+        routes: { '$rid': {
+          '.validate': `newData.hasChildren(['kind','pts'])`,
+          kind: {'.validate': "newData.val() === 'hund' || newData.val() === 'drev'"},
+          who: {'.validate': 'newData.isString() && newData.val().length <= 60'},
+          uid: {'.validate': 'newData.isString() && newData.val().length <= 128'},
+          pts: {'.validate': 'newData.isString() && newData.val().length <= 20000'},
+          '$other': {'.validate': false}
+        } },
+        '$other': {'.validate': false}
+      }
+    },
     // Spår (tidigare positioner) per jakt, med samma åtkomst som positionerna.
     huntTrail: {
       '$hid': {
