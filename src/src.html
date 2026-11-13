@@ -1166,17 +1166,18 @@ function openAreaForm(id){
   const a = areaById(id); if(!a) return;
   const mine = Object.values(cloud.groups).filter(g => g.kind === 'member' && canEditGroup(g));
   const canMove = !a.gid || (cloud.groups[a.gid] && isAdminGroup(cloud.groups[a.gid]));
-  const n = state.pins.filter(p => p.areaId === id).length;
+  const n = state.pins.filter(p => p.areaId === id).length, rings = areaRings(a);
   openModal(`<h2>Ändra område</h2><form id="afForm"><label class="field"><span>Namn</span><input class="input" id="afName" maxlength="60" value="${esc(a.name)}"></label>
     ${mine.length || a.gid ? `<label class="field"><span>Delas med</span><select class="input" id="afShare" ${canMove ? '' : 'disabled'}><option value="">Bara jag (privat)</option>${mine.map(g => `<option value="${g.id}"${a.gid === g.id ? ' selected' : ''}>${esc(gname(g))}</option>`).join('')}</select></label>
     <p class="note" style="margin:-4px 0 0">${canMove ? `Delar du området ser alla i jaktlaget dess ${n} ${n === 1 ? 'nål' : 'nålar'}, och medlemmar kan ändra dem.` : 'Bara en admin kan sluta dela området.'}</p>` : '<p class="note" style="margin:-4px 0 0">Logga in under Jakt och skapa ett jaktlag för att kunna dela området.</p>'}
-    <div class="field" style="margin-top:14px"><span>Gräns</span><div class="small">${parseBorder(a.border).length >= 3 ? `${parseBorder(a.border).length} punkter · ${fmtHa(areaHa(parseBorder(a.border)))}` : 'Ingen gräns är ritad.'}</div>
-      <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afDraw">${a.border ? 'Ändra gräns' : 'Rita gräns'}</button><button class="btn sm" type="button" id="afImport">Importera från fil</button><button class="btn sm" type="button" id="afShot">Från skärmdump</button>${a.border ? '<button class="btn sm danger" type="button" id="afBorderDel">Ta bort gräns</button>' : ''}</div></div>
+    <div class="field" style="margin-top:14px"><span>Gräns</span>${rings.length ? rings.map((r, k) => `<div class="frow"><span class="fname">${rings.length > 1 ? `Del ${k + 1}` : 'Gränsen'}<br><span class="small muted">${r.length} punkter · ${fmtHa(areaHa(r))}</span></span><button class="btn sm" type="button" data-ring-edit="${k}">Ändra</button><button class="btn sm danger" type="button" data-ring-del="${k}">Ta bort</button></div>`).join('') + (rings.length > 1 ? `<div class="small" style="margin-top:4px">Totalt ${fmtHa(ringsHa(rings))} i ${rings.length} delar.</div>` : '') : '<div class="small">Ingen gräns är ritad.</div>'}
+      <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afDraw">${rings.length ? 'Rita en till del' : 'Rita gräns'}</button><button class="btn sm" type="button" id="afImport">Importera från fil</button><button class="btn sm" type="button" id="afShot">Från skärmdump</button></div>
+      ${rings.length ? '<p class="note" style="margin:6px 0 0">Består marken av flera skiften? Rita en del för varje. Alla delar hör till samma område och delas med samma jaktlag.</p>' : ''}</div>
     <div class="field" style="margin-top:14px"><span>Egna vägar och stigar</span>${areaLines(a).length ? areaLines(a).map(([lid, l]) => `<div class="frow"><span class="fname">${esc(l.n || LINE_KIND[l.k])}<br><span class="small muted">${LINE_KIND[l.k]} · ${fmtDist(lineLen(parseBorder(l.p)))}</span></span><button class="btn sm" type="button" data-line-edit="${lid}">Ändra</button></div>`).join('') : '<div class="small">Inga egna vägar eller stigar.</div>'}
       <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afLine">Rita väg eller stig</button></div></div>
     ${moveTargets(a).length && (a.border || areaLines(a).length || n) ? `<details class="field" style="margin-top:14px" id="afMoveBox"><summary><span>Flytta till ett annat område</span></summary>
-      <label class="field" style="margin-top:8px"><span>Till</span><select class="input" id="afMoveTo">${moveTargets(a).map(t => `<option value="${t.id}">${esc(t.name)}${t.border ? ' (har gräns)' : ''}</option>`).join('')}</select></label>
-      ${a.border ? '<label class="checkline"><input type="checkbox" id="afMvBorder" checked><span>Gränsen</span></label>' : ''}
+      <label class="field" style="margin-top:8px"><span>Till</span><select class="input" id="afMoveTo">${moveTargets(a).map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></label>
+      ${rings.length ? `<label class="checkline"><input type="checkbox" id="afMvBorder" checked><span>${rings.length > 1 ? `Gränsen (${rings.length} delar)` : 'Gränsen'}</span></label>` : ''}
       ${areaLines(a).length ? `<label class="checkline"><input type="checkbox" id="afMvLines" checked><span>Vägar och stigar (${areaLines(a).length})</span></label>` : ''}
       ${n ? `<label class="checkline"><input type="checkbox" id="afMvPins" checked><span>Nålar och pass (${n})</span></label>` : ''}
       <div class="btnrow"><button class="btn sm" type="button" id="afMove">Flytta</button></div></details>` : ''}
@@ -1191,11 +1192,13 @@ function openAreaForm(id){
       const to = areaById(m.querySelector('#afMoveTo').value), chk = s => { const c = m.querySelector(s); return !!(c && c.checked); };
       const what = {border:chk('#afMvBorder'), lines:chk('#afMvLines'), pins:chk('#afMvPins')};
       if(!to || !(what.border || what.lines || what.pins)){ toast('Välj vad som ska flyttas.'); return; }
-      const go = () => { closeModal(); toast(moveAreaContent(id, to.id, what)); };
-      if(what.border && to.border) confirmClick(mv, `Tryck igen: ersätter gränsen i ${to.name}`, go); else go();
+      closeModal(); toast(moveAreaContent(id, to.id, what));
     });
     m.querySelectorAll('[data-line-edit]').forEach(b => b.addEventListener('click', () => openLineForm({areaId:id, lid:b.dataset.lineEdit})));
-    const bd = m.querySelector('#afBorderDel'); if(bd) bd.addEventListener('click', () => confirmClick(bd, 'Bekräfta', () => { const cur = areaById(id); if(cur){ delete cur.border; cur.updated = Date.now(); save(); } closeModal(); renderAll(); toast('Gränsen är borttagen'); }));
+    m.querySelectorAll('[data-ring-edit]').forEach(b => b.addEventListener('click', () => startDrawing(id, +b.dataset.ringEdit)));
+    m.querySelectorAll('[data-ring-del]').forEach(b => b.addEventListener('click', () => confirmClick(b, 'Bekräfta', () => {
+      const cur = areaById(id); if(cur){ const r = areaRings(cur); r.splice(+b.dataset.ringDel, 1); setRings(cur, r); cur.updated = Date.now(); save(); }
+      closeModal(); renderAll(); toast(rings.length > 1 ? 'Gränsdelen är borttagen' : 'Gränsen är borttagen'); })));
     m.querySelector('#afForm').addEventListener('submit', e => { e.preventDefault(); const v = m.querySelector('#afName').value.trim(); if(!v) return; const cur = areaById(id); if(!cur){ closeModal(); return; }
       cur.name = v; cur.updated = Date.now(); delete cur.example;
       const sh = m.querySelector('#afShare');
@@ -1303,7 +1306,7 @@ $('#placeOk').addEventListener('click', () => {
 $('#placeCancel').addEventListener('click', endPlacing);
 $('#placeGps').addEventListener('click', () => locate(true));
 $('#btnAdd').addEventListener('click', () => { if(!drawing) startPlacing({mode:'new'}); });
-map.on('contextmenu', e => { if(placing || drawing) return; openPinForm({lat:e.latlng.lat, lng:e.latlng.lng}); });
+map.on('contextmenu', e => { if(placing || drawing || (typeof cal !== 'undefined' && cal) || (typeof adj !== 'undefined' && adj)) return; openPinForm({lat:e.latlng.lat, lng:e.latlng.lng}); });
 
 /* ---------- Position ---------- */
 function showMe(lat, lng, acc){
@@ -1332,7 +1335,7 @@ $('#btnLocate').addEventListener('click', () => locate(true));
 function fitAll(){
   const pts = state.pins.filter(pinVisible).map(p => [p.lat,p.lng]);
   if(state.settings.svampMode) state.external.forEach(s => { if(s.visible !== false) s.points.forEach(pt => pts.push([pt.lat,pt.lng])); });
-  state.areas.forEach(a => { if(a.visible !== false){ parseBorder(a.border).forEach(pt => pts.push(pt)); areaLines(a).forEach(([, l]) => parseBorder(l.p).forEach(pt => pts.push(pt))); } });
+  state.areas.forEach(a => { if(a.visible !== false){ areaRings(a).forEach(r => r.forEach(pt => pts.push(pt))); areaLines(a).forEach(([, l]) => parseBorder(l.p).forEach(pt => pts.push(pt))); } });
   if(!pts.length){ toast('Inga nålar visas just nu.'); return; }
   map.closePopup();
   if(pts.length === 1){ map.setView(pts[0], 15); return; }

@@ -1832,17 +1832,18 @@ function openAreaForm(id){
   const a = areaById(id); if(!a) return;
   const mine = Object.values(cloud.groups).filter(g => g.kind === 'member' && canEditGroup(g));
   const canMove = !a.gid || (cloud.groups[a.gid] && isAdminGroup(cloud.groups[a.gid]));
-  const n = state.pins.filter(p => p.areaId === id).length;
+  const n = state.pins.filter(p => p.areaId === id).length, rings = areaRings(a);
   openModal(`<h2>Ändra område</h2><form id="afForm"><label class="field"><span>Namn</span><input class="input" id="afName" maxlength="60" value="${esc(a.name)}"></label>
     ${mine.length || a.gid ? `<label class="field"><span>Delas med</span><select class="input" id="afShare" ${canMove ? '' : 'disabled'}><option value="">Bara jag (privat)</option>${mine.map(g => `<option value="${g.id}"${a.gid === g.id ? ' selected' : ''}>${esc(gname(g))}</option>`).join('')}</select></label>
     <p class="note" style="margin:-4px 0 0">${canMove ? `Delar du området ser alla i jaktlaget dess ${n} ${n === 1 ? 'nål' : 'nålar'}, och medlemmar kan ändra dem.` : 'Bara en admin kan sluta dela området.'}</p>` : '<p class="note" style="margin:-4px 0 0">Logga in under Jakt och skapa ett jaktlag för att kunna dela området.</p>'}
-    <div class="field" style="margin-top:14px"><span>Gräns</span><div class="small">${parseBorder(a.border).length >= 3 ? `${parseBorder(a.border).length} punkter · ${fmtHa(areaHa(parseBorder(a.border)))}` : 'Ingen gräns är ritad.'}</div>
-      <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afDraw">${a.border ? 'Ändra gräns' : 'Rita gräns'}</button><button class="btn sm" type="button" id="afImport">Importera från fil</button><button class="btn sm" type="button" id="afShot">Från skärmdump</button>${a.border ? '<button class="btn sm danger" type="button" id="afBorderDel">Ta bort gräns</button>' : ''}</div></div>
+    <div class="field" style="margin-top:14px"><span>Gräns</span>${rings.length ? rings.map((r, k) => `<div class="frow"><span class="fname">${rings.length > 1 ? `Del ${k + 1}` : 'Gränsen'}<br><span class="small muted">${r.length} punkter · ${fmtHa(areaHa(r))}</span></span><button class="btn sm" type="button" data-ring-edit="${k}">Ändra</button><button class="btn sm danger" type="button" data-ring-del="${k}">Ta bort</button></div>`).join('') + (rings.length > 1 ? `<div class="small" style="margin-top:4px">Totalt ${fmtHa(ringsHa(rings))} i ${rings.length} delar.</div>` : '') : '<div class="small">Ingen gräns är ritad.</div>'}
+      <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afDraw">${rings.length ? 'Rita en till del' : 'Rita gräns'}</button><button class="btn sm" type="button" id="afImport">Importera från fil</button><button class="btn sm" type="button" id="afShot">Från skärmdump</button></div>
+      ${rings.length ? '<p class="note" style="margin:6px 0 0">Består marken av flera skiften? Rita en del för varje. Alla delar hör till samma område och delas med samma jaktlag.</p>' : ''}</div>
     <div class="field" style="margin-top:14px"><span>Egna vägar och stigar</span>${areaLines(a).length ? areaLines(a).map(([lid, l]) => `<div class="frow"><span class="fname">${esc(l.n || LINE_KIND[l.k])}<br><span class="small muted">${LINE_KIND[l.k]} · ${fmtDist(lineLen(parseBorder(l.p)))}</span></span><button class="btn sm" type="button" data-line-edit="${lid}">Ändra</button></div>`).join('') : '<div class="small">Inga egna vägar eller stigar.</div>'}
       <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afLine">Rita väg eller stig</button></div></div>
     ${moveTargets(a).length && (a.border || areaLines(a).length || n) ? `<details class="field" style="margin-top:14px" id="afMoveBox"><summary><span>Flytta till ett annat område</span></summary>
-      <label class="field" style="margin-top:8px"><span>Till</span><select class="input" id="afMoveTo">${moveTargets(a).map(t => `<option value="${t.id}">${esc(t.name)}${t.border ? ' (har gräns)' : ''}</option>`).join('')}</select></label>
-      ${a.border ? '<label class="checkline"><input type="checkbox" id="afMvBorder" checked><span>Gränsen</span></label>' : ''}
+      <label class="field" style="margin-top:8px"><span>Till</span><select class="input" id="afMoveTo">${moveTargets(a).map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></label>
+      ${rings.length ? `<label class="checkline"><input type="checkbox" id="afMvBorder" checked><span>${rings.length > 1 ? `Gränsen (${rings.length} delar)` : 'Gränsen'}</span></label>` : ''}
       ${areaLines(a).length ? `<label class="checkline"><input type="checkbox" id="afMvLines" checked><span>Vägar och stigar (${areaLines(a).length})</span></label>` : ''}
       ${n ? `<label class="checkline"><input type="checkbox" id="afMvPins" checked><span>Nålar och pass (${n})</span></label>` : ''}
       <div class="btnrow"><button class="btn sm" type="button" id="afMove">Flytta</button></div></details>` : ''}
@@ -1857,11 +1858,13 @@ function openAreaForm(id){
       const to = areaById(m.querySelector('#afMoveTo').value), chk = s => { const c = m.querySelector(s); return !!(c && c.checked); };
       const what = {border:chk('#afMvBorder'), lines:chk('#afMvLines'), pins:chk('#afMvPins')};
       if(!to || !(what.border || what.lines || what.pins)){ toast('Välj vad som ska flyttas.'); return; }
-      const go = () => { closeModal(); toast(moveAreaContent(id, to.id, what)); };
-      if(what.border && to.border) confirmClick(mv, `Tryck igen: ersätter gränsen i ${to.name}`, go); else go();
+      closeModal(); toast(moveAreaContent(id, to.id, what));
     });
     m.querySelectorAll('[data-line-edit]').forEach(b => b.addEventListener('click', () => openLineForm({areaId:id, lid:b.dataset.lineEdit})));
-    const bd = m.querySelector('#afBorderDel'); if(bd) bd.addEventListener('click', () => confirmClick(bd, 'Bekräfta', () => { const cur = areaById(id); if(cur){ delete cur.border; cur.updated = Date.now(); save(); } closeModal(); renderAll(); toast('Gränsen är borttagen'); }));
+    m.querySelectorAll('[data-ring-edit]').forEach(b => b.addEventListener('click', () => startDrawing(id, +b.dataset.ringEdit)));
+    m.querySelectorAll('[data-ring-del]').forEach(b => b.addEventListener('click', () => confirmClick(b, 'Bekräfta', () => {
+      const cur = areaById(id); if(cur){ const r = areaRings(cur); r.splice(+b.dataset.ringDel, 1); setRings(cur, r); cur.updated = Date.now(); save(); }
+      closeModal(); renderAll(); toast(rings.length > 1 ? 'Gränsdelen är borttagen' : 'Gränsen är borttagen'); })));
     m.querySelector('#afForm').addEventListener('submit', e => { e.preventDefault(); const v = m.querySelector('#afName').value.trim(); if(!v) return; const cur = areaById(id); if(!cur){ closeModal(); return; }
       cur.name = v; cur.updated = Date.now(); delete cur.example;
       const sh = m.querySelector('#afShare');
@@ -1969,7 +1972,7 @@ $('#placeOk').addEventListener('click', () => {
 $('#placeCancel').addEventListener('click', endPlacing);
 $('#placeGps').addEventListener('click', () => locate(true));
 $('#btnAdd').addEventListener('click', () => { if(!drawing) startPlacing({mode:'new'}); });
-map.on('contextmenu', e => { if(placing || drawing) return; openPinForm({lat:e.latlng.lat, lng:e.latlng.lng}); });
+map.on('contextmenu', e => { if(placing || drawing || (typeof cal !== 'undefined' && cal) || (typeof adj !== 'undefined' && adj)) return; openPinForm({lat:e.latlng.lat, lng:e.latlng.lng}); });
 
 /* ---------- Position ---------- */
 function showMe(lat, lng, acc){
@@ -1998,7 +2001,7 @@ $('#btnLocate').addEventListener('click', () => locate(true));
 function fitAll(){
   const pts = state.pins.filter(pinVisible).map(p => [p.lat,p.lng]);
   if(state.settings.svampMode) state.external.forEach(s => { if(s.visible !== false) s.points.forEach(pt => pts.push([pt.lat,pt.lng])); });
-  state.areas.forEach(a => { if(a.visible !== false){ parseBorder(a.border).forEach(pt => pts.push(pt)); areaLines(a).forEach(([, l]) => parseBorder(l.p).forEach(pt => pts.push(pt))); } });
+  state.areas.forEach(a => { if(a.visible !== false){ areaRings(a).forEach(r => r.forEach(pt => pts.push(pt))); areaLines(a).forEach(([, l]) => parseBorder(l.p).forEach(pt => pts.push(pt))); } });
   if(!pts.length){ toast('Inga nålar visas just nu.'); return; }
   map.closePopup();
   if(pts.length === 1){ map.setView(pts[0], 15); return; }
@@ -2905,8 +2908,8 @@ function loupeBase(){
 function loupeLayers(){
   loupe.vec.clearLayers(); loupe.shots.clearLayers();
   for(const a of state.areas){
-    if(a.visible === false || (drawing && drawing.mode === 'border' && drawing.id === a.id)) continue;
-    const pts = parseBorder(a.border); if(pts.length >= 3) L.polygon(pts, {color:'#d9520e', weight:3, fill:false, dashArray:'10 6', interactive:false}).addTo(loupe.vec);
+    if(a.visible === false) continue;
+    areaRings(a).forEach((pts, k) => { if(!(drawing && drawing.mode === 'border' && drawing.id === a.id && drawing.ring === k)) L.polygon(pts, {color:'#d9520e', weight:3, fill:false, dashArray:'10 6', interactive:false}).addTo(loupe.vec); });
     for(const [, l] of areaLines(a)) L.polyline(parseBorder(l.p), {color:l.k === 'path' ? '#7a2e8f' : '#8a4b12', weight:3, interactive:false}).addTo(loupe.vec);
   }
   if(drawing && drawing.pts.length >= 2){
@@ -2953,6 +2956,12 @@ const borderLayer = L.layerGroup().addTo(map), drawLayer = L.layerGroup().addTo(
 let drawing = null;
 const parseBorder = s => typeof s === 'string' && s ? s.split(';').map(p => p.split(',').map(Number)).filter(p => p.length === 2 && isFinite(p[0]) && isFinite(p[1]) && Math.abs(p[0]) <= 90 && Math.abs(p[1]) <= 180) : [];
 const fmtBorder = pts => pts.map(p => p[0].toFixed(5) + ',' + p[1].toFixed(5)).join(';');
+/* Ett område kan ha flera gränsdelar (skiften). De sparas i samma sträng, avskilda med |. */
+const parseRings = s => typeof s === 'string' && s ? s.split('|').map(parseBorder).filter(r => r.length >= 3) : [];
+const fmtRings = rings => rings.filter(r => r.length >= 3).map(fmtBorder).join('|');
+const areaRings = a => parseRings(a && a.border);
+const ringsHa = rings => rings.reduce((s, r) => s + areaHa(r), 0);
+function setRings(a, rings){ const s = fmtRings(rings); if(s) a.border = s; else delete a.border; }
 function areaHa(pts){
   if(pts.length < 3) return 0;
   const q = pts.map(p => toSweref99TM(p[0], p[1])); let s = 0;
@@ -2963,10 +2972,12 @@ const fmtHa = ha => (ha >= 100 ? fmtInt(ha) : ha.toLocaleString('sv-SE', {maximu
 function renderBorders(){
   borderLayer.clearLayers();
   for(const a of state.areas){
-    if(a.visible === false || (drawing && drawing.mode === 'border' && drawing.id === a.id)) continue;
-    const pts = parseBorder(a.border); if(pts.length < 3) continue;
-    L.polygon(pts, {color:'#ffffff', weight:6, opacity:.7, fill:false, interactive:false}).addTo(borderLayer);
-    L.polygon(pts, {color:'#d9520e', weight:3, fillColor:'#d9520e', fillOpacity:.06, dashArray:'10 6', interactive:false}).addTo(borderLayer);
+    if(a.visible === false) continue;
+    areaRings(a).forEach((pts, k) => {
+      if(drawing && drawing.mode === 'border' && drawing.id === a.id && drawing.ring === k) return;   // delen som ritas visas som utkast
+      L.polygon(pts, {color:'#ffffff', weight:6, opacity:.7, fill:false, interactive:false}).addTo(borderLayer);
+      L.polygon(pts, {color:'#d9520e', weight:3, fillColor:'#d9520e', fillOpacity:.06, dashArray:'10 6', interactive:false}).addTo(borderLayer);
+    });
   }
   renderLines();
 }
@@ -3014,7 +3025,7 @@ function moveAreaContent(fromId, toId, what){
   const from = areaById(fromId), to = areaById(toId); if(!from || !to) return 'Området finns inte längre.';
   if(!canEditArea(from) || !canEditArea(to)) return 'Du har inte rättighet att ändra något av områdena.';
   const done = [], now = Date.now();
-  if(what.border && from.border){ to.border = from.border; delete from.border; done.push('gränsen'); }
+  if(what.border && areaRings(from).length){ const r = areaRings(from); setRings(to, areaRings(to).concat(r)); delete from.border; done.push(r.length === 1 ? 'gränsen' : `${r.length} gränsdelar`); }
   if(what.lines && areaLines(from).length){ const n = areaLines(from).length; to.lines = Object.assign({}, to.lines || {}, from.lines); delete from.lines; done.push(n === 1 ? '1 väg eller stig' : `${n} vägar och stigar`); }
   if(what.pins){ const ps = state.pins.filter(p => p.areaId === fromId); ps.forEach(p => { p.areaId = toId; p.updated = now; }); if(ps.length) done.push(ps.length === 1 ? '1 nål' : `${ps.length} nålar`); }
   if(!done.length) return 'Det fanns inget att flytta.';
@@ -3111,11 +3122,13 @@ function drawDraft(){
   $('#drawText').textContent = p.length < 3 ? `Tryck på kartan i varje hörn av marken. ${p.length} av minst 3 punkter.` : `${p.length} punkter · ${fmtHa(areaHa(p))}. ${drawing.sel != null ? 'Punkten är markerad.' : 'Dra en punkt för att flytta den, tryck på den för att ta bort den, eller dra ett + för att lägga till en punkt mellan två andra.'}`;
   $('#drawOk').disabled = p.length < 3;
 }
-function startDrawing(id){
+/* Ritar en gränsdel. ring = index för en befintlig del som ska ändras, eller utelämnas för en ny del. */
+function startDrawing(id, ring){
   const a = areaById(id); if(!a) return;
   if(!canEditArea(a)){ toast('Du har inte rättighet att ändra det området.'); return; }
   closeModal(); map.closePopup(); if(placing) endPlacing();
-  drawing = {mode:'border', id, pts:parseBorder(a.border), hist:[], sel:null};
+  const rings = areaRings(a), k = ring != null && rings[ring] ? ring : null;
+  drawing = {mode:'border', id, ring:k, pts:k != null ? rings[k] : [], hist:[], sel:null};
   $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
   if(drawing.pts.length) map.fitBounds(L.latLngBounds(drawing.pts), {paddingTopLeft:[40,70], paddingBottomRight:[40, bottomPad() + 190], maxZoom:17});
   renderBorders(); drawDraft();
@@ -3144,8 +3157,11 @@ $('#drawOk').addEventListener('click', () => {
     save(); renderAll(); toast(`${d.name || LINE_KIND[d.kind]} är sparad, ${fmtDist(lineLen(pts))}.`);
     return;
   }
-  a.border = fmtBorder(pts); a.updated = Date.now(); delete a.example;
-  save(); renderAll(); toast(`Gränsen för ${a.name} är sparad, ${fmtHa(areaHa(pts))}.`);
+  const rings = areaRings(a);
+  if(d.ring != null && rings[d.ring]) rings[d.ring] = pts; else rings.push(pts);
+  setRings(a, rings); a.updated = Date.now(); delete a.example;
+  save(); renderAll();
+  toast(rings.length > 1 ? `Gränsen för ${a.name} är sparad. ${rings.length} delar, totalt ${fmtHa(ringsHa(rings))}.` : `Gränsen för ${a.name} är sparad, ${fmtHa(areaHa(pts))}.`);
 });
 function parseRing(text){
   const ring = c => c.map(x => [+x[1], +x[0]]);
@@ -3174,10 +3190,11 @@ $('#fileBorder').addEventListener('change', async e => {
     if(pts.length > 1 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1]) pts.pop();
     if(pts.length < 3){ toast('Hittade ingen yta eller linje med minst tre punkter i filen.', 5000); return; }
     if(pts.length > 2000){ const step = Math.ceil(pts.length / 2000); pts = pts.filter((p, i) => i % step === 0); }
-    a.border = fmtBorder(pts); a.updated = Date.now(); delete a.example;
+    const rings = areaRings(a).concat([pts]);
+    setRings(a, rings); a.updated = Date.now(); delete a.example;
     closeModal(); save(); renderAll();
     map.fitBounds(L.latLngBounds(pts), {paddingTopLeft:[40,70], paddingBottomRight:[40, bottomPad() + 40], maxZoom:16});
-    toast(`Gränsen för ${a.name} är importerad, ${fmtHa(areaHa(pts))}.`);
+    toast(rings.length > 1 ? `En ny gränsdel är importerad till ${a.name}, ${fmtHa(areaHa(pts))}.` : `Gränsen för ${a.name} är importerad, ${fmtHa(areaHa(pts))}.`);
   } catch(err){ toast('Filen kunde inte läsas som en gräns.', 5000); }
 });
 
@@ -3320,7 +3337,7 @@ function openBorderPick(areaId){
   const editable = state.areas.filter(a => canEditArea(a));
   if(!editable.length){ toast('Skapa ett område under Filter först.'); return; }
   const sel = areaId || (cal && cal.areaId) || (editable.find(a => !a.example) || editable[0]).id;
-  openModal(`<h2>Rita gräns</h2><label class="field"><span>Område</span><select class="input" id="obArea">${editable.map(a => `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.border ? ' (har en gräns, ersätts)' : ''}</option>`).join('')}</select></label>
+  openModal(`<h2>Rita gräns</h2><label class="field"><span>Område</span><select class="input" id="obArea">${editable.map(a => `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.border ? ' (en ny gränsdel läggs till)' : ''}</option>`).join('')}</select></label>
     <div class="actions"><button class="btn primary grow" type="button" id="obGo">Börja rita</button><button class="btn ghost" type="button" id="obCancel">Avbryt</button></div>`, m => {
     m.querySelector('#obCancel').addEventListener('click', closeModal);
     m.querySelector('#obGo').addEventListener('click', () => { const id = m.querySelector('#obArea').value; endAdjust(); cal = null; endCalBar(); startDrawing(id); });

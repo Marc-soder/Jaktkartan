@@ -3,6 +3,12 @@ const borderLayer = L.layerGroup().addTo(map), drawLayer = L.layerGroup().addTo(
 let drawing = null;
 const parseBorder = s => typeof s === 'string' && s ? s.split(';').map(p => p.split(',').map(Number)).filter(p => p.length === 2 && isFinite(p[0]) && isFinite(p[1]) && Math.abs(p[0]) <= 90 && Math.abs(p[1]) <= 180) : [];
 const fmtBorder = pts => pts.map(p => p[0].toFixed(5) + ',' + p[1].toFixed(5)).join(';');
+/* Ett område kan ha flera gränsdelar (skiften). De sparas i samma sträng, avskilda med |. */
+const parseRings = s => typeof s === 'string' && s ? s.split('|').map(parseBorder).filter(r => r.length >= 3) : [];
+const fmtRings = rings => rings.filter(r => r.length >= 3).map(fmtBorder).join('|');
+const areaRings = a => parseRings(a && a.border);
+const ringsHa = rings => rings.reduce((s, r) => s + areaHa(r), 0);
+function setRings(a, rings){ const s = fmtRings(rings); if(s) a.border = s; else delete a.border; }
 function areaHa(pts){
   if(pts.length < 3) return 0;
   const q = pts.map(p => toSweref99TM(p[0], p[1])); let s = 0;
@@ -13,10 +19,12 @@ const fmtHa = ha => (ha >= 100 ? fmtInt(ha) : ha.toLocaleString('sv-SE', {maximu
 function renderBorders(){
   borderLayer.clearLayers();
   for(const a of state.areas){
-    if(a.visible === false || (drawing && drawing.mode === 'border' && drawing.id === a.id)) continue;
-    const pts = parseBorder(a.border); if(pts.length < 3) continue;
-    L.polygon(pts, {color:'#ffffff', weight:6, opacity:.7, fill:false, interactive:false}).addTo(borderLayer);
-    L.polygon(pts, {color:'#d9520e', weight:3, fillColor:'#d9520e', fillOpacity:.06, dashArray:'10 6', interactive:false}).addTo(borderLayer);
+    if(a.visible === false) continue;
+    areaRings(a).forEach((pts, k) => {
+      if(drawing && drawing.mode === 'border' && drawing.id === a.id && drawing.ring === k) return;   // delen som ritas visas som utkast
+      L.polygon(pts, {color:'#ffffff', weight:6, opacity:.7, fill:false, interactive:false}).addTo(borderLayer);
+      L.polygon(pts, {color:'#d9520e', weight:3, fillColor:'#d9520e', fillOpacity:.06, dashArray:'10 6', interactive:false}).addTo(borderLayer);
+    });
   }
   renderLines();
 }
@@ -64,7 +72,7 @@ function moveAreaContent(fromId, toId, what){
   const from = areaById(fromId), to = areaById(toId); if(!from || !to) return 'Området finns inte längre.';
   if(!canEditArea(from) || !canEditArea(to)) return 'Du har inte rättighet att ändra något av områdena.';
   const done = [], now = Date.now();
-  if(what.border && from.border){ to.border = from.border; delete from.border; done.push('gränsen'); }
+  if(what.border && areaRings(from).length){ const r = areaRings(from); setRings(to, areaRings(to).concat(r)); delete from.border; done.push(r.length === 1 ? 'gränsen' : `${r.length} gränsdelar`); }
   if(what.lines && areaLines(from).length){ const n = areaLines(from).length; to.lines = Object.assign({}, to.lines || {}, from.lines); delete from.lines; done.push(n === 1 ? '1 väg eller stig' : `${n} vägar och stigar`); }
   if(what.pins){ const ps = state.pins.filter(p => p.areaId === fromId); ps.forEach(p => { p.areaId = toId; p.updated = now; }); if(ps.length) done.push(ps.length === 1 ? '1 nål' : `${ps.length} nålar`); }
   if(!done.length) return 'Det fanns inget att flytta.';
@@ -161,11 +169,13 @@ function drawDraft(){
   $('#drawText').textContent = p.length < 3 ? `Tryck på kartan i varje hörn av marken. ${p.length} av minst 3 punkter.` : `${p.length} punkter · ${fmtHa(areaHa(p))}. ${drawing.sel != null ? 'Punkten är markerad.' : 'Dra en punkt för att flytta den, tryck på den för att ta bort den, eller dra ett + för att lägga till en punkt mellan två andra.'}`;
   $('#drawOk').disabled = p.length < 3;
 }
-function startDrawing(id){
+/* Ritar en gränsdel. ring = index för en befintlig del som ska ändras, eller utelämnas för en ny del. */
+function startDrawing(id, ring){
   const a = areaById(id); if(!a) return;
   if(!canEditArea(a)){ toast('Du har inte rättighet att ändra det området.'); return; }
   closeModal(); map.closePopup(); if(placing) endPlacing();
-  drawing = {mode:'border', id, pts:parseBorder(a.border), hist:[], sel:null};
+  const rings = areaRings(a), k = ring != null && rings[ring] ? ring : null;
+  drawing = {mode:'border', id, ring:k, pts:k != null ? rings[k] : [], hist:[], sel:null};
   $('#drawbar').hidden = false; $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
   if(drawing.pts.length) map.fitBounds(L.latLngBounds(drawing.pts), {paddingTopLeft:[40,70], paddingBottomRight:[40, bottomPad() + 190], maxZoom:17});
   renderBorders(); drawDraft();
@@ -194,8 +204,11 @@ $('#drawOk').addEventListener('click', () => {
     save(); renderAll(); toast(`${d.name || LINE_KIND[d.kind]} är sparad, ${fmtDist(lineLen(pts))}.`);
     return;
   }
-  a.border = fmtBorder(pts); a.updated = Date.now(); delete a.example;
-  save(); renderAll(); toast(`Gränsen för ${a.name} är sparad, ${fmtHa(areaHa(pts))}.`);
+  const rings = areaRings(a);
+  if(d.ring != null && rings[d.ring]) rings[d.ring] = pts; else rings.push(pts);
+  setRings(a, rings); a.updated = Date.now(); delete a.example;
+  save(); renderAll();
+  toast(rings.length > 1 ? `Gränsen för ${a.name} är sparad. ${rings.length} delar, totalt ${fmtHa(ringsHa(rings))}.` : `Gränsen för ${a.name} är sparad, ${fmtHa(areaHa(pts))}.`);
 });
 function parseRing(text){
   const ring = c => c.map(x => [+x[1], +x[0]]);
@@ -224,10 +237,11 @@ $('#fileBorder').addEventListener('change', async e => {
     if(pts.length > 1 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1]) pts.pop();
     if(pts.length < 3){ toast('Hittade ingen yta eller linje med minst tre punkter i filen.', 5000); return; }
     if(pts.length > 2000){ const step = Math.ceil(pts.length / 2000); pts = pts.filter((p, i) => i % step === 0); }
-    a.border = fmtBorder(pts); a.updated = Date.now(); delete a.example;
+    const rings = areaRings(a).concat([pts]);
+    setRings(a, rings); a.updated = Date.now(); delete a.example;
     closeModal(); save(); renderAll();
     map.fitBounds(L.latLngBounds(pts), {paddingTopLeft:[40,70], paddingBottomRight:[40, bottomPad() + 40], maxZoom:16});
-    toast(`Gränsen för ${a.name} är importerad, ${fmtHa(areaHa(pts))}.`);
+    toast(rings.length > 1 ? `En ny gränsdel är importerad till ${a.name}, ${fmtHa(areaHa(pts))}.` : `Gränsen för ${a.name} är importerad, ${fmtHa(areaHa(pts))}.`);
   } catch(err){ toast('Filen kunde inte läsas som en gräns.', 5000); }
 });
 
