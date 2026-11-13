@@ -1294,14 +1294,15 @@ function openTypeForm(id, after){
 
 /* ---------- Placera nål ---------- */
 let placing = null; let crossEl = null;
-/* Korsets plats: mitt i den del av kartan som syns, ovanför knappfälten och bottenpanelen. */
+/* Korsets plats: mitt på kartan, samma punkt som krysset med avståndsringar. Bara om ett knappfält eller
+   bottenpanelen skulle täcka mitten flyttas det upp ovanför dem, så att det alltid syns. */
 function crossPoint(){
   const c = map.getContainer(), r = c.getBoundingClientRect();
   let bottom = r.bottom;
   for(const id of ['placebar', 'ovbar', 'drawbar', 'measurebar']){ const el = document.getElementById(id); if(el && !el.hidden){ const b = el.getBoundingClientRect(); if(b.height) bottom = Math.min(bottom, b.top - 8); } }
   if(!isDesktop()) bottom = Math.min(bottom, $('#panel').getBoundingClientRect().top);
-  const y = Math.round((r.top + bottom) / 2 - r.top);
-  return L.point(Math.round(c.clientWidth / 2), Math.max(80, Math.min(y, Math.round(c.clientHeight / 2))));
+  const mid = Math.round(c.clientHeight / 2), limit = Math.round(bottom - r.top - 40);
+  return L.point(Math.round(c.clientWidth / 2), Math.max(80, Math.min(mid, limit)));
 }
 const crossLatLng = () => map.containerPointToLatLng(crossPoint());
 /* Flyttar kartan så att latlng hamnar under korset. */

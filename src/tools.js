@@ -145,8 +145,8 @@ function panShow(stay){
 function panHide(){ clearTimeout(pan.timer); if(pan.el && !measure) pan.el.hidden = true; }
 function panUpdate(){
   if(!pan.el || pan.el.hidden) return;
-  // Mitt på skärmen. I mätläget ovanför mätfältet, där punkterna sätts.
-  const p = measure ? crossPoint() : map.getSize().divideBy(2).round(), ll = map.containerPointToLatLng(p), mpp = metersPerPixel(ll.lat, map.getZoom());
+  // Samma punkt som placeringskorset: mitt på kartan
+  const p = crossPoint(), ll = map.containerPointToLatLng(p), mpp = metersPerPixel(ll.lat, map.getZoom());
   pan.el.style.left = p.x + 'px'; pan.el.style.top = p.y + 'px';
   const step = NICE.find(m => m / mpp >= 38) || NICE[NICE.length - 1];
   pan.el.querySelector('.pc-rings').innerHTML = [1, 2, 3].map(k => { const rpx = k * step / mpp; return `<span class="pc-ring" style="width:${2 * rpx}px;height:${2 * rpx}px;margin:${-rpx}px 0 0 ${-rpx}px"></span><span class="pc-rl" style="top:${-rpx}px">${fmtDist(k * step)}</span>`; }).join('');

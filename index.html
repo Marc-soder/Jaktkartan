@@ -1960,14 +1960,15 @@ function openTypeForm(id, after){
 
 /* ---------- Placera nål ---------- */
 let placing = null; let crossEl = null;
-/* Korsets plats: mitt i den del av kartan som syns, ovanför knappfälten och bottenpanelen. */
+/* Korsets plats: mitt på kartan, samma punkt som krysset med avståndsringar. Bara om ett knappfält eller
+   bottenpanelen skulle täcka mitten flyttas det upp ovanför dem, så att det alltid syns. */
 function crossPoint(){
   const c = map.getContainer(), r = c.getBoundingClientRect();
   let bottom = r.bottom;
   for(const id of ['placebar', 'ovbar', 'drawbar', 'measurebar']){ const el = document.getElementById(id); if(el && !el.hidden){ const b = el.getBoundingClientRect(); if(b.height) bottom = Math.min(bottom, b.top - 8); } }
   if(!isDesktop()) bottom = Math.min(bottom, $('#panel').getBoundingClientRect().top);
-  const y = Math.round((r.top + bottom) / 2 - r.top);
-  return L.point(Math.round(c.clientWidth / 2), Math.max(80, Math.min(y, Math.round(c.clientHeight / 2))));
+  const mid = Math.round(c.clientHeight / 2), limit = Math.round(bottom - r.top - 40);
+  return L.point(Math.round(c.clientWidth / 2), Math.max(80, Math.min(mid, limit)));
 }
 const crossLatLng = () => map.containerPointToLatLng(crossPoint());
 /* Flyttar kartan så att latlng hamnar under korset. */
@@ -3777,8 +3778,8 @@ function panShow(stay){
 function panHide(){ clearTimeout(pan.timer); if(pan.el && !measure) pan.el.hidden = true; }
 function panUpdate(){
   if(!pan.el || pan.el.hidden) return;
-  // Mitt på skärmen. I mätläget ovanför mätfältet, där punkterna sätts.
-  const p = measure ? crossPoint() : map.getSize().divideBy(2).round(), ll = map.containerPointToLatLng(p), mpp = metersPerPixel(ll.lat, map.getZoom());
+  // Samma punkt som placeringskorset: mitt på kartan
+  const p = crossPoint(), ll = map.containerPointToLatLng(p), mpp = metersPerPixel(ll.lat, map.getZoom());
   pan.el.style.left = p.x + 'px'; pan.el.style.top = p.y + 'px';
   const step = NICE.find(m => m / mpp >= 38) || NICE[NICE.length - 1];
   pan.el.querySelector('.pc-rings').innerHTML = [1, 2, 3].map(k => { const rpx = k * step / mpp; return `<span class="pc-ring" style="width:${2 * rpx}px;height:${2 * rpx}px;margin:${-rpx}px 0 0 ${-rpx}px"></span><span class="pc-rl" style="top:${-rpx}px">${fmtDist(k * step)}</span>`; }).join('');
