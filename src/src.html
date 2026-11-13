@@ -530,7 +530,8 @@ function distM(a,b){
   const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*DEG)*Math.cos(b.lat*DEG)*Math.sin(dLng/2)**2;
   return 2*R*Math.asin(Math.sqrt(x));
 }
-const fmtDist = m => m < 1000 ? `${Math.round(m/10)*10} m` : `${(m/1000).toLocaleString('sv-SE',{maximumFractionDigits: m<10000?1:0})} km`;
+/* Avstånd i hela meter upp till 10 km, därefter i km. */
+const fmtDist = m => m < 10000 ? `${Math.round(m).toLocaleString('sv-SE')} m` : `${(m/1000).toLocaleString('sv-SE',{maximumFractionDigits: m<100000?1:0})} km`;
 const navUrl = (lat,lng) => `https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(6)},${lng.toFixed(6)}`;
 
 /* ---------- Svamparter (Artportalen via GBIF) ---------- */
@@ -1380,7 +1381,10 @@ function showMe(lat, lng, acc){
   trailAdd(lat, lng, acc);
   renderHeading();
   if(windOn() && wind.data) windRender();
+  if(typeof panUpdate === 'function') panUpdate();
 }
+/* Glöm positionen (används av testerna). */
+function forgetMe(){ myPos = null; if(meMarker){ map.removeLayer(meMarker); map.removeLayer(meCircle); meMarker = meCircle = null; } panLine(null); }
 function locate(fly){
   if(!('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); return; }
   $('#btnLocate').setAttribute('aria-pressed','true');
@@ -1630,7 +1634,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

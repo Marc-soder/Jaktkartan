@@ -78,7 +78,8 @@ with sync_playwright() as p:
         pg.evaluate('__fk.showMe(58.7201, 14.6001, 8)'); pg.wait_for_timeout(150)
         check(pg.evaluate("document.querySelector('.me-icon .me-cone').style.transform") == 'rotate(45deg)', f'{name}: pilen ligger kvar när positionen uppdateras')
 
-        # ---- Kryss med avståndsringar ----
+        # ---- Kryss med avståndsringar (utan känd position) ----
+        pg.evaluate('__fk.forgetMe()')
         pg.evaluate('__fk.map.panBy([60, 40], {animate:false})'); pg.wait_for_timeout(200)
         check(pg.is_visible('.pancross .pc-x') and pg.locator('.pc-ring').count() == 3, f'{name}: krysset med tre avståndsringar visas när kartan flyttas')
         mb = pg.locator('#map').bounding_box(); xb = pg.locator('.pc-x').bounding_box()
@@ -91,11 +92,22 @@ with sync_playwright() as p:
         lab = rl[0].replace(' ', ' ')
         want = float(lab.split()[0].replace(',', '.')) * (1000 if 'km' in lab else 1)
         check(abs(ok - want) / want < 0.03, f'{name}: första ringen är {lab} (uppmätt {ok:.0f} m)')
-        lbl = pg.inner_text('.pc-label'); dist = pg.evaluate('__fk.distM({lat:58.72, lng:14.60}, __fk.map.getCenter())')
-        check(lbl.startswith(pg.evaluate("m => (m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toLocaleString('sv-SE', {maximumFractionDigits: m < 10000 ? 1 : 0})} km`).replace(/\u00a0/g, ' ')", dist)), f'{name}: avståndet från dig gäller punkten i mitten')
-        check('från dig' in lbl, f'{name}: avståndet från din position visas: {lbl} (exakt {dist:.0f} m)')
+        check(not pg.is_visible('.pc-label') and pg.evaluate('__fk.panLine()') is None, f'{name}: utan position ingen linje och inget avstånd från dig')
         pg.wait_for_timeout(3000)
-        check(not pg.is_visible('.pancross .pc-x'), f'{name}: krysset försvinner en stund efter att kartan stannat')
+        # ---- Med känd position: linje från mig till krysset i stället för ringar ----
+        pg.evaluate('__fk.map.setView([58.7200, 14.6000], 16, {animate:false})')
+        pg.evaluate('__fk.showMe(58.7200, 14.6000, 8)'); pg.wait_for_timeout(200)
+        pg.evaluate('__fk.map.panBy([70, -90], {animate:false})'); pg.wait_for_timeout(200)
+        check(pg.is_visible('.pancross .pc-x') and pg.locator('.pc-ring').count() == 0, f'{name}: med känd position visas krysset utan avståndsringar')
+        ln = pg.evaluate("(() => { const l = __fk.panLine(); if(!l) return null; const p = l.getLatLngs(), c = __fk.crossLatLng(); return {a:[p[0].lat, p[0].lng], b:[p[1].lat - c.lat, p[1].lng - c.lng], dash:l.options.dashArray, w:l.options.weight, vis:!!l._path && l._path.isConnected}; })()")
+        check(ln is not None and ln['a'] == [58.72, 14.6] and max(abs(ln['b'][0]), abs(ln['b'][1])) < 1e-9 and ln['vis'], f'{name}: linjen går från min position till krysset {ln}')
+        check(ln is not None and ln['dash'] and ln['w'] <= 2, f'{name}: linjen är tunn och streckad {ln and (ln["dash"], ln["w"])}')
+        lbl = pg.inner_text('.pc-label').replace('\u00a0', ' '); dist = pg.evaluate('__fk.distM({lat:58.72, lng:14.60}, __fk.crossLatLng())')
+        check(lbl.startswith(f'{round(dist)} m från dig'), f'{name}: avståndet visas i hela meter: {lbl} (exakt {dist:.1f} m)')
+        fd = [pg.evaluate('m => __fk.fmtDist(m).replace(/\u00a0/g, " ")', m) for m in (7.4, 347.6, 1234.2, 9999.4, 12345)]
+        check(fd == ['7 m', '348 m', '1 234 m', '9 999 m', '12,3 km'], f'{name}: avstånd avrundas till hela meter {fd}')
+        pg.wait_for_timeout(3000)
+        check(not pg.is_visible('.pancross .pc-x') and pg.evaluate('__fk.panLine()') is None, f'{name}: krysset och linjen försvinner en stund efter att kartan stannat')
         pg.click('#btnAdd'); pg.wait_for_timeout(400); pg.evaluate('__fk.map.panBy([30, 0], {animate:false})'); pg.wait_for_timeout(200)
         check(not pg.is_visible('.pancross .pc-x'), f'{name}: inget extra kryss när man placerar en nål')
         pg.click('#placeCancel'); pg.wait_for_timeout(300)
@@ -110,8 +122,7 @@ with sync_playwright() as p:
         c = pg.evaluate('__fk.crossLatLng()'); d1 = pg.evaluate('([a, b]) => __fk.distM(a, b)', [a, c])
         txt = pg.inner_text('#measureText').replace(' ', ' ')
         check(lines(pg, '#d9520e') >= 2, f'{name}: linje från punkten till krysset')
-        def fmt(m): return pg.evaluate('m => fmtDistForTest(m)', m) if False else None
-        want = pg.evaluate("m => { const f = m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toLocaleString('sv-SE', {maximumFractionDigits: m < 10000 ? 1 : 0})} km`; return f.replace(/\\u00a0/g, ' '); }", d1)
+        want = pg.evaluate("m => __fk.fmtDist(m).replace(/\\u00a0/g, ' ')", d1)
         check(want in txt, f'{name}: avståndet till krysset visas: {txt.splitlines()[0]} (väntat {want})')
         pg.click('#mAdd'); pg.wait_for_timeout(150)
         pg.evaluate('__fk.map.panBy([-60, 100], {animate:false})'); pg.wait_for_timeout(200)

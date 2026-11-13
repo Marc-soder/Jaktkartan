@@ -1196,7 +1196,8 @@ function distM(a,b){
   const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*DEG)*Math.cos(b.lat*DEG)*Math.sin(dLng/2)**2;
   return 2*R*Math.asin(Math.sqrt(x));
 }
-const fmtDist = m => m < 1000 ? `${Math.round(m/10)*10} m` : `${(m/1000).toLocaleString('sv-SE',{maximumFractionDigits: m<10000?1:0})} km`;
+/* Avstånd i hela meter upp till 10 km, därefter i km. */
+const fmtDist = m => m < 10000 ? `${Math.round(m).toLocaleString('sv-SE')} m` : `${(m/1000).toLocaleString('sv-SE',{maximumFractionDigits: m<100000?1:0})} km`;
 const navUrl = (lat,lng) => `https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(6)},${lng.toFixed(6)}`;
 
 /* ---------- Svamparter (Artportalen via GBIF) ---------- */
@@ -2046,7 +2047,10 @@ function showMe(lat, lng, acc){
   trailAdd(lat, lng, acc);
   renderHeading();
   if(windOn() && wind.data) windRender();
+  if(typeof panUpdate === 'function') panUpdate();
 }
+/* Glöm positionen (används av testerna). */
+function forgetMe(){ myPos = null; if(meMarker){ map.removeLayer(meMarker); map.removeLayer(meCircle); meMarker = meCircle = null; } panLine(null); }
 function locate(fly){
   if(!('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); return; }
   $('#btnLocate').setAttribute('aria-pressed','true');
@@ -3796,9 +3800,11 @@ $('#windChip').addEventListener('click', () => { windFetch(true); toast('Hämtar
 
 /* ---------- Kryss med avståndsringar ----------
    Visas i mitten av den synliga kartan medan man panorerar och zoomar, och en stund efteråt.
-   Visar också avståndet från din position till krysset. Ligger kvar hela tiden när man mäter. */
+   Är din position känd visas i stället för ringarna en tunn streckad linje från dig till krysset,
+   och avståndet i hela meter. Ligger kvar hela tiden när man mäter. */
 const NICE = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000, 20000, 50000];
-const pan = {el:null, timer:null, ready:false};
+const pan = {el:null, timer:null, ready:false, line:null};
+const ringLabel = m => m < 1000 ? `${m} m` : `${(m / 1000).toLocaleString('sv-SE')} km`;
 function panInit(){
   if(pan.el) return;
   pan.el = h(`<div class="pancross" hidden aria-hidden="true"><div class="pc-rings"></div><svg class="pc-x" viewBox="0 0 30 30"><path d="M15 3v9M15 18v9M3 15h9M18 15h9" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M15 3v9M15 18v9M3 15h9M18 15h9" stroke="#16231c" stroke-width="2" stroke-linecap="round"/></svg><div class="pc-label"></div></div>`);
@@ -3811,14 +3817,23 @@ function panShow(stay){
   clearTimeout(pan.timer);
   if(!stay && !measure) pan.timer = setTimeout(panHide, 2500);
 }
-function panHide(){ clearTimeout(pan.timer); if(pan.el && !measure) pan.el.hidden = true; }
+function panHide(){ clearTimeout(pan.timer); if(pan.el && !measure){ pan.el.hidden = true; panLine(null); } }
+/* Linjen från din position till krysset. null tar bort den. */
+function panLine(to){
+  if(!to || !myPos){ if(pan.line){ map.removeLayer(pan.line); pan.line = null; } return; }
+  const pts = [L.latLng(myPos.lat, myPos.lng), to];
+  if(pan.line) pan.line.setLatLngs(pts);
+  else pan.line = L.polyline(pts, {color:'#1a73e8', weight:2, opacity:.95, dashArray:'4 6', lineCap:'butt', interactive:false, className:'me-line'}).addTo(map);
+}
 function panUpdate(){
   if(!pan.el || pan.el.hidden) return;
   // Samma punkt som placeringskorset: mitt på kartan
   const p = crossPoint(), ll = map.containerPointToLatLng(p), mpp = metersPerPixel(ll.lat, map.getZoom());
   pan.el.style.left = p.x + 'px'; pan.el.style.top = p.y + 'px';
   const step = NICE.find(m => m / mpp >= 38) || NICE[NICE.length - 1];
-  pan.el.querySelector('.pc-rings').innerHTML = [1, 2, 3].map(k => { const rpx = k * step / mpp; return `<span class="pc-ring" style="width:${2 * rpx}px;height:${2 * rpx}px;margin:${-rpx}px 0 0 ${-rpx}px"></span><span class="pc-rl" style="top:${-rpx}px">${fmtDist(k * step)}</span>`; }).join('');
+  // Med känd position: linje från dig i stället för ringar. När man mäter från egna punkter behövs ingen linje från dig.
+  panLine(myPos && !(measure && measure.pts.length) ? ll : null);
+  pan.el.querySelector('.pc-rings').innerHTML = myPos ? '' : [1, 2, 3].map(k => { const rpx = k * step / mpp; return `<span class="pc-ring" style="width:${2 * rpx}px;height:${2 * rpx}px;margin:${-rpx}px 0 0 ${-rpx}px"></span><span class="pc-rl" style="top:${-rpx}px">${ringLabel(k * step)}</span>`; }).join('');
   const lab = pan.el.querySelector('.pc-label');
   lab.textContent = myPos ? `${fmtDist(distM(myPos, ll))} från dig · ${dirName(bearingDeg(L.latLng(myPos.lat, myPos.lng), ll))}` : '';
   lab.hidden = !myPos;
@@ -4084,7 +4099,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>
