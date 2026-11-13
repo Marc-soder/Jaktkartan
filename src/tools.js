@@ -317,3 +317,78 @@ map.on('moveend zoomend resize', () => { if(heatOn() && heat.count) heatRender()
 $('#popHeat').addEventListener('change', e => { state.settings.heat = e.target.checked; save(); heatSync(); });
 for(const [id, k] of [['#heatSp', 'sp'], ['#heatPeriod', 'period'], ['#heatArea', 'area']])
   $(id).addEventListener('change', e => { state.settings.heatFilter = Object.assign(heatFilter(), {[k]: e.target.value}); save(); renderHeatControls(); heatRender(); });
+
+/* ---------- Numrera om passen ----------
+   Passen i en jaktmark får nummer i ordning efter läge, t.ex. från söder till norr.
+   En beskrivning efter numret behålls: "Pass 3 – kalhygget" kan bli "Pass 1 – kalhygget". */
+var renumberUndo = null;   /* var: listan kan ritas innan den här filen har körts klart */
+const RENUM_DIRS = {sn:'Söder till norr', ns:'Norr till söder', wo:'Väster till öster', ow:'Öster till väster'};
+function isPassType(t){ return !!t && (t.id === 't-pass' || /^pass$/i.test((t.name || '').trim())); }
+function passPins(){ return state.pins.filter(p => isPassType(typeById(p.typeId)) && canEditPin(p)); }
+function passRest(name){
+  const s = (name || '').trim();
+  const m = s.match(/^(?:pass\s*)?(?:nr\.?\s*)?\d+\s*[–—\-:.,)]*\s*(.*)$/i);
+  if(m) return m[1].trim();
+  return s.replace(/^pass\b[\s–—\-:.,]*/i, '').trim();
+}
+function passName(n, rest){ return 'Pass ' + n + (rest ? ' – ' + rest : ''); }
+/* Grupperar per område och sorterar. Returnerar [{pin, name}] med de nya namnen. */
+function renumberPlan(areaKey, dir){
+  const pins = passPins().filter(p => areaKey === '*' || (p.areaId || '') === areaKey);
+  const groups = {};
+  for(const p of pins) (groups[p.areaId || ''] = groups[p.areaId || ''] || []).push(p);
+  const cmp = {sn:(a,b) => a.lat - b.lat || a.lng - b.lng, ns:(a,b) => b.lat - a.lat || a.lng - b.lng,
+               wo:(a,b) => a.lng - b.lng || a.lat - b.lat, ow:(a,b) => b.lng - a.lng || a.lat - b.lat}[dir] || ((a,b) => a.lat - b.lat);
+  const out = [];
+  for(const list of Object.values(groups)) list.slice().sort(cmp).forEach((p, i) => out.push({pin:p, name:passName(i + 1, passRest(p.name))}));
+  return out;
+}
+function renumberAreas(){
+  const counts = {};
+  for(const p of passPins()) counts[p.areaId || ''] = (counts[p.areaId || ''] || 0) + 1;
+  return Object.entries(counts).map(([id, n]) => ({id, n, name:id ? ((areaById(id) || {}).name || 'Okänt område') : 'Utan område'}))
+    .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, 'sv'));
+}
+function openRenumber(){
+  const areas = renumberAreas();
+  if(!passPins().length){ toast('Det finns inga pass som du kan ändra.'); return; }
+  const set = state.settings.renumber || {};
+  let areaKey = areas.some(a => a.id === set.area) ? set.area : areas[0].id, dir = RENUM_DIRS[set.dir] ? set.dir : 'sn';
+  openModal(`<h2>Numrera om passen</h2>
+    <p class="note" style="margin-top:0">Passen får nummer i ordning efter var de ligger. Varje jaktmark numreras för sig, från 1. Text efter numret behålls.</p>
+    <div class="row2">
+      <label class="field"><span>Jaktmark</span><select class="input" id="rnArea">${areas.map(a => `<option value="${esc(a.id)}"${a.id === areaKey ? ' selected' : ''}>${esc(a.name)} (${a.n})</option>`).join('')}${areas.length > 1 ? `<option value="*"${areaKey === '*' ? ' selected' : ''}>Alla, var för sig</option>` : ''}</select></label>
+      <label class="field"><span>Ordning</span><select class="input" id="rnDir">${Object.entries(RENUM_DIRS).map(([k, v]) => `<option value="${k}"${k === dir ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+    </div>
+    <div class="field"><span>Så här blir det</span><div id="rnPreview" class="rn-preview"></div></div>
+    <div class="actions"><button class="btn primary grow" type="button" id="rnOk">Numrera om</button><button class="btn ghost" type="button" id="rnCancel">Avbryt</button></div>`, m => {
+    const preview = () => {
+      const plan = renumberPlan(areaKey, dir);
+      m.querySelector('#rnPreview').innerHTML = plan.map(({pin, name}) => {
+        const same = (pin.name || '') === name;
+        return `<div class="rn-row${same ? ' same' : ''}"><span class="rn-old">${esc(pin.name || 'Pass')}</span><span class="rn-arrow" aria-hidden="true">→</span><span class="rn-new">${esc(name)}</span></div>`;
+      }).join('');
+      const changed = plan.filter(x => (x.pin.name || '') !== x.name).length;
+      const ok = m.querySelector('#rnOk'); ok.disabled = !changed; ok.textContent = changed ? `Numrera om ${changed} pass` : 'Redan i ordning';
+    };
+    m.querySelector('#rnArea').addEventListener('change', e => { areaKey = e.target.value; preview(); });
+    m.querySelector('#rnDir').addEventListener('change', e => { dir = e.target.value; preview(); });
+    m.querySelector('#rnCancel').addEventListener('click', closeModal);
+    m.querySelector('#rnOk').addEventListener('click', () => {
+      const plan = renumberPlan(areaKey, dir), now = Date.now();
+      const undo = plan.map(({pin}) => [pin.id, pin.name, pin.updated]);
+      let changed = 0;
+      for(const {pin, name} of plan){ if((pin.name || '') === name) continue; pin.name = name; pin.updated = now; delete pin.example; changed++; }
+      state.settings.renumber = {area:areaKey, dir};
+      renumberUndo = changed ? undo : null;
+      save(); closeModal(); renderAll();
+      toast(changed ? `${changed} pass har numrerats om. Ångra under Nålar.` : 'Passen var redan i ordning.', 4500);
+    });
+    preview();
+  });
+}
+function undoRenumber(){
+  if(!renumberUndo) return;
+  for(const [id, name, upd] of renumberUndo){ const p = pinById(id); if(p && canEditPin(p)){ p.name = name; p.updated = Date.now(); } }
+  renumberUndo = null; save(); renderAll(); toast('Numreringen är ångrad.');
+}
