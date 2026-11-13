@@ -5,10 +5,11 @@
   "scripts": {
     "build": "python3 src/build.py",
     "check": "python3 src/build.py --check",
-    "test": "npm run test:app && npm run test:border && npm run test:cloud",
+    "test": "npm run test:app && npm run test:border && npm run test:tools && npm run test:cloud",
     "test:app": "python3 tests/test.py",
     "test:border": "python3 tests/test3.py",
-    "test:cloud": "node tests/test2.js"
+    "test:cloud": "node tests/test2.js",
+    "test:tools": "python3 tests/test4.py"
   },
   "devDependencies": {
     "leaflet": "1.9.4",

@@ -23,7 +23,7 @@ def build():
     rules = subprocess.check_output(['node', '-e', 'process.stdout.write(JSON.stringify(require(process.argv[1]), null, 2))',
                                      os.path.join(SRC, 'rules.js')]).decode('utf-8')
     cloud = read(os.path.join(SRC, 'cloud.js')).replace("/*RULES_JSON*/''", json.dumps(rules, ensure_ascii=False))
-    inj = read(os.path.join(SRC, 'vilt.js')) + '\n' + cloud + '\n' + read(os.path.join(SRC, 'loupe.js')) + '\n' + read(os.path.join(SRC, 'border.js')) + '\n' + read(os.path.join(SRC, 'overlay.js'))
+    inj = read(os.path.join(SRC, 'vilt.js')) + '\n' + cloud + '\n' + read(os.path.join(SRC, 'loupe.js')) + '\n' + read(os.path.join(SRC, 'border.js')) + '\n' + read(os.path.join(SRC, 'overlay.js')) + '\n' + read(os.path.join(SRC, 'tools.js'))
     for k in ('/*LEAFLET_CSS*/', '/*LEAFLET_JS*/', '/*INJECT*/'):
         assert src.count(k) == 1, k
     assert '</script' not in inj
