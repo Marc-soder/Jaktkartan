@@ -23,16 +23,12 @@ function renderBorders(){
     areaRings(a).forEach((pts, k) => {
       if(drawing && drawing.mode === 'border' && drawing.id === a.id && drawing.ring === k) return;   // delen som ritas visas som utkast
       L.polygon(pts, {color:'#ffffff', weight:6, opacity:.7, fill:false, interactive:false}).addTo(borderLayer);
-      // Tryck i området: namn, storlek, Zooma till området och Ändra. Under ritning, placering, mätning och inpassning går trycket vidare till kartan.
-      const pg = L.polygon(pts, {color:'#d9520e', weight:3, fillColor:'#d9520e', fillOpacity:.06, dashArray:'10 6', className:'area-shape'});
-      pg.on('click', e => { if(areaTapBlocked()) return; L.DomEvent.stop(e); areaPopup(a.id, e.latlng); });
-      pg.addTo(borderLayer);
+      L.polygon(pts, {color:'#d9520e', weight:3, fillColor:'#d9520e', fillOpacity:.06, dashArray:'10 6', interactive:false}).addTo(borderLayer);
     });
   }
   renderLines();
 }
 
-const areaTapBlocked = () => !!(drawing || placing || (typeof cal !== 'undefined' && cal) || (typeof adj !== 'undefined' && adj) || (typeof measure !== 'undefined' && measure));
 /* Alla punkter som hör till ett område: gränsdelar, egna vägar och nålar */
 function areaPoints(a){
   const pts = [];
@@ -52,16 +48,6 @@ function zoomToArea(id){
     else map.fitBounds(L.latLngBounds(pts), {paddingTopLeft:[30, 30], paddingBottomRight:[70, bottomPad() + 30], maxZoom:17});
   }, isDesktop() ? 0 : 280);
 }
-function areaPopup(id, at){
-  const a = areaById(id); if(!a) return;
-  const rings = areaRings(a), n = state.pins.filter(p => p.areaId === id).length, g = a.gid && cloud.groups[a.gid];
-  const el = h(`<div class="pp"><h4>${esc(a.name)}</h4><div class="pnote">${fmtHa(ringsHa(rings))}${rings.length > 1 ? ` i ${rings.length} delar` : ''} · ${n} ${n === 1 ? 'nål' : 'nålar'}${g ? `<br>Delas med ${esc(gname(g))}` : ''}</div>
-    <div class="pbtns"><button class="btn sm" type="button" data-a="zoom">Zooma till området</button>${canEditArea(a) ? '<button class="btn sm" type="button" data-a="edit">Ändra</button>' : ''}</div></div>`);
-  el.querySelector('[data-a="zoom"]').addEventListener('click', () => zoomToArea(id));
-  const ed = el.querySelector('[data-a="edit"]'); if(ed) ed.addEventListener('click', () => { map.closePopup(); openAreaForm(id); });
-  L.popup({maxWidth:260}).setLatLng(at).setContent(el).openOn(map);
-}
-
 /* ---------- Egna vägar och stigar ----------
    Sparas per område som a.lines = {id: {k:'road'|'path', p:'lat,lng;lat,lng', n:'namn'}} och delas med jaktlaget tillsammans med området. */
 const lineLayer = L.layerGroup().addTo(map);
