@@ -108,6 +108,7 @@ a{color:var(--accent)}
 .rn-row .rn-new{font-weight:600;overflow-wrap:anywhere}
 .rn-row.same .rn-new{font-weight:400;color:var(--muted)}
 .rn-bar{margin-top:12px}
+.rn-start .input{max-width:140px}
 .heat-filters{display:grid;gap:6px;padding:0 8px 8px}
 .heat-filters .input{min-height:38px;padding:6px 10px;font-size:14px}
 .heat-canvas{position:absolute;left:0;top:0;pointer-events:none}
@@ -932,7 +933,7 @@ function renderList(){
   let html = '';
   const hiddenCount = state.pins.length - visible.length;
   if(!state.pins.length){
-    html += `<div class="empty">Inga nålar ännu. Tryck på <b>+</b> och placera korset, eller håll fingret på kartan.</div>`;
+    html += `<div class="empty">Inga nålar ännu. Tryck på <b>+</b> och placera korset där nålen ska ligga.</div>`;
   } else if(!items.length){
     html += `<div class="empty">${q ? 'Inga nålar matchar sökningen.' : 'Alla nålar är dolda av filtret.'}</div>`;
   } else {
@@ -964,7 +965,6 @@ function renderList(){
   }
   if(passPins().length >= 2 || renumberUndo) html += `<div class="btnrow rn-bar">${passPins().length >= 2 ? '<button class="btn sm" type="button" data-act="renumber" id="btnRenumber">Numrera om passen</button>' : ''}${renumberUndo ? '<button class="btn sm ghost" type="button" data-act="renumber-undo" id="btnRenumberUndo">Ångra numreringen</button>' : ''}</div>`;
   if(hiddenCount > 0) html += `<p class="note">${hiddenCount} ${hiddenCount === 1 ? 'nål är dold' : 'nålar är dolda'} av ${state.settings.svampMode ? 'svampkartan' : 'filtret'}.</p>`;
-  html += `<p class="note">Håll fingret på kartan (högerklicka på dator) för att lägga en nål direkt där.</p>`;
   $('#listItems').innerHTML = html;
 }
 function gotoPin(id){

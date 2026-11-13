@@ -344,14 +344,15 @@ function passRest(name){
 }
 function passName(n, rest){ return 'Pass ' + n + (rest ? ' – ' + rest : ''); }
 /* Grupperar per område och sorterar. Returnerar [{pin, name}] med de nya namnen. */
-function renumberPlan(areaKey, dir){
+function renumberPlan(areaKey, dir, start){
+  start = Math.max(1, Math.floor(+start) || 1);
   const pins = passPins().filter(p => areaKey === '*' || (p.areaId || '') === areaKey);
   const groups = {};
   for(const p of pins) (groups[p.areaId || ''] = groups[p.areaId || ''] || []).push(p);
   const cmp = {sn:(a,b) => a.lat - b.lat || a.lng - b.lng, ns:(a,b) => b.lat - a.lat || a.lng - b.lng,
                wo:(a,b) => a.lng - b.lng || a.lat - b.lat, ow:(a,b) => b.lng - a.lng || a.lat - b.lat}[dir] || ((a,b) => a.lat - b.lat);
   const out = [];
-  for(const list of Object.values(groups)) list.slice().sort(cmp).forEach((p, i) => out.push({pin:p, name:passName(i + 1, passRest(p.name))}));
+  for(const list of Object.values(groups)) list.slice().sort(cmp).forEach((p, i) => out.push({pin:p, name:passName(start + i, passRest(p.name))}));
   return out;
 }
 function renumberAreas(){
@@ -364,17 +365,18 @@ function openRenumber(){
   const areas = renumberAreas();
   if(!passPins().length){ toast('Det finns inga pass som du kan ändra.'); return; }
   const set = state.settings.renumber || {};
-  let areaKey = areas.some(a => a.id === set.area) ? set.area : areas[0].id, dir = RENUM_DIRS[set.dir] ? set.dir : 'sn';
+  let areaKey = areas.some(a => a.id === set.area) ? set.area : areas[0].id, dir = RENUM_DIRS[set.dir] ? set.dir : 'sn', start = 1;
   openModal(`<h2>Numrera om passen</h2>
-    <p class="note" style="margin-top:0">Passen får nummer i ordning efter var de ligger. Varje jaktmark numreras för sig, från 1. Text efter numret behålls.</p>
+    <p class="note" style="margin-top:0">Passen får nummer i ordning efter var de ligger. Varje jaktmark numreras för sig. Text efter numret behålls.</p>
     <div class="row2">
       <label class="field"><span>Jaktmark</span><select class="input" id="rnArea">${areas.map(a => `<option value="${esc(a.id)}"${a.id === areaKey ? ' selected' : ''}>${esc(a.name)} (${a.n})</option>`).join('')}${areas.length > 1 ? `<option value="*"${areaKey === '*' ? ' selected' : ''}>Alla, var för sig</option>` : ''}</select></label>
       <label class="field"><span>Ordning</span><select class="input" id="rnDir">${Object.entries(RENUM_DIRS).map(([k, v]) => `<option value="${k}"${k === dir ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
     </div>
+    <label class="field rn-start"><span>Börja på nummer</span><input class="input" id="rnStart" type="number" inputmode="numeric" min="1" max="999" step="1" value="1"></label>
     <div class="field"><span>Så här blir det</span><div id="rnPreview" class="rn-preview"></div></div>
     <div class="actions"><button class="btn primary grow" type="button" id="rnOk">Numrera om</button><button class="btn ghost" type="button" id="rnCancel">Avbryt</button></div>`, m => {
     const preview = () => {
-      const plan = renumberPlan(areaKey, dir);
+      const plan = renumberPlan(areaKey, dir, start);
       m.querySelector('#rnPreview').innerHTML = plan.map(({pin, name}) => {
         const same = (pin.name || '') === name;
         return `<div class="rn-row${same ? ' same' : ''}"><span class="rn-old">${esc(pin.name || 'Pass')}</span><span class="rn-arrow" aria-hidden="true">→</span><span class="rn-new">${esc(name)}</span></div>`;
@@ -384,9 +386,10 @@ function openRenumber(){
     };
     m.querySelector('#rnArea').addEventListener('change', e => { areaKey = e.target.value; preview(); });
     m.querySelector('#rnDir').addEventListener('change', e => { dir = e.target.value; preview(); });
+    m.querySelector('#rnStart').addEventListener('input', e => { start = Math.min(999, Math.max(1, Math.floor(+e.target.value) || 1)); preview(); });
     m.querySelector('#rnCancel').addEventListener('click', closeModal);
     m.querySelector('#rnOk').addEventListener('click', () => {
-      const plan = renumberPlan(areaKey, dir), now = Date.now();
+      const plan = renumberPlan(areaKey, dir, start), now = Date.now();
       const undo = plan.map(({pin}) => [pin.id, pin.name, pin.updated]);
       let changed = 0;
       for(const {pin, name} of plan){ if((pin.name || '') === name) continue; pin.name = name; pin.updated = now; delete pin.example; changed++; }
