@@ -793,6 +793,10 @@ a{color:var(--accent)}
 .cmp-dial{width:70px;height:70px;border-radius:50%;background:var(--surface);box-shadow:0 2px 10px rgba(0,0,0,.25);transition:transform .15s linear}
 .compass.off .cmp-dial{opacity:.7}
 .cmp-ring{fill:none;stroke:var(--line);stroke-width:2}
+.cmp-no path{fill:#dc2626;opacity:.55}
+.compass.nofire .cmp-dial{box-shadow:0 0 0 4px #dc2626,0 2px 10px rgba(0,0,0,.35)}
+.compass.nofire .cmp-txt{background:#dc2626;color:#fff}
+.compass.nofire .cmp-idx{border-top-color:#dc2626}
 .cmp-ticks line{stroke:var(--muted);stroke-width:1.5}
 .cmp-n{fill:#dc2626}.cmp-s{fill:var(--muted)}
 .cmp-l{font:700 12px/1 var(--font-body);fill:var(--fg);text-anchor:middle;dominant-baseline:central}
@@ -1085,7 +1089,7 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
 </button>
 
 <button class="wind-chip" id="windChip" type="button" hidden></button>
-<button class="compass" id="compassBtn" type="button" hidden aria-label="Kompass: tryck för att starta"><svg class="cmp-dial" id="compassDial" viewBox="-50 -50 100 100" aria-hidden="true"><circle r="47" class="cmp-ring"/><g class="cmp-ticks"><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(0.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(22.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(45.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(67.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(90.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(112.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(135.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(157.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(180.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(202.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(225.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(247.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(270.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(292.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(315.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(337.5)"/></g><path d="M0 -21 L5 0 L0 -3 L-5 0 Z" class="cmp-n"/><path d="M0 21 L5 0 L0 3 L-5 0 Z" class="cmp-s"/><text x="0" y="-32" class="cmp-l n">N</text><text x="32" y="0" class="cmp-l">O</text><text x="0" y="32" class="cmp-l">S</text><text x="-32" y="0" class="cmp-l">V</text></svg><span class="cmp-idx" aria-hidden="true"></span><span class="cmp-txt" id="compassTxt">Kompass</span></button>
+<button class="compass" id="compassBtn" type="button" hidden aria-label="Kompass: tryck för att starta"><svg class="cmp-dial" id="compassDial" viewBox="-50 -50 100 100" aria-hidden="true"><circle r="47" class="cmp-ring"/><g id="cmpNo" class="cmp-no"></g><g class="cmp-ticks"><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(0.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(22.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(45.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(67.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(90.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(112.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(135.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(157.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(180.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(202.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(225.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(247.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(270.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(292.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(315.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(337.5)"/></g><path d="M0 -21 L5 0 L0 -3 L-5 0 Z" class="cmp-n"/><path d="M0 21 L5 0 L0 3 L-5 0 Z" class="cmp-s"/><text x="0" y="-32" class="cmp-l n">N</text><text x="32" y="0" class="cmp-l">O</text><text x="0" y="32" class="cmp-l">S</text><text x="-32" y="0" class="cmp-l">V</text></svg><span class="cmp-idx" aria-hidden="true"></span><span class="cmp-txt" id="compassTxt">Kompass</span></button>
 <div class="placebar" id="measurebar" hidden>
   <p id="measureText"></p>
   <div class="btnrow">
@@ -4109,7 +4113,7 @@ map.whenReady(() => setTimeout(() => { pan.ready = true; if(windOn()) setWind(tr
 /* ---------- Riktningen jag tittar åt ----------
    En blå kon från positionspricken och en kompass uppe till vänster, efter telefonens kompass. Startas av ett tryck på positionsknappen
    (på iPhone krävs ett tryck för att få tillåtelse att läsa kompassen). */
-const compass = {on:false, heading:null, raf:0, rot:0, timer:null};
+const compass = {on:false, heading:null, raf:0, rot:0, timer:null, mask:0, bad:false};
 const compassOn = () => state.settings.compass !== false;
 const isTouch = () => !!(window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
 const screenAngle = () => (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (typeof window.orientation === 'number' ? window.orientation : 0);
@@ -4134,8 +4138,21 @@ function renderCompass(){
   const last = ((compass.rot % 360) + 360) % 360; let d = h - last; if(d > 180) d -= 360; if(d < -180) d += 360;
   compass.rot += d;
   $('#compassDial').style.transform = `rotate(${-compass.rot}deg)`;
+  // Förbjudna skjutriktningar på mitt pass: röda fält i rosen, och varning när telefonen pekar in i ett
+  const mask = typeof myNoFireMask === 'function' ? myNoFireMask() : 0;
+  if(mask !== compass.mask){
+    compass.mask = mask;
+    const pt = (r, a) => `${(r * Math.sin(a * Math.PI / 180)).toFixed(2)},${(-r * Math.cos(a * Math.PI / 180)).toFixed(2)}`;
+    $('#cmpNo').innerHTML = maskRuns(mask).map(([i, n]) => { const a0 = i * 22.5 - 11.25, a1 = a0 + n * 22.5, big = n * 22.5 > 180 ? 1 : 0;
+      return n >= 16 ? '<path d="M0,-47A47,47 0 1 1 0,47A47,47 0 1 1 0,-47Z"/>' : `<path d="M0,0L${pt(47, a0)}A47,47 0 ${big} 1 ${pt(47, a1)}Z"/>`; }).join('');
+  }
+  const bad = !!(mask & (1 << (Math.round(h / 22.5) % 16)));
+  btn.classList.toggle('nofire', bad);
+  if(bad && !compass.bad){ try { if(navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch(e){} }
+  compass.bad = bad;
   const t = `${dirName(h)} ${Math.round(h) % 360}°`;
-  $('#compassTxt').textContent = t; btn.setAttribute('aria-label', 'Telefonen pekar mot ' + t);
+  $('#compassTxt').textContent = bad ? `Förbjuden riktning · ${t}` : t;
+  btn.setAttribute('aria-label', bad ? `Förbjuden skjutriktning: telefonen pekar mot ${t}` : 'Telefonen pekar mot ' + t);
 }
 function renderHeading(){
   renderCompass();
@@ -4400,10 +4417,34 @@ function routeStyle(kind, pts){
   return [L.polyline(pts, Object.assign({color:'#ffffff', weight:6, opacity:.8}, o)), L.polyline(pts, Object.assign({color:k.color, weight:3, dashArray:'2 7', lineCap:'round', className:'plan-route ' + kind}, o))];
 }
 
+/* Mitt pass under en pågående jakt, med förbjudna riktningar (för kompassen). {mask, lat, lng} eller null. */
+var planMine = null;
+function findMyNoFire(){
+  let mine = null;
+  for(const {g, hid, hunt} of planHunts()){
+    if(!huntLive(hunt)) continue;
+    for(const [pid, s] of Object.entries(planOf(g, hid).stands || {})){
+      if(!s || s.uid !== myUid() || !s.no) continue;
+      const p = pinById(pid); if(!p) continue;
+      mine = mine ? Object.assign(mine, {mask:mine.mask | s.no}) : {mask:s.no, lat:p.lat, lng:p.lng, name:p.name || 'Pass'};
+    }
+  }
+  return mine;
+}
+/* Gäller bara nära passet (inom 300 m) eller när positionen inte är känd. */
+const NOFIRE_NEAR = 300;
+function myNoFireMask(){
+  const m = planMine; if(!m) return 0;
+  if(myPos && distM(myPos, m) > NOFIRE_NEAR) return 0;
+  return m.mask;
+}
+
 /* ---------- Planen på kartan ---------- */
 function renderPlan(){
   if(!planLayer) planLayer = L.layerGroup().addTo(map);
   planLayer.clearLayers();
+  planMine = findMyNoFire();
+  if(typeof renderCompass === 'function') renderCompass();
   if(!planOn()) return;
   const pins = new Map(state.pins.map(p => [p.id, p]));
   for(const {g, hid} of planHunts()){

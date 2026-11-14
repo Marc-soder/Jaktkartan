@@ -51,7 +51,7 @@ window.firebase = (function(){
   return {apps, initializeApp(){ apps.push(1); }, auth: authFn, database: dbFn};
 })();`;
 async function mkPage(browser, who, hash, opts){
-  const ctx = await browser.newContext(Object.assign({viewport:{width:1280, height:900}, geolocation:{latitude:58.72, longitude:14.61, accuracy:12}, permissions:['geolocation']}, opts || {}));
+  const ctx = await browser.newContext(Object.assign({viewport:{width:1280, height:900}, geolocation:{latitude:58.72, longitude:14.61, accuracy:12}, permissions:['geolocation', 'accelerometer', 'gyroscope', 'magnetometer']}, opts || {}));
   await ctx.route('**/*', r => { const u = r.request().url();
     if(u.includes('firebase-app-compat')) return r.fulfill({status:200, contentType:'text/javascript', body:FAKE});
     if(u.includes('gstatic.com/firebasejs')) return r.fulfill({status:200, contentType:'text/javascript', body:''});
@@ -251,6 +251,23 @@ const gids = () => Object.keys(data.groups || {});
     firebase.database().ref('groups/' + g + '/huntPlan/' + h).get().then(() => 'ok', () => 'denied'),
     firebase.database().ref('groups/' + g + '/huntPlan').get().then(() => 'ok', () => 'denied')]), [gid, hid]);
   check(cw2.join() === 'denied,ok,denied', `gästen kan läsa sin jakts plan men inte ändra den eller läsa andra jakters (${cw2})`);
+  // Kompassen på Carls pass: röda fält för förbjudna riktningar, varning när telefonen pekar dit
+  const pa = data.groups[gid].pins[aid][pA];
+  await C.click('#btnLocate'); await W(C, 500);
+  await C.evaluate(([la, ln]) => __fk.showMe(la, ln, 5), [pa.lat, pa.lng]); await W(C, 300);
+  const head = h => C.evaluate(v => { const e = new Event('deviceorientation'); Object.defineProperty(e, 'webkitCompassHeading', {value: v}); window.dispatchEvent(e); }, h).then(() => W(C, 250));
+  await head(90);
+  check(await C.locator('#cmpNo path').count() === 1 && !(await C.evaluate(() => document.getElementById('compassBtn').classList.contains('nofire'))), 'kompassen visar ett rött fält för de förbjudna riktningarna, ingen varning mot öster');
+  await head(5);
+  check(await C.evaluate(() => document.getElementById('compassBtn').classList.contains('nofire')) && (await C.innerText('#compassTxt')).startsWith('Förbjuden riktning'), `varning när telefonen pekar mot norr: ${await C.innerText('#compassTxt')}`);
+  await head(340);
+  check(await C.evaluate(() => document.getElementById('compassBtn').classList.contains('nofire')), 'varning också mot NNV');
+  await head(320);
+  check(!(await C.evaluate(() => document.getElementById('compassBtn').classList.contains('nofire'))), 'ingen varning mot NV, som är tillåtet');
+  await C.screenshot({path:shot('c_compass.png'), clip:{x:380, y:0, width:200, height:150}});
+  await C.evaluate(([la, ln]) => __fk.showMe(la - 0.01, ln, 5), [pa.lat, pa.lng]); await head(5);
+  check(await C.locator('#cmpNo path').count() === 0 && !(await C.evaluate(() => document.getElementById('compassBtn').classList.contains('nofire'))), 'mer än 300 m från passet: inga röda fält och ingen varning');
+  await C.evaluate(() => __fk.showMe(58.72, 14.61, 12));
   // ---- Jag deltar: positionen delas automatiskt ----
   const hp = () => ((data.groups[gid].huntPos || {})[hid] || {});
   await W(C, 900);

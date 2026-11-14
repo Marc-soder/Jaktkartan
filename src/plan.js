@@ -71,10 +71,34 @@ function routeStyle(kind, pts){
   return [L.polyline(pts, Object.assign({color:'#ffffff', weight:6, opacity:.8}, o)), L.polyline(pts, Object.assign({color:k.color, weight:3, dashArray:'2 7', lineCap:'round', className:'plan-route ' + kind}, o))];
 }
 
+/* Mitt pass under en pågående jakt, med förbjudna riktningar (för kompassen). {mask, lat, lng} eller null. */
+var planMine = null;
+function findMyNoFire(){
+  let mine = null;
+  for(const {g, hid, hunt} of planHunts()){
+    if(!huntLive(hunt)) continue;
+    for(const [pid, s] of Object.entries(planOf(g, hid).stands || {})){
+      if(!s || s.uid !== myUid() || !s.no) continue;
+      const p = pinById(pid); if(!p) continue;
+      mine = mine ? Object.assign(mine, {mask:mine.mask | s.no}) : {mask:s.no, lat:p.lat, lng:p.lng, name:p.name || 'Pass'};
+    }
+  }
+  return mine;
+}
+/* Gäller bara nära passet (inom 300 m) eller när positionen inte är känd. */
+const NOFIRE_NEAR = 300;
+function myNoFireMask(){
+  const m = planMine; if(!m) return 0;
+  if(myPos && distM(myPos, m) > NOFIRE_NEAR) return 0;
+  return m.mask;
+}
+
 /* ---------- Planen på kartan ---------- */
 function renderPlan(){
   if(!planLayer) planLayer = L.layerGroup().addTo(map);
   planLayer.clearLayers();
+  planMine = findMyNoFire();
+  if(typeof renderCompass === 'function') renderCompass();
   if(!planOn()) return;
   const pins = new Map(state.pins.map(p => [p.id, p]));
   for(const {g, hid} of planHunts()){

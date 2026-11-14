@@ -247,7 +247,7 @@ map.whenReady(() => setTimeout(() => { pan.ready = true; if(windOn()) setWind(tr
 /* ---------- Riktningen jag tittar åt ----------
    En blå kon från positionspricken och en kompass uppe till vänster, efter telefonens kompass. Startas av ett tryck på positionsknappen
    (på iPhone krävs ett tryck för att få tillåtelse att läsa kompassen). */
-const compass = {on:false, heading:null, raf:0, rot:0, timer:null};
+const compass = {on:false, heading:null, raf:0, rot:0, timer:null, mask:0, bad:false};
 const compassOn = () => state.settings.compass !== false;
 const isTouch = () => !!(window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
 const screenAngle = () => (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (typeof window.orientation === 'number' ? window.orientation : 0);
@@ -272,8 +272,21 @@ function renderCompass(){
   const last = ((compass.rot % 360) + 360) % 360; let d = h - last; if(d > 180) d -= 360; if(d < -180) d += 360;
   compass.rot += d;
   $('#compassDial').style.transform = `rotate(${-compass.rot}deg)`;
+  // Förbjudna skjutriktningar på mitt pass: röda fält i rosen, och varning när telefonen pekar in i ett
+  const mask = typeof myNoFireMask === 'function' ? myNoFireMask() : 0;
+  if(mask !== compass.mask){
+    compass.mask = mask;
+    const pt = (r, a) => `${(r * Math.sin(a * Math.PI / 180)).toFixed(2)},${(-r * Math.cos(a * Math.PI / 180)).toFixed(2)}`;
+    $('#cmpNo').innerHTML = maskRuns(mask).map(([i, n]) => { const a0 = i * 22.5 - 11.25, a1 = a0 + n * 22.5, big = n * 22.5 > 180 ? 1 : 0;
+      return n >= 16 ? '<path d="M0,-47A47,47 0 1 1 0,47A47,47 0 1 1 0,-47Z"/>' : `<path d="M0,0L${pt(47, a0)}A47,47 0 ${big} 1 ${pt(47, a1)}Z"/>`; }).join('');
+  }
+  const bad = !!(mask & (1 << (Math.round(h / 22.5) % 16)));
+  btn.classList.toggle('nofire', bad);
+  if(bad && !compass.bad){ try { if(navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch(e){} }
+  compass.bad = bad;
   const t = `${dirName(h)} ${Math.round(h) % 360}°`;
-  $('#compassTxt').textContent = t; btn.setAttribute('aria-label', 'Telefonen pekar mot ' + t);
+  $('#compassTxt').textContent = bad ? `Förbjuden riktning · ${t}` : t;
+  btn.setAttribute('aria-label', bad ? `Förbjuden skjutriktning: telefonen pekar mot ${t}` : 'Telefonen pekar mot ' + t);
 }
 function renderHeading(){
   renderCompass();
