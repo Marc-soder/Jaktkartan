@@ -216,6 +216,74 @@
             }
           }
         },
+        "msgKeys": {
+          ".read": "(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now)",
+          "$uid": {
+            ".write": "auth != null && (($uid === auth.uid && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now))) || ((auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()))",
+            "$did": {
+              ".validate": "newData.hasChildren(['k','name','t']) && ($uid !== auth.uid || root.child('groups/'+$gid+'/members/'+auth.uid).exists() || newData.child('hid').val() === root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val())",
+              "k": {
+                ".validate": "newData.isString() && newData.val().length >= 40 && newData.val().length <= 200"
+              },
+              "name": {
+                ".validate": "newData.isString() && newData.val().length <= 60"
+              },
+              "t": {
+                ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+              },
+              "hid": {
+                ".validate": "newData.isString() && newData.val().length <= 40"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          }
+        },
+        "huntMsg": {
+          "$hid": {
+            ".read": "((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid)) && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now))",
+            ".write": "(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()",
+            "$mid": {
+              ".write": "auth != null && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now)) && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid)) && (newData.exists() ? (!data.exists() && newData.child('from').val() === auth.uid) : (data.child('from').val() === auth.uid || (auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))))",
+              ".validate": "newData.hasChildren(['from','name','t','iv','ct','spk','keys']) && (newData.child('all').val() === true || newData.hasChild('to'))",
+              "from": {
+                ".validate": "newData.isString()"
+              },
+              "name": {
+                ".validate": "newData.isString() && newData.val().length <= 60"
+              },
+              "t": {
+                ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+              },
+              "iv": {
+                ".validate": "newData.isString() && newData.val().length <= 40"
+              },
+              "ct": {
+                ".validate": "newData.isString() && newData.val().length <= 8000"
+              },
+              "spk": {
+                ".validate": "newData.isString() && newData.val().length <= 200"
+              },
+              "all": {
+                ".validate": "newData.isBoolean()"
+              },
+              "to": {
+                "$uid": {
+                  ".validate": "newData.val() === true"
+                }
+              },
+              "keys": {
+                "$k": {
+                  ".validate": "newData.isString() && newData.val().length <= 200"
+                }
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          }
+        },
         "huntTrail": {
           "$hid": {
             ".read": "((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid)) && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now))",

@@ -63,3 +63,44 @@ Halsband ──radio──> Alpha-handenhet ──ANT+──> Garmin-klocka (Con
 - **inReach (Alpha 200i/300i), MapShare KML-flöde:** visar handenhetens position, inte hundarnas (inte bekräftat),
   uppdateras med några minuters mellanrum och kräver en server som hämtar flödet.
 - **Web Bluetooth direkt mot handenheten:** protokollet är inte dokumenterat, och iPhone saknar Web Bluetooth. Går inte.
+
+## Meddelanden via Meshtastic (väntar)
+
+Krypterade meddelanden i appen finns (`src/msg.js`). Målet är att också kunna välja att skicka via Meshtastic
+till deltagare som har en Meshtastic-radio, så att meddelandet når fram utan mobiltäckning.
+
+### Så fungerar det i Meshtastic
+
+- Sedan firmware 2.5 krypteras **direktmeddelanden** med publika nycklar (x25519 och AES-CCM). Varje radio har ett eget nyckelpar,
+  och bara mottagarens radio kan läsa meddelandet. Saknar avsändaren mottagarens publika nyckel skickas inget,
+  och avsändaren får felet `PKI_SEND_FAIL_PUBLIC_KEY`.
+- Meddelanden på en **kanal** kan läsas av alla som har kanalnyckeln. Ett meddelande "till flera" ska därför skickas som
+  ett direktmeddelande till var och en, inte på kanalen.
+- Ett meddelande får vara högst cirka 200 tecken.
+- Använd aktuell firmware. Flera säkerhetsfel i den första versionen av den publika krypteringen är rättade i senare versioner, se Meshtastics CVE-meddelanden.
+
+### Vad som behöver byggas
+
+1. **Ansluta radion från webbappen** med Web Bluetooth (eller Web Serial/USB) via `@meshtastic/core` och
+   `@meshtastic/transport-web-bluetooth`: `new MeshDevice(await TransportWebBluetooth.create())`, `configure()`,
+   och sedan `sendText(text, nodnummer, wantAck)` för direktmeddelanden. Inkommande meddelanden kommer via `onMessagePacket`.
+   - **Licens:** biblioteken är GPL-3.0. Ägaren valde att vänta med det här. Alternativen är att göra Jaktkartan GPL-3.0
+     eller att hämta biblioteket från ett CDN när radion ansluts (en juridisk gråzon).
+2. **Koppla deltagare till radio:** varje deltagare sparar sitt nod-id (t.ex. `!a1b2c3d4`) i jakten, antingen automatiskt
+   när radion ansluts eller genom att skriva in det. Det behövs en ny nod i reglerna, till exempel `groups/<lag>/meshNodes/<uid>`,
+   och regeltester.
+3. **Välja väg när man skickar:** "App" eller "Meshtastic" (eller båda). Meshtastic går bara att välja för mottagare som har
+   ett nod-id, och bara när avsändarens radio är ansluten. Visa en varning om texten är för lång.
+4. **Ta emot:** är mottagarens radio ansluten till Jaktkartan visas meddelandet i appen. Annars läses det i Meshtastic-appen.
+   En radio kan ofta bara vara ansluten till en app i taget via Bluetooth.
+5. **Tester:** en låtsasradio i testerna (testerna ska gå utan nätverk och utan hårdvara), och skarpa prov med riktiga radioapparater.
+
+### Begränsningar
+
+- **iPhone:** webbläsare på iPhone har inte Web Bluetooth. Den som skickar via Meshtastic från Jaktkartan behöver Android
+  (Chrome) eller en dator. Den som har iPhone kan ta emot genom att skriva in sitt nod-id och läsa i Meshtastic-appen.
+- Det går inte att testa i CI mot riktiga radioapparater.
+
+Källor: [Meshtastic: publik nyckelkryptering i 2.5](https://meshtastic.org/blog/introducing-new-public-key-cryptography-in-v2_5/),
+[Meshtastic: krypteringens begränsningar](https://meshtastic.org/docs/about/overview/encryption/limitations/),
+[@meshtastic/core: MeshDevice.sendText](https://jsr.io/@meshtastic/core/doc/~/MeshDevice.prototype.sendText).

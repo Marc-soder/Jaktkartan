@@ -32,6 +32,7 @@ Efter merge klistrar du in den nya filen i Firebase-konsolen under Realtime Data
 | `src/tools.js` | Vindriktning, kryss med avståndsringar och mätning av avstånd. |
 | `src/overlay.js` | Skärmdumpar ovanpå kartan, som hjälp att rita gränser och lägga ut pass. Sparas bara i webbläsaren. |
 | `src/plan.js` | Jaktplan: vem som står på vilket pass, förbjudna skjutriktningar, såtar och vägar för hundförare och drevkarlar. |
+| `src/msg.js` | Krypterade meddelanden mellan jaktens deltagare. |
 | `src/rules.js` | Säkerhetsreglerna för Firebase. |
 | `src/build.py` | Bygger `index.html` och `database.rules.json`. |
 | `TODO.md` | Saker som väntar, med beskrivning av hur de kan byggas. |
