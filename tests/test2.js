@@ -248,11 +248,23 @@ const gids = () => Object.keys(data.groups || {});
     firebase.database().ref('groups/' + g + '/huntPlan/' + h).get().then(() => 'ok', () => 'denied'),
     firebase.database().ref('groups/' + g + '/huntPlan').get().then(() => 'ok', () => 'denied')]), [gid, hid]);
   check(cw2.join() === 'denied,ok,denied', `gästen kan läsa sin jakts plan men inte ändra den eller läsa andra jakters (${cw2})`);
+  // ---- Jag deltar: positionen delas automatiskt ----
+  const hp = () => ((data.groups[gid].huntPos || {})[hid] || {});
+  await W(C, 900);
+  check(hp()['anon-carl'] && await C.isChecked('#shareToggle') && (await C.innerText('#paneJakt')).includes('delas automatiskt'), 'gästen som gått med via jaktkoden delar sin position automatiskt under jakten');
+  await A.click('#tab-jakt'); await W(A, 200);
+  check(!(await A.isChecked('#shareToggle')) && !hp().alice && (await A.innerText('#paneJakt')).includes('Carl Gäst (gäst)'), 'Alice har inte svarat och delar inte, men ser att gästen deltar');
+  await A.click(`[data-j="rsvp"][data-h="${hid}"]`); await W(A, 900);
+  const rs = () => ((data.groups[gid].huntRsvp || {})[hid] || {});
+  check(rs().alice && rs().alice.name === 'Alice Test' && await A.isChecked('#shareToggle') && hp().alice, 'Alice trycker Jag deltar: svaret sparas och positionen delas direkt eftersom jakten pågår');
+  check((await B.innerText('#paneJakt')).toUpperCase().includes('DELTAR (2)') && (await B.innerText('#paneJakt')).includes('Alice Test, Carl Gäst (gäst)'), 'jaktledaren ser vilka som deltar');
+  const rw = await C.evaluate(([g, h]) => firebase.database().ref('groups/' + g + '/huntRsvp/' + h + '/bob').set({name:'Bob', t:Date.now()}).then(() => 'ok', () => 'denied'), [gid, hid]);
+  const rw2 = await B.evaluate(([g, h]) => firebase.database().ref('groups/' + g + '/huntRsvp/' + h + '/alice').set({name:'Fejk', t:Date.now()}).then(() => 'ok', () => 'denied'), [gid, hid]);
+  check(rw === 'denied' && rw2 === 'denied', 'man kan bara svara för sig själv');
   // ---- Positioner ----
   await A.click('#tab-jakt'); await A.locator('#shareToggle').check({force:true}); await W(A, 900);
-  const hp = () => ((data.groups[gid].huntPos || {})[hid] || {});
   check(hp().alice && Math.abs(hp().alice.lat - 58.72) < 1e-6 && !data.groups[gid].positions, 'Alice delar sin position i den pågående jakten');
-  check(await B.locator('.pos-icon').count() === 1 && await C.locator('.pos-icon').count() === 1 && await A.locator('.pos-icon').count() === 0, 'Bob och gästen Carl ser Alice på kartan, Alice ser inte sig själv som annan');
+  check(await B.locator('.pos-icon').count() === 2 && await C.locator('.pos-icon').count() === 1 && await A.locator('.pos-icon').count() === 1, 'Bob ser Alice och Carl, Carl ser Alice, Alice ser Carl men inte sig själv');
   await C.locator('#shareToggle').check({force:true}); await W(C, 900);
   check(await A.locator('.pos-icon').count() === 1 && (await A.innerText('#posCount')).startsWith('1 person'), 'gästens position syns för laget');
   // ---- Spår ----
@@ -294,10 +306,26 @@ const gids = () => Object.keys(data.groups || {});
   await A.evaluate(() => { const o = document.querySelector('.obs-icon'); if(o) o.scrollIntoView(); }); await A.screenshot({path:shot('a_obs.png')});
   await A.locator('#shareToggle').uncheck({force:true}); await W(A, 500);
   check(!hp().alice && !Object.keys(tr()).length && await B.locator('.pos-icon').count() === 1, 'Alice slutar dela: hennes position och spår tas bort');
+  await W(A, 600);
+  check(!(await A.isChecked('#shareToggle')) && !hp().alice, 'stänger man av själv startas delningen inte igen automatiskt under samma jakt');
+  // Kommande jakt: delningen startar själv när jakten startar och slutar när den är slut
+  const h2 = 'h2kvall', t2 = Date.now();
+  await B.evaluate(([g, h, t]) => firebase.database().ref().update({[`groups/${g}/hunts/${h}`]: {name:'Kvällsjakt', day:'2026-11-14', starts:t + 5000, expires:t + 16000, code:'KVALL234', by:'bob', created:t, areas:{}, species:{}}, 'huntCodes/KVALL234': {gid:g, hid:h, expires:t + 16000}}), [gid, h2, t2]); await W(A, 500);
+  check((await A.innerText('#paneJakt')).includes('Kvällsjakt') && (await A.innerText('#paneJakt')).includes('KOMMANDE'), 'Alice ser den kommande jakten');
+  await A.click(`[data-j="rsvp"][data-h="${h2}"]`); await W(A, 600);
+  const hp2 = () => ((data.groups[gid].huntPos || {})[h2] || {});
+  check(((data.groups[gid].huntRsvp || {})[h2] || {}).alice && !(await A.isChecked('#shareToggle')) && !hp2().alice, 'Alice deltar i kvällsjakten, men inget delas innan den startar');
+  await A.waitForTimeout(Math.max(0, t2 + 5000 - Date.now()) + 1800);
+  check(await A.isChecked('#shareToggle') && hp2().alice && !hp().alice, 'när kvällsjakten startar delas Alices position automatiskt, bara i den jakten');
+  await A.waitForTimeout(Math.max(0, t2 + 16000 - Date.now()) + 1800);
+  check(!(await A.isChecked('#shareToggle')) && (await A.evaluate(() => __fk.cloud.sharing)) === false, 'när kvällsjakten är slut slutar delningen av sig själv');
+  await B.click('#tab-jakt'); await W(B, 200);
+  await B.click(`[data-j="hunt-end"][data-h="${h2}"]`); await B.click(`[data-j="hunt-end"][data-h="${h2}"]`); await W(B, 700);
+  check(!data.groups[gid].hunts[h2] && !(data.groups[gid].huntRsvp || {})[h2] && !(data.groups[gid].huntPos || {})[h2], 'den avslutade kvällsjakten tas bort med svar och positioner');
   // ---- Avsluta jakten ----
   await B.click('[data-j="hunt-end"]'); await B.click('[data-j="hunt-end"]'); await W(B, 900);
   check(!data.groups[gid].hunts && !data.huntCodes && !(data.groups[gid].guests || {})['anon-carl'], 'jakten, koden och gästposten är borta');
-  check(!data.groups[gid].huntPos && !data.groups[gid].huntTrail && !data.groups[gid].huntObs && !data.groups[gid].huntPlan, 'jaktens positioner, spår, observationer och plan raderades när jakten avslutades');
+  check(!data.groups[gid].huntPos && !data.groups[gid].huntTrail && !data.groups[gid].huntObs && !data.groups[gid].huntPlan && !data.groups[gid].huntRsvp, 'jaktens positioner, spår, observationer, plan och svar raderades när jakten avslutades');
   const arch = Object.values(data.groups[gid].obsArchive || {});
   check(arch.length === 2 && arch.every(o => !o.by && !o.name && !o.note && o.hid === hid) && arch.map(o => o.sp + o.n).sort().join() === 'Rådjur2,Vildsvin1', 'observationerna arkiverades utan namn när jakten avslutades');
   // ---- Värmekarta ----
@@ -391,6 +419,9 @@ const gids = () => Object.keys(data.groups || {});
   check(!D('a2').write('/groups/g/huntPlan/nojakt', PL).allowed && D('a2').write('/groups/g/huntPlan/nojakt', null).allowed, 'regel: plan kan bara finnas för en jakt som finns');
   const bad = [{stands:{p:{who:'O', note:'x'}}}, {stands:{p:{no:70000}}}, {stands:{p:{no:1.5}}}, {stands:{p:{who:'x'.repeat(61)}}}, {routes:{r:{kind:'bil', pts:'1,1;1,2'}}}, {routes:{r:{kind:'hund'}}}, {drives:{d:{ring:'1,1;1,2;2,2'}}}, {drives:{d:{name:'S', ring:'1,1;1,2;2,2', by:'x'}}}, {foo:1}];
   check(bad.every(b => !D('a2').write('/groups/g/huntPlan/h2', b).allowed), 'regel: planen tar bara emot kända fält med rätt typ');
+  check(D('e').write('/groups/g/huntRsvp/h2/e', {name:'E', t:t0}).allowed && D('gu').read('/groups/g/huntRsvp').allowed === false && D('v').read('/groups/g/huntRsvp').allowed, 'regel: medlemmar svarar Jag deltar, laget ser svaren, gäster ser dem inte');
+  check(!D('e').write('/groups/g/huntRsvp/h2/v', {name:'V', t:t0}).allowed && !D('x').write('/groups/g/huntRsvp/h2/x', {name:'X', t:t0}).allowed && !D('e').write('/groups/g/huntRsvp/nojakt/e', {name:'E', t:t0}).allowed && !D('e').write('/groups/g/huntRsvp/h2/e', {name:'E', t:t0, extra:1}).allowed, 'regel: man svarar bara för sig själv, för en jakt som finns, utan extra fält');
+  check(D('a2').write('/groups/g/huntRsvp/h2', null).allowed && !D('e').write('/groups/g/huntRsvp/h2', null).allowed, 'regel: bara jaktledare och admin raderar alla svar för en jakt');
   check(!D('x').write('/groups/n2/meta', {name:'N', owner:'x'}).allowed && !D('e').write('/groups/n2/meta', {name:'N', owner:'e'}).allowed && D('o').write('/groups/n2/meta', {name:'N', owner:'o'}).allowed && D('c1').write('/groups/n2/meta', {name:'N', owner:'c1'}).allowed, 'regel: bara ägaren och godkända kan skapa jaktlag');
   check(!D('x').write('/owner', 'x').allowed && !D('o').write('/owner', 'x').allowed && !D('x').write('/creators/x', true).allowed && D('o').write('/creators/x', true).allowed, 'regel: ägarskapet kan inte tas över, bara ägaren godkänner fler');
   { const e0 = targaryen.database(rules, {}, t0); check(e0.as(tok('first')).write('/owner', 'first', undefined, t0).allowed && !e0.as(tok('anon-z')).write('/owner', 'anon-z', undefined, t0).allowed && !e0.as(tok('first')).write('/owner', 'other', undefined, t0).allowed, 'regel: första Google-inloggade blir ägare, inte en gäst och inte åt någon annan'); }

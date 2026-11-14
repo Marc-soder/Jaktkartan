@@ -36,9 +36,11 @@ function planPasses(g, hunt){
 /* Deltagare att välja bland: lagets medlemmar och jaktens gäster. */
 function planPeople(g, hid){
   const out = [];
-  for(const [u, m] of Object.entries(g.members || {})) if(m) out.push({uid:u, name:m.name || 'Medlem', label:m.name || 'Medlem'});
-  for(const [u, v] of Object.entries(g.guests || {})) if(v && v.hid === hid) out.push({uid:u, name:v.name || 'Gäst', label:(v.name || 'Gäst') + ' (gäst)'});
-  return out.sort((a, b) => a.label.localeCompare(b.label, 'sv'));
+  const going = (g.huntRsvp || {})[hid] || {};
+  for(const [u, m] of Object.entries(g.members || {})) if(m) out.push({uid:u, name:m.name || 'Medlem', label:(going[u] ? '✓ ' : '') + (m.name || 'Medlem'), going:!!going[u]});
+  for(const [u, v] of Object.entries(g.guests || {})) if(v && v.hid === hid) out.push({uid:u, name:v.name || 'Gäst', label:'✓ ' + (v.name || 'Gäst') + ' (gäst)', going:true});
+  // De som deltar först
+  return out.sort((a, b) => (b.going - a.going) || a.name.localeCompare(b.name, 'sv'));
 }
 
 /* Förbjudna riktningar sparas som en bitmask: bit i = riktningen DIR16[i] (i * 22,5° medurs från norr, ± 11,25°). */
