@@ -7,6 +7,13 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Jaktkartan</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#16231c">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Jaktkartan">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -813,6 +820,9 @@ a{color:var(--accent)}
 .tab.has-news::after{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-left:4px;vertical-align:top}
 .sunbox{display:grid;gap:3px;margin:8px 0;padding:8px 10px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line)}
 .sun-i{display:inline-block;width:1.3em}
+.netbar{position:fixed;z-index:1300;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top,0px));max-width:min(420px,calc(100vw - 200px));padding:6px 12px;border-radius:12px;background:#7c2d12;color:#fff;font:600 12px/1.35 var(--font-body);box-shadow:var(--shadow);text-align:center}
+.netbar[hidden]{display:none}
+@media (max-width:520px){.netbar{top:auto;bottom:calc(var(--sheet-h) + 70px);max-width:calc(100vw - 32px)}}
 .rn-preview{display:grid;gap:4px;max-height:40dvh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--surface-2)}
 .rn-row{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;font-size:14px}
 .rn-row .rn-old{color:var(--muted);overflow-wrap:anywhere}
@@ -1091,6 +1101,7 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
 </button>
 
 <button class="wind-chip" id="windChip" type="button" hidden></button>
+<div class="netbar" id="netBar" role="status" hidden>Ingen täckning. Kartan visas från det som sparats. Ändringar skickas när täckningen kommer tillbaka.</div>
 <button class="compass" id="compassBtn" type="button" hidden aria-label="Kompass: tryck för att starta"><svg class="cmp-dial" id="compassDial" viewBox="-50 -50 100 100" aria-hidden="true"><circle r="47" class="cmp-ring"/><g id="cmpNo" class="cmp-no"></g><g class="cmp-ticks"><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(0.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(22.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(45.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(67.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(90.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(112.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(135.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(157.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(180.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(202.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(225.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(247.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(270.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(292.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(315.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(337.5)"/></g><path d="M0 -21 L5 0 L0 -3 L-5 0 Z" class="cmp-n"/><path d="M0 21 L5 0 L0 3 L-5 0 Z" class="cmp-s"/><text x="0" y="-32" class="cmp-l n">N</text><text x="32" y="0" class="cmp-l">O</text><text x="0" y="32" class="cmp-l">S</text><text x="-32" y="0" class="cmp-l">V</text></svg><span class="cmp-idx" aria-hidden="true"></span><span class="cmp-txt" id="compassTxt">Kompass</span></button>
 <div class="placebar" id="measurebar" hidden>
   <p id="measureText"></p>
@@ -2827,6 +2838,7 @@ function openObsForm(ll){
       const n = Math.max(1, Math.min(999, parseInt(m.querySelector('#obN').value, 10) || 1)), note = m.querySelector('#obNote').value.trim();
       const o = {sp:name.slice(0, 40), n, lat:+ll.lat.toFixed(6), lng:+ll.lng.toFixed(6), t:Date.now(), by:myUid(), name:myName()}; if(note) o.note = note.slice(0, 200);
       closeModal();
+      if(!navigator.onLine) toast(`Ingen täckning: ${o.sp} skickas när täckningen kommer tillbaka. Håll appen öppen.`, 6000);
       fb.db.ref(`groups/${x.g.id}/huntObs/${x.hid}`).push(o).then(() => toast(`${o.sp} är sparad i jakten.`)).catch(fail('Observationen kunde inte sparas. Pågår jakten fortfarande?'));
     });
   });
@@ -4849,8 +4861,10 @@ function openMsgForm(g, hid, to){
       if(!chosen.length){ toast('Välj minst en mottagare.'); return; }
       const btn = m.querySelector('#msgSend'); btn.disabled = true;
       try {
-        await msgSend(g, hid, text, chosen, toAll);
-        closeModal(); toast(toAll ? 'Meddelandet är skickat till alla i jakten.' : `Meddelandet är skickat till ${chosen.map(p => p.name).join(', ')}.`);
+        const r = await msgSend(g, hid, text, chosen, toAll);
+        closeModal();
+        if(r === 'queued') toast('Ingen täckning: meddelandet skickas när täckningen kommer tillbaka. Håll appen öppen.', 6000);
+        else toast(toAll ? 'Meddelandet är skickat till alla i jakten.' : `Meddelandet är skickat till ${chosen.map(p => p.name).join(', ')}.`);
       } catch(err){ btn.disabled = false; toast('Kunde inte skicka meddelandet. Kontrollera nätverket.', 5000); }
     });
   });
@@ -4864,10 +4878,24 @@ async function msgSend(g, hid, text, people, toAll){
   if(toAll) msg.all = true; else { msg.to = {}; for(const p of people) msg.to[p.uid] = true; }
   const mid = 'm' + uid().replace(/[^a-z0-9]/gi, '');
   msgPlain[mid] = {text};
-  await fb.db.ref(`groups/${g.id}/huntMsg/${hid}/${mid}`).set(msg);
+  const sent = fb.db.ref(`groups/${g.id}/huntMsg/${hid}/${mid}`).set(msg);
+  // Utan täckning lägger Firebase meddelandet i kö och skickar det när täckningen kommer tillbaka (så länge appen är öppen)
+  if(!navigator.onLine){ sent.catch(() => toast('Ett meddelande kunde inte skickas.', 5000)); return 'queued'; }
+  await sent;
 }
 $('#tab-jakt').addEventListener('click', () => $('#tab-jakt').classList.remove('has-news'));
 
+
+/* ---------- Offline ----------
+   Service workern sparar appen och de kartrutor man har tittat på, så att appen startar och visar kartan utan täckning.
+   Den registreras på webbadressen (https), och lokalt bara med ?sw=1 (för testerna). */
+if('serviceWorker' in navigator && (location.protocol === 'https:' || new URLSearchParams(location.search).has('sw'))){
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+function renderNet(){ const b = $('#netBar'); if(b) b.hidden = navigator.onLine; }
+window.addEventListener('online', () => { renderNet(); toast('Täckningen är tillbaka. Ändringar skickas nu.'); });
+window.addEventListener('offline', renderNet);
+renderNet();
 
 /* ---------- Start ---------- */
 map.on('moveend', () => { const c = map.getCenter(); state.settings.view = {lat:+c.lat.toFixed(5), lng:+c.lng.toFixed(5), z:map.getZoom()}; save(); });

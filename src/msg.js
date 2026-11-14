@@ -162,8 +162,10 @@ function openMsgForm(g, hid, to){
       if(!chosen.length){ toast('Välj minst en mottagare.'); return; }
       const btn = m.querySelector('#msgSend'); btn.disabled = true;
       try {
-        await msgSend(g, hid, text, chosen, toAll);
-        closeModal(); toast(toAll ? 'Meddelandet är skickat till alla i jakten.' : `Meddelandet är skickat till ${chosen.map(p => p.name).join(', ')}.`);
+        const r = await msgSend(g, hid, text, chosen, toAll);
+        closeModal();
+        if(r === 'queued') toast('Ingen täckning: meddelandet skickas när täckningen kommer tillbaka. Håll appen öppen.', 6000);
+        else toast(toAll ? 'Meddelandet är skickat till alla i jakten.' : `Meddelandet är skickat till ${chosen.map(p => p.name).join(', ')}.`);
       } catch(err){ btn.disabled = false; toast('Kunde inte skicka meddelandet. Kontrollera nätverket.', 5000); }
     });
   });
@@ -177,6 +179,9 @@ async function msgSend(g, hid, text, people, toAll){
   if(toAll) msg.all = true; else { msg.to = {}; for(const p of people) msg.to[p.uid] = true; }
   const mid = 'm' + uid().replace(/[^a-z0-9]/gi, '');
   msgPlain[mid] = {text};
-  await fb.db.ref(`groups/${g.id}/huntMsg/${hid}/${mid}`).set(msg);
+  const sent = fb.db.ref(`groups/${g.id}/huntMsg/${hid}/${mid}`).set(msg);
+  // Utan täckning lägger Firebase meddelandet i kö och skickar det när täckningen kommer tillbaka (så länge appen är öppen)
+  if(!navigator.onLine){ sent.catch(() => toast('Ett meddelande kunde inte skickas.', 5000)); return 'queued'; }
+  await sent;
 }
 $('#tab-jakt').addEventListener('click', () => $('#tab-jakt').classList.remove('has-news'));
