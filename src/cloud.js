@@ -490,7 +490,7 @@ function huntCard(g, hid, hunt, lead){
     ${areas.length ? `<div class="lbl">Områden</div><div class="small">${areas.map(esc).join(', ')}</div>` : ''}
     ${lead && live ? `<div class="lbl">Tillfällig åtkomst för gäster</div><div class="codebox"><span>Jaktkod <b>${esc(hunt.code)}</b></span><button class="btn sm" type="button" data-j="hunt-link" data-g="${g.id}" data-h="${hid}">Kopiera länk</button></div>
       ${guests.length ? `<div class="small" style="margin-top:6px">${guests.map(([gu, v]) => `<span class="gst">${esc(v.name)}<button class="x" type="button" data-j="guest-del" data-g="${g.id}" data-u="${gu}" aria-label="Ta bort ${esc(v.name)}">×</button></span>`).join(' ')}</div>` : '<div class="small muted" style="margin-top:6px">Inga gäster har gått med.</div>'}` : ''}
-    ${lead ? `<div class="btnrow" style="margin-top:10px"><button class="btn sm danger" type="button" data-j="hunt-end" data-g="${g.id}" data-h="${hid}">${live ? 'Avsluta jakten' : 'Ta bort'}</button></div>` : ''}</div>`;
+    ${lead ? `<div class="btnrow" style="margin-top:10px">${live ? `<button class="btn sm" type="button" data-j="hunt-edit" data-g="${g.id}" data-h="${hid}">Ändra jakt</button>` : ''}<button class="btn sm danger" type="button" data-j="hunt-end" data-g="${g.id}" data-h="${hid}">${live ? 'Avsluta jakten' : 'Ta bort'}</button></div>` : ''}</div>`;
 }
 /* Vilka som deltar, och knappen Jag deltar. Gäster deltar alltid (de har gått med via jaktkoden). */
 function rsvpHtml(g, hid){
@@ -573,19 +573,28 @@ function askText(title, label, value, okLabel, cb, max){
     m.querySelector('#atForm').addEventListener('submit', e => { e.preventDefault(); const v = m.querySelector('#atVal').value.trim(); if(!v) return; closeModal(); cb(v); });
   });
 }
-function openHuntForm(g){
+const hmOf = t => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+/* Ny jakt, eller ändra en befintlig (hid). En pågående jakt ändras utan att brytas: datum och start ligger fast,
+   resten går att ändra. Ändras sluttiden följer jaktkoden och gästernas åtkomst med. */
+function openHuntForm(g, hid){
   const areas = state.areas.filter(a => a.gid === g.id);
-  const sel = {};
-  openModal(`<h2>Ny jakt</h2><form id="hfForm">
-    <label class="field"><span>Namn</span><input class="input" id="hfName" maxlength="60" value="Jakt ${fmtDay(todayISO())}"></label>
-    <div class="row2"><label class="field"><span>Datum</span><input class="input" type="date" id="hfDay" value="${todayISO()}"></label>
-    <label class="field"><span>Startar kl.</span><input class="input" type="time" id="hfStart" value="${nowHM()}"></label></div>
-    <label class="field"><span>Slutar kl.</span><input class="input" type="time" id="hfEnd" value="23:59"></label>
+  const old = hid ? (g.hunts || {})[hid] : null;
+  if(hid && !old){ toast('Jakten finns inte längre.'); return; }
+  const live = !!old && huntLive(old);
+  const sel = old ? Object.assign({}, old.species || {}) : {};
+  const day0 = old ? (old.day || todayISO()) : todayISO(), lan0 = old ? (old.lan || '') : state.settings.lan;
+  const area0 = a => old ? !!(old.areas || {})[a.id] : true;
+  openModal(`<h2>${old ? 'Ändra jakt' : 'Ny jakt'}</h2><form id="hfForm">
+    ${live ? '<p class="note" style="margin-top:0">Jakten pågår och fortsätter medan du ändrar. Datum och start ligger fast. Positioner, observationer, plan och gäster finns kvar.</p>' : ''}
+    <label class="field"><span>Namn</span><input class="input" id="hfName" maxlength="60" value="${esc(old ? old.name : 'Jakt ' + fmtDay(todayISO()))}"></label>
+    <div class="row2"><label class="field"><span>Datum</span><input class="input" type="date" id="hfDay" value="${day0}"${live ? ' disabled' : ''}></label>
+    <label class="field"><span>Startar kl.</span><input class="input" type="time" id="hfStart" value="${old && old.starts ? hmOf(old.starts) : nowHM()}"${live ? ' disabled' : ''}></label></div>
+    <label class="field"><span>Slutar kl.</span><input class="input" type="time" id="hfEnd" value="${old ? hmOf(old.expires) : '23:59'}"></label>
     <p class="note" style="margin-top:0">Positioner kan bara delas och ses mellan start och slut. Gästernas åtkomst gäller till sluttiden.</p>
-    <label class="field"><span>Län</span><select class="input" id="hfLan"><option value="">Välj län</option>${LAN.map(l => `<option${l === state.settings.lan ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
-    <div class="field"><span>Områden som gästerna får se</span>${areas.length ? areas.map(a => `<label class="checkline"><input type="checkbox" data-area="${a.id}" checked><span>${esc(a.name)}</span></label>`).join('') : '<span class="small muted">Laget har inga delade områden ännu. Gäster ser då bara varandras positioner.</span>'}</div>
+    <label class="field"><span>Län</span><select class="input" id="hfLan"><option value="">Välj län</option>${LAN.map(l => `<option${l === lan0 ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+    <div class="field"><span>Områden som gästerna får se</span>${areas.length ? areas.map(a => `<label class="checkline"><input type="checkbox" data-area="${a.id}"${area0(a) ? ' checked' : ''}><span>${esc(a.name)}</span></label>`).join('') : '<span class="small muted">Laget har inga delade områden ännu. Gäster ser då bara varandras positioner.</span>'}</div>
     <div class="field"><span>Jaktbart vilt</span><div id="hfVilt"></div></div>
-    <div class="actions"><button class="btn primary grow" type="submit" id="hfPlan" data-plan="1">Skapa och planera</button><button class="btn" type="submit" id="hfOk">Skapa jakt</button><button class="btn ghost" type="button" id="hfCancel">Avbryt</button></div></form>`, m => {
+    <div class="actions">${old ? '<button class="btn primary grow" type="submit" id="hfOk">Spara ändringar</button>' : '<button class="btn primary grow" type="submit" id="hfPlan" data-plan="1">Skapa och planera</button><button class="btn" type="submit" id="hfOk">Skapa jakt</button>'}<button class="btn ghost" type="button" id="hfCancel">Avbryt</button></div></form>`, m => {
     const draw = () => {
       const lan = m.querySelector('#hfLan').value, md = (m.querySelector('#hfDay').value || todayISO()).slice(5);
       if(!lan){ m.querySelector('#hfVilt').innerHTML = '<span class="small muted">Välj län för att se vad som är lovligt den dagen.</span>'; return; }
@@ -606,13 +615,26 @@ function openHuntForm(g){
       const plan = !!(e.submitter && e.submitter.dataset.plan);   // Skapa och planera: öppna planeringen direkt
       const name = m.querySelector('#hfName').value.trim() || 'Jakt', day = m.querySelector('#hfDay').value || todayISO(), end = m.querySelector('#hfEnd').value || '23:59', lan = m.querySelector('#hfLan').value;
       const [y, mo, d] = day.split('-').map(Number), [hh, mm] = end.split(':').map(Number), [sh, sm] = (m.querySelector('#hfStart').value || '00:00').split(':').map(Number);
-      const expires = new Date(y, mo - 1, d, hh, mm, 59).getTime(), starts = new Date(y, mo - 1, d, sh, sm, 0).getTime();
+      const expires = new Date(y, mo - 1, d, hh, mm, 59).getTime(), starts = live ? old.starts : new Date(y, mo - 1, d, sh, sm, 0).getTime();
       if(expires < Date.now()){ toast('Sluttiden har redan passerat. Välj en senare tid.'); return; }
       if(starts >= expires){ toast('Starttiden måste vara före sluttiden.'); return; }
-      const hunt = {name, day, starts, expires, lan, code:newCode(8), by:myUid(), created:Date.now(), areas:{}, species:{}};
+      const hunt = old ? Object.assign({}, old, {name, day:live ? old.day : day, starts, expires, lan, areas:{}, species:{}}) : {name, day, starts, expires, lan, code:newCode(8), by:myUid(), created:Date.now(), areas:{}, species:{}};
+      if(!hunt.starts) delete hunt.starts;
       $$('[data-area]', m).forEach(c => { if(c.checked) hunt.areas[c.dataset.area] = true; });
       for(const k of Object.keys(sel)) if(sel[k]) hunt.species[k] = true;
-      const hid = uid(), up = {};
+      if(old){
+        // Ändra: samma jakt och samma kod. En ny sluttid gäller även koden och gästernas åtkomst.
+        const up = {[`groups/${g.id}/hunts/${hid}`]: hunt};
+        if(expires !== old.expires){
+          if(old.code) up[`huntCodes/${old.code}`] = {gid:g.id, hid, expires};
+          for(const [gu, v] of Object.entries(g.guests || {})) if(v && v.hid === hid) up[`groups/${g.id}/guests/${gu}/expires`] = expires;
+        }
+        if(lan){ state.settings.lan = lan; save(); }
+        closeModal();
+        fb.db.ref().update(up).then(() => toast(expires !== old.expires ? `Jakten är ändrad. Den slutar nu ${fmtTime(expires)}.` : 'Jakten är ändrad.')).catch(fail());
+        return;
+      }
+      hid = uid(); const up = {};
       up[`groups/${g.id}/hunts/${hid}`] = hunt; up[`huntCodes/${hunt.code}`] = {gid:g.id, hid, expires};
       if(lan){ state.settings.lan = lan; save(); }
       closeModal();
@@ -638,6 +660,7 @@ $('#paneJakt').addEventListener('click', e => {
   else if(!g) return;
   else if(act === 'obs-go'){ const o = ((g.huntObs || {})[hid] || {})[b.dataset.o]; if(o){ map.setView([o.lat, o.lng], Math.max(map.getZoom(), 16)); if(!isDesktop()) setSheet('peek'); } }
   else if(act === 'hunt-new') openHuntForm(g);
+  else if(act === 'hunt-edit') openHuntForm(g, hid);
   else if(act === 'plan') openPlan(g, hid);
   else if(act === 'rsvp'){ delete cloud.autoOff[g.id + '/' + hid]; fb.db.ref(`groups/${g.id}/huntRsvp/${hid}/${myUid()}`).set({name:myName(), t:Date.now()}).then(() => toast(huntLive(g.hunts[hid]) ? 'Du deltar. Din position delas med jaktlaget.' : 'Du deltar. Din position delas automatiskt när jakten startar.', 4500)).catch(fail()); }
   else if(act === 'rsvp-no') fb.db.ref(`groups/${g.id}/huntRsvp/${hid}/${myUid()}`).remove().catch(fail());
