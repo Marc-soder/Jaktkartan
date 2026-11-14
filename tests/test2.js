@@ -257,9 +257,11 @@ const gids = () => Object.keys(data.groups || {});
   check(hp()['anon-carl'] && await C.isChecked('#shareToggle') && (await C.innerText('#paneJakt')).includes('delas automatiskt'), 'gästen som gått med via jaktkoden delar sin position automatiskt under jakten');
   await A.click('#tab-jakt'); await W(A, 200);
   check(!(await A.isChecked('#shareToggle')) && !hp().alice && (await A.innerText('#paneJakt')).includes('Carl Gäst (gäst)'), 'Alice har inte svarat och delar inte, men ser att gästen deltar');
+  await A.evaluate(() => { window.__toasts = []; const t = document.getElementById('toast'); new MutationObserver(() => window.__toasts.push(t.textContent)).observe(t, {childList:true, characterData:true, subtree:true}); });
   await A.click(`[data-j="rsvp"][data-h="${hid}"]`); await W(A, 900);
   const rs = () => ((data.groups[gid].huntRsvp || {})[hid] || {});
   check(rs().alice && rs().alice.name === 'Alice Test' && await A.isChecked('#shareToggle') && hp().alice, 'Alice trycker Jag deltar: svaret sparas och positionen delas direkt eftersom jakten pågår');
+  { const ts = await A.evaluate(() => window.__toasts); check(ts.length === 1 && ts[0].startsWith('Du deltar'), `bara en avisering när man trycker Jag deltar under jakten: ${JSON.stringify(ts)}`); }
   check((await B.innerText('#paneJakt')).toUpperCase().includes('DELTAR (2)') && (await B.innerText('#paneJakt')).includes('Alice Test, Carl Gäst (gäst)'), 'jaktledaren ser vilka som deltar');
   const rw = await C.evaluate(([g, h]) => firebase.database().ref('groups/' + g + '/huntRsvp/' + h + '/bob').set({name:'Bob', t:Date.now()}).then(() => 'ok', () => 'denied'), [gid, hid]);
   const rw2 = await B.evaluate(([g, h]) => firebase.database().ref('groups/' + g + '/huntRsvp/' + h + '/alice').set({name:'Fejk', t:Date.now()}).then(() => 'ok', () => 'denied'), [gid, hid]);
@@ -309,6 +311,12 @@ const gids = () => Object.keys(data.groups || {});
   await C.fill('#msgText', 'Uppfattat, jag går dit nu'); await C.click('#msgSend'); await W(C, 900); await W(B, 500);
   check((await B.innerText('#paneJakt')).includes('Uppfattat, jag går dit nu') && !(await A.innerText('#paneJakt')).includes('Uppfattat'), 'gästens svar når Bob men inte Alice');
   await A.screenshot({path:shot('a_msg.png')}); await C.screenshot({path:shot('c_msg.png')});
+  // Gamla enheters nycklar: Bobs egen gamla nyckel tas bort, och ingen krypterar till Alices gamla
+  const old = Date.now() - 100 * 864e5, okKey = Object.values(keys().bob)[0].k;
+  await B.evaluate(([g, k, t]) => firebase.database().ref(`groups/${g}/msgKeys/bob/dgammal`).set({k, name:'Bob Test', t}), [gid, okKey, old]);
+  await A.evaluate(([g, k, t]) => firebase.database().ref(`groups/${g}/msgKeys/alice/dgammal`).set({k, name:'Alice Test', t}), [gid, okKey, old]); await W(B, 900);
+  const aliceDevs = await B.evaluate(([g, h]) => __fk.msgPeopleFor(g, h).find(p => p.uid === 'alice').devices.length, [gid, hid]);
+  check(!(keys().bob || {}).dgammal && aliceDevs === 1, `Bobs app tar bort hans gamla enhets nyckel och krypterar inte till Alices gamla (${aliceDevs} enhet)`);
   // En öppen nålruta hos Bob stängs inte när Carl skickar ett meddelande
   await B.evaluate(() => __fk.map.setView([58.72, 14.6], 15, {animate:false})); await W(B, 300);
   await B.evaluate(() => { let m = null; __fk.map.eachLayer(l => { if(l.pinId && !m) m = l; }); m.openPopup(); }); await W(B, 300);

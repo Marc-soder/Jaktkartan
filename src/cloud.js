@@ -201,7 +201,8 @@ function autoShare(){
   if(cloud.sharing && cloud.autoShared && !live.length){ stopSharing(); toast('Jakten är slut. Din position delas inte längre.', 5000); return; }
   if(cloud.sharing || !live.length) return;
   startSharing();
-  if(cloud.sharing){ cloud.autoShared = true; toast('Jakten har startat. Din position delas med jaktlaget medan appen är öppen.', 5000); }
+  // Har man precis tryckt Jag deltar har man redan fått besked: ingen andra avisering
+  if(cloud.sharing){ cloud.autoShared = true; if(Date.now() - (cloud.rsvpAt || 0) > 5000) toast('Jakten har startat. Din position delas med jaktlaget medan appen är öppen.', 5000); }
 }
 let huntPosTimer = null;
 function syncHuntPos(){
@@ -705,7 +706,7 @@ $('#paneJakt').addEventListener('click', e => {
   else if(act === 'plan') openPlan(g, hid);
   else if(act === 'msg-new') openMsgForm(g, hid);
   else if(act === 'msg-reply') openMsgForm(g, hid, u);
-  else if(act === 'rsvp'){ delete cloud.autoOff[g.id + '/' + hid]; fb.db.ref(`groups/${g.id}/huntRsvp/${hid}/${myUid()}`).set({name:myName(), t:Date.now()}).then(() => toast(huntLive(g.hunts[hid]) ? 'Du deltar. Din position delas med jaktlaget.' : 'Du deltar. Din position delas automatiskt när jakten startar.', 4500)).catch(fail()); }
+  else if(act === 'rsvp'){ delete cloud.autoOff[g.id + '/' + hid]; cloud.rsvpAt = Date.now(); fb.db.ref(`groups/${g.id}/huntRsvp/${hid}/${myUid()}`).set({name:myName(), t:Date.now()}).then(() => toast(huntLive(g.hunts[hid]) ? 'Du deltar. Din position delas med jaktlaget.' : 'Du deltar. Din position delas automatiskt när jakten startar.', 4500)).catch(fail()); }
   else if(act === 'rsvp-no') fb.db.ref(`groups/${g.id}/huntRsvp/${hid}/${myUid()}`).remove().catch(fail());
   else if(act === 'plan-go') gotoPin(b.dataset.p);
   else if(act === 'hunt-link'){ const hunt = g.hunts[hid]; copyText(`${hunt.name}: gå med i jakten med kod ${hunt.code}\n${shareLink('j', hunt.code)}`, 'Länken är kopierad'); }

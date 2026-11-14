@@ -5,6 +5,8 @@
    (och avsändarens egna) med en nyckel som härleds med ECDH + HKDF. Databasen ser alltså bara vem som skrivit till vem,
    aldrig texten. Meddelandena ligger i groups/<lag>/huntMsg/<jakt> och finns bara medan jakten pågår. */
 const MSG_MAX = 1000;
+const KEY_TTL = 90 * 864e5;   // nycklar från enheter som inte använts på 90 dagar används inte och tas bort
+const keyFresh = d => !!d && !!d.k && (d.t || 0) >= Date.now() - KEY_TTL;
 var msgKeyP = null;                 // Promise med {did, priv, pubB64}
 const msgPlain = {};                // mid -> {text} | {err}
 const msgPair = {};                 // publik nyckel (base64) -> härledd AES-nyckel
@@ -83,7 +85,10 @@ async function msgPublish(g){
   if(g.kind === 'member' ? !(g.members || {})[myUid()] : !(g.guest && g.guest.hid)) return;
   let me; try { me = await myMsgKey(); } catch(e){ return; }
   const cur = ((g.msgKeys || {})[myUid()] || {})[me.did], hid = g.kind === 'guest' ? g.guest.hid : null;
-  if(cur && cur.k === me.pubB64 && cur.name === myName() && (cur.hid || null) === hid) return;
+  // Mina gamla enheters nycklar tas bort, så att meddelanden inte krypteras till enheter som inte används
+  for(const [did, d] of Object.entries((g.msgKeys || {})[myUid()] || {})) if(did !== me.did && !keyFresh(d)) fb.db.ref(`groups/${g.id}/msgKeys/${myUid()}/${did}`).remove().catch(() => {});
+  // Tiden uppdateras högst en gång per dygn: den visar att enheten används
+  if(cur && cur.k === me.pubB64 && cur.name === myName() && (cur.hid || null) === hid && Date.now() - (cur.t || 0) < 864e5) return;
   const v = {k:me.pubB64, name:myName(), t:Date.now()}; if(hid) v.hid = hid;
   fb.db.ref(`groups/${g.id}/msgKeys/${myUid()}/${me.did}`).set(v).catch(() => {});
 }
@@ -92,7 +97,7 @@ function msgPeople(g, hid){
   const out = [];
   for(const [u, devs] of Object.entries(g.msgKeys || {})){
     if(!devs || u === myUid()) continue;
-    const list = Object.entries(devs).filter(([, d]) => d && d.k && (!d.hid || d.hid === hid));
+    const list = Object.entries(devs).filter(([, d]) => keyFresh(d) && (!d.hid || d.hid === hid));
     if(!list.length) continue;
     if(g.kind === 'member' && !(g.members || {})[u] && !Object.entries(g.guests || {}).some(([gu, v]) => gu === u && v && v.hid === hid)) continue;
     const guest = list.every(([, d]) => d.hid);
@@ -101,7 +106,7 @@ function msgPeople(g, hid){
   }
   return out.sort((a, b) => a.name.localeCompare(b.name, 'sv'));
 }
-const myDevices = g => Object.entries((g.msgKeys || {})[myUid()] || {}).filter(([, d]) => d && d.k).map(([did, d]) => ({id:myUid() + '~' + did, k:d.k}));
+const myDevices = g => Object.entries((g.msgKeys || {})[myUid()] || {}).filter(([, d]) => keyFresh(d)).map(([did, d]) => ({id:myUid() + '~' + did, k:d.k}));
 
 /* Meddelanden som rör mig: jag skrev dem eller de är skickade till mig. */
 function msgMine(g, hid){
