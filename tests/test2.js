@@ -282,6 +282,45 @@ const gids = () => Object.keys(data.groups || {});
   check(hp()['anon-carl'] && ((data.groups[gid].huntPlan || {})[hid] || {}).stands && rs().alice, 'positioner, plan och svar finns kvar efter ändringen');
   await W(C, 500);
   check((await C.innerText('#paneJakt')).includes('Älgjakt, eftermiddag') && await C.isChecked('#shareToggle'), 'gästen ser det nya namnet och delar fortfarande sin position');
+  // ---- Krypterade meddelanden ----
+  await W(A, 400); await W(B, 400); await W(C, 400);
+  const keys = () => data.groups[gid].msgKeys || {};
+  const carlKey = Object.values(keys()['anon-carl'] || {})[0];
+  check(Object.keys(keys().alice || {}).length === 1 && Object.keys(keys().bob || {}).length === 1 && carlKey && carlKey.hid === hid && carlKey.name === 'Carl Gäst', 'varje deltagare har publicerat sin nyckel, gästens är märkt med jakten');
+  const msgs = () => Object.values(((data.groups[gid].huntMsg || {})[hid]) || {});
+  await B.click('#tab-jakt'); await W(B, 200);
+  await B.click(`[data-j="msg-new"][data-h="${hid}"]`); await W(B, 200);
+  const opts2 = await B.locator('#msgPeople .checkline').allInnerTexts();
+  check(opts2.length === 2 && opts2.some(o => o.includes('Alice Test')) && opts2.some(o => o.includes('Carl Gäst (gäst)')) && await B.isChecked('#msgAll'), `mottagare: alla i jakten, eller valda (${opts2.join(' | ')})`);
+  await B.uncheck('#msgAll'); await B.check('[data-to="anon-carl"]'); await B.fill('#msgText', 'Hej Carl, du står på pass 1'); await B.click('#msgSend'); await W(B, 900);
+  const m1 = msgs()[0];
+  check(msgs().length === 1 && m1.from === 'bob' && m1.to && m1.to['anon-carl'] && !m1.all && Object.keys(m1.keys).length === 2, 'meddelandet till Carl sparas med en nyckel till Carl och en till Bob');
+  check(!JSON.stringify(data).includes('Hej Carl') && !JSON.stringify(data).includes('pass 1'), 'texten finns inte i klartext någonstans i databasen');
+  await W(C, 600); await C.click('#tab-jakt'); await W(C, 400);
+  check((await C.innerText('#paneJakt')).includes('Hej Carl, du står på pass 1'), 'Carl kan läsa meddelandet till honom');
+  check(!(await A.innerText('#paneJakt')).includes('Hej Carl') && (await A.evaluate(() => Object.values(__fk.msgPlain()).filter(Boolean).filter(p => p.text).length)) === 0, 'Alice ser inte meddelandet, och kan inte låsa upp det');
+  await B.click(`[data-j="msg-new"][data-h="${hid}"]`); await W(B, 200);
+  await B.fill('#msgText', 'Samling vid bilarna 15.00'); await B.click('#msgSend'); await W(B, 900);
+  await W(A, 600);
+  check((await A.innerText('#paneJakt')).includes('Samling vid bilarna 15.00') && (await C.innerText('#paneJakt')).includes('Samling vid bilarna 15.00') && msgs().some(m => m.all), 'meddelande till alla: Alice och Carl kan läsa det');
+  check((await A.innerText('#toast')).includes('Meddelande från Bob Test: Samling vid bilarna'), `mottagaren får en avisering: ${await A.innerText('#toast')}`);
+  await C.click(`[data-j="msg-reply"][data-h="${hid}"][data-u="bob"] >> nth=0`); await W(C, 200);
+  check(!(await C.isChecked('#msgAll')) && await C.isChecked('[data-to="bob"]'), 'Svara väljer avsändaren som mottagare');
+  await C.fill('#msgText', 'Uppfattat, jag går dit nu'); await C.click('#msgSend'); await W(C, 900); await W(B, 500);
+  check((await B.innerText('#paneJakt')).includes('Uppfattat, jag går dit nu') && !(await A.innerText('#paneJakt')).includes('Uppfattat'), 'gästens svar når Bob men inte Alice');
+  await A.screenshot({path:shot('a_msg.png')}); await C.screenshot({path:shot('c_msg.png')});
+  // Försök att lura systemet
+  const fake = await A.evaluate(([g, h, m]) => Promise.all([
+    firebase.database().ref(`groups/${g}/huntMsg/${h}/mfake1`).set(Object.assign({}, m, {from:'bob', t:Date.now()})).then(() => 'ok', () => 'denied'),
+    firebase.database().ref(`groups/${g}/huntMsg/${h}/${m.mid}`).set(Object.assign({}, m, {from:'alice'})).then(() => 'ok', () => 'denied')]),
+    [gid, hid, Object.assign({mid:Object.keys(data.groups[gid].huntMsg[hid])[0]}, msgs()[0])]);
+  check(fake.join() === 'denied,denied', `man kan inte skriva i någon annans namn eller ändra ett meddelande (${fake})`);
+  // Alice kopierar Bobs krypterade meddelande till alla och skickar det som sitt eget: det går inte att läsa som Alices
+  const allMsg = msgs().find(m => m.all), copy = Object.assign({}, allMsg, {from:'alice', name:'Alice Test', t:Date.now()});
+  delete copy.mid;
+  const cp = await A.evaluate(([g, h, m]) => firebase.database().ref(`groups/${g}/huntMsg/${h}/mcopy1`).set(m).then(() => 'ok', () => 'denied'), [gid, hid, copy]); await W(C, 700);
+  const ctx2 = await C.innerText('#paneJakt');
+  check(cp === 'ok' && ctx2.includes('Kunde inte bekräfta avsändaren'), 'ett kopierat meddelande avslöjas: avsändaren kan inte bekräftas');
   // ---- Positioner ----
   await A.click('#tab-jakt'); await A.locator('#shareToggle').check({force:true}); await W(A, 900);
   check(hp().alice && Math.abs(hp().alice.lat - 58.72) < 1e-6 && !data.groups[gid].positions, 'Alice delar sin position i den pågående jakten');
@@ -346,7 +385,7 @@ const gids = () => Object.keys(data.groups || {});
   // ---- Avsluta jakten ----
   await B.click('[data-j="hunt-end"]'); await B.click('[data-j="hunt-end"]'); await W(B, 900);
   check(!data.groups[gid].hunts && !data.huntCodes && !(data.groups[gid].guests || {})['anon-carl'], 'jakten, koden och gästposten är borta');
-  check(!data.groups[gid].huntPos && !data.groups[gid].huntTrail && !data.groups[gid].huntObs && !data.groups[gid].huntPlan && !data.groups[gid].huntRsvp, 'jaktens positioner, spår, observationer, plan och svar raderades när jakten avslutades');
+  check(!data.groups[gid].huntPos && !data.groups[gid].huntTrail && !data.groups[gid].huntObs && !data.groups[gid].huntPlan && !data.groups[gid].huntRsvp && !data.groups[gid].huntMsg && !(data.groups[gid].msgKeys || {})['anon-carl'], 'jaktens positioner, spår, observationer, plan, svar, meddelanden och gästens nyckel raderades när jakten avslutades');
   const arch = Object.values(data.groups[gid].obsArchive || {});
   check(arch.length === 2 && arch.every(o => !o.by && !o.name && !o.note && o.hid === hid) && arch.map(o => o.sp + o.n).sort().join() === 'Rådjur2,Vildsvin1', 'observationerna arkiverades utan namn när jakten avslutades');
   // ---- Värmekarta ----
@@ -394,7 +433,7 @@ const gids = () => Object.keys(data.groups || {});
   const t0 = Date.now();
   const base = {owner:'o', creators:{c1:true}, groups:{g:{meta:{name:'L', owner:'o'}, members:{o:{role:'admin', name:'O'}, a2:{role:'admin', name:'A2'}, e:{role:'editor', name:'E'}, v:{role:'viewer', name:'V'}},
     areas:{ar:{name:'A'}}, pins:{ar:{p:{lat:1, lng:2, typeId:'t'}}}, hunts:{h:{name:'J', expires:t0 + 1000, code:'HUNTCODE', areas:{ar:true}}, h2:{name:'J2', starts:t0 + 500, expires:t0 + 1000, code:'HUNTCOD2'}}, guests:{gu:{hid:'h', code:'HUNTCODE', name:'G', expires:t0 + 1000}},
-      huntPos:{h:{e:{lat:1, lng:1, t:1}}, h2:{}}, huntTrail:{h:{e:{k1:{lat:1, lng:1, t:1}}}}, huntObs:{h:{o1:{sp:'Rådjur', n:1, lat:1, lng:1, t:1, by:'e'}}}, obsArchive:{a1:{sp:'Älg', n:2, lat:1, lng:1, t:1, hid:'h'}}}},
+      huntPos:{h:{e:{lat:1, lng:1, t:1}}, h2:{}}, huntTrail:{h:{e:{k1:{lat:1, lng:1, t:1}}}}, huntObs:{h:{o1:{sp:'Rådjur', n:1, lat:1, lng:1, t:1, by:'e'}}}, obsArchive:{a1:{sp:'Älg', n:2, lat:1, lng:1, t:1, hid:'h'}}, huntMsg:{h:{m0:{from:'e', name:'E', t:1, iv:'x', ct:'y', spk:'z', keys:{a:'b'}, all:true}}}}},
     invites:{INVITECODE1:{gid:'g', role:'editor', expires:t0 + 1000}, OLDINVITE01:{gid:'g', role:'editor', expires:t0 - 1}}, huntCodes:{HUNTCODE:{gid:'g', hid:'h', expires:t0 + 1000}}};
   const D = (uid, now) => { const d = targaryen.database(rules, base, now || t0).as(uid ? tok(uid) : null);
     return {read: p => d.read(p, now || t0), write: (p, v) => d.write(p, v, undefined, now || t0)}; };
@@ -444,6 +483,15 @@ const gids = () => Object.keys(data.groups || {});
   check(!D('e').write('/groups/g/huntRsvp/h2/v', {name:'V', t:t0}).allowed && !D('x').write('/groups/g/huntRsvp/h2/x', {name:'X', t:t0}).allowed && !D('e').write('/groups/g/huntRsvp/nojakt/e', {name:'E', t:t0}).allowed && !D('e').write('/groups/g/huntRsvp/h2/e', {name:'E', t:t0, extra:1}).allowed, 'regel: man svarar bara för sig själv, för en jakt som finns, utan extra fält');
   check(D('a2').write('/groups/g/huntRsvp/h2', null).allowed && !D('e').write('/groups/g/huntRsvp/h2', null).allowed, 'regel: bara jaktledare och admin raderar alla svar för en jakt');
   check(D('a2').write('/huntCodes/HUNTCODE', {gid:'g', hid:'h', expires:t0 + 5000}).allowed && !D('a2').write('/huntCodes/HUNTCODE', {gid:'g', hid:'h2', expires:t0 + 5000}).allowed && !D('a2').write('/huntCodes/HUNTCODE', {gid:'n2', hid:'h', expires:t0 + 5000}).allowed && !D('e').write('/huntCodes/HUNTCODE', {gid:'g', hid:'h', expires:t0 + 5000}).allowed, 'regel: jaktledaren kan ändra jaktkodens sluttid, men inte flytta den till en annan jakt, och en vanlig medlem kan inte ändra den');
+  const K = (extra) => Object.assign({k:'A'.repeat(88), name:'N', t:t0}, extra || {});
+  check(D('e').write('/groups/g/msgKeys/e/d1', K()).allowed && !D('e').write('/groups/g/msgKeys/v/d1', K()).allowed && !D('x').write('/groups/g/msgKeys/x/d1', K()).allowed && !D('e').write('/groups/g/msgKeys/e/d1', K({extra:1})).allowed && !D('e').write('/groups/g/msgKeys/e/d1', K({k:'kort'})).allowed, 'regel: man publicerar bara sin egen nyckel, i rätt form');
+  check(D('gu').write('/groups/g/msgKeys/gu/d1', K({hid:'h'})).allowed && !D('gu').write('/groups/g/msgKeys/gu/d1', K({hid:'h2'})).allowed && !D('gu').write('/groups/g/msgKeys/gu/d1', K()).allowed, 'regel: en gäst märker sin nyckel med sin egen jakt');
+  check(D('gu').read('/groups/g/msgKeys').allowed && D('v').read('/groups/g/msgKeys').allowed && !D('x').read('/groups/g/msgKeys').allowed && D('a2').write('/groups/g/msgKeys/gu', null).allowed && !D('e').write('/groups/g/msgKeys/gu', null).allowed, 'regel: laget och gästerna läser nycklarna, jaktledaren kan ta bort en gästs nyckel');
+  const MS = (u, extra) => Object.assign({from:u, name:'N', t:t0, iv:'x', ct:'y', spk:'z', keys:{a:'b'}, all:true}, extra || {});
+  check(D('e').write('/groups/g/huntMsg/h/m1', MS('e')).allowed && D('gu').write('/groups/g/huntMsg/h/m1', MS('gu')).allowed && !D('e').write('/groups/g/huntMsg/h/m1', MS('v')).allowed && !D('x').write('/groups/g/huntMsg/h/m1', MS('x')).allowed, 'regel: jaktens deltagare skriver meddelanden, bara i eget namn');
+  check(!D('e').write('/groups/g/huntMsg/h2/m1', MS('e')).allowed && !D('e', t0 + 2000).write('/groups/g/huntMsg/h/m1', MS('e')).allowed && !D('v', t0 + 2000).read('/groups/g/huntMsg/h').allowed && D('v').read('/groups/g/huntMsg/h').allowed && D('gu').read('/groups/g/huntMsg/h').allowed && !D('gu').read('/groups/g/huntMsg/h2').allowed && !D('x').read('/groups/g/huntMsg/h').allowed, 'regel: meddelanden finns bara medan jakten pågår, och bara för jaktens deltagare');
+  check(!D('e').write('/groups/g/huntMsg/h/m1', MS('e', {text:'klartext'})).allowed && !D('e').write('/groups/g/huntMsg/h/m1', MS('e', {all:null})).allowed && D('e').write('/groups/g/huntMsg/h/m1', MS('e', {all:null, to:{v:true}})).allowed, 'regel: inga extra fält (ingen klartext), och mottagare måste anges');
+  check(!D('e').write('/groups/g/huntMsg/h/m0', MS('e')).allowed && D('e').write('/groups/g/huntMsg/h/m0', null).allowed && !D('v').write('/groups/g/huntMsg/h/m0', null).allowed && D('a2').write('/groups/g/huntMsg/h/m0', null).allowed && D('a2').write('/groups/g/huntMsg/h', null).allowed, 'regel: ett meddelande kan inte ändras, avsändaren och jaktledaren kan ta bort det');
   check(!D('x').write('/groups/n2/meta', {name:'N', owner:'x'}).allowed && !D('e').write('/groups/n2/meta', {name:'N', owner:'e'}).allowed && D('o').write('/groups/n2/meta', {name:'N', owner:'o'}).allowed && D('c1').write('/groups/n2/meta', {name:'N', owner:'c1'}).allowed, 'regel: bara ägaren och godkända kan skapa jaktlag');
   check(!D('x').write('/owner', 'x').allowed && !D('o').write('/owner', 'x').allowed && !D('x').write('/creators/x', true).allowed && D('o').write('/creators/x', true).allowed, 'regel: ägarskapet kan inte tas över, bara ägaren godkänner fler');
   { const e0 = targaryen.database(rules, {}, t0); check(e0.as(tok('first')).write('/owner', 'first', undefined, t0).allowed && !e0.as(tok('anon-z')).write('/owner', 'anon-z', undefined, t0).allowed && !e0.as(tok('first')).write('/owner', 'other', undefined, t0).allowed, 'regel: första Google-inloggade blir ägare, inte en gäst och inte åt någon annan'); }

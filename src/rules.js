@@ -163,6 +163,46 @@ const rules = { rules: {
         }
       }
     },
+    // Publika nycklar för krypterade meddelanden, en per enhet: msgKeys/<uid>/<enhet> = {k, name, t, hid?}.
+    // Lagets medlemmar och gäster läser dem (för att kunna kryptera till varandra). Var och en skriver bara sina egna.
+    // En gäst märker sin nyckel med sin jakt. Jaktledare och admin kan ta bort nycklar (gästernas, när jakten avslutas).
+    msgKeys: {
+      '.read': `${isMember} || ${isGuest}`,
+      '$uid': {
+        '.write': `${signed} && (($uid === auth.uid && (${me}.exists() || ${isGuest})) || (${canLead} && !newData.exists()))`,
+        '$did': {
+          '.validate': `newData.hasChildren(['k','name','t']) && ($uid !== auth.uid || ${me}.exists() || newData.child('hid').val() === ${guest}.child('hid').val())`,
+          k: {'.validate': 'newData.isString() && newData.val().length >= 40 && newData.val().length <= 200'},
+          name: {'.validate': 'newData.isString() && newData.val().length <= 60'},
+          t: {'.validate': 'newData.isNumber() && newData.val() <= now + 60000'},
+          hid: {'.validate': 'newData.isString() && newData.val().length <= 40'},
+          '$other': {'.validate': false}
+        }
+      }
+    },
+    // Krypterade meddelanden per jakt. Bara jaktens deltagare läser och skriver, och bara medan jakten pågår.
+    // Innehållet är krypterat i webbläsaren till mottagarnas nycklar: databasen ser bara vem som skrivit till vem.
+    // Ett meddelande kan inte ändras. Avsändaren tar bort sina egna, jaktledare och admin alla. Raderas när jakten avslutas.
+    huntMsg: {
+      '$hid': {
+        '.read': `(${isMember} || (${isGuest} && ${guest}.child('hid').val() === $hid)) && ${huntLive}`,
+        '.write': `${canLead} && !newData.exists()`,
+        '$mid': {
+          '.write': `${signed} && ${huntLive} && (${me}.exists() || (${isGuest} && ${guest}.child('hid').val() === $hid)) && (newData.exists() ? (!data.exists() && newData.child('from').val() === auth.uid) : (data.child('from').val() === auth.uid || ${canLead}))`,
+          '.validate': `newData.hasChildren(['from','name','t','iv','ct','spk','keys']) && (newData.child('all').val() === true || newData.hasChild('to'))`,
+          from: {'.validate': 'newData.isString()'},
+          name: {'.validate': 'newData.isString() && newData.val().length <= 60'},
+          t: {'.validate': 'newData.isNumber() && newData.val() <= now + 60000'},
+          iv: {'.validate': 'newData.isString() && newData.val().length <= 40'},
+          ct: {'.validate': 'newData.isString() && newData.val().length <= 8000'},
+          spk: {'.validate': 'newData.isString() && newData.val().length <= 200'},
+          all: {'.validate': 'newData.isBoolean()'},
+          to: {'$uid': {'.validate': 'newData.val() === true'}},
+          keys: {'$k': {'.validate': 'newData.isString() && newData.val().length <= 200'}},
+          '$other': {'.validate': false}
+        }
+      }
+    },
     // Spår (tidigare positioner) per jakt, med samma åtkomst som positionerna.
     huntTrail: {
       '$hid': {
