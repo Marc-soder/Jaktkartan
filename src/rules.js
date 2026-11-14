@@ -147,6 +147,21 @@ const rules = { rules: {
         '$other': {'.validate': false}
       }
     },
+    // Vilka medlemmar som deltar i en jakt ("Jag deltar"). Hos den som deltar delas positionen automatiskt
+    // medan jakten pågår. Laget ser vilka som deltar. Man svarar bara för sig själv. Tas bort när jakten avslutas.
+    huntRsvp: {
+      '.read': isMember,
+      '$hid': {
+        '.write': `${canLead} && !newData.exists()`,
+        '$uid': {
+          '.write': `${signed} && $uid === auth.uid && ${me}.exists() && (${hunt}.exists() || !newData.exists())`,
+          '.validate': `newData.hasChildren(['name','t'])`,
+          name: {'.validate': 'newData.isString() && newData.val().length <= 60'},
+          t: {'.validate': 'newData.isNumber() && newData.val() <= now + 60000'},
+          '$other': {'.validate': false}
+        }
+      }
+    },
     // Spår (tidigare positioner) per jakt, med samma åtkomst som positionerna.
     huntTrail: {
       '$hid': {
