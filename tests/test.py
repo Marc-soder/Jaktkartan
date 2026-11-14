@@ -309,6 +309,21 @@ with sync_playwright() as p:
     check('Håll fingret' not in txt and 'högerklicka' not in txt, 'inget tips om långt tryck, som inte längre lägger ut nålar')
     plan = pg.evaluate("__fk.renumberPlan('a-rn', 'wo').map(x => x.pin.id)")
     check(plan == ['rn4', 'rn1', 'rn2', 'rn3'], f'väster till öster {plan}')
+    # En öppen nålruta ska inte stängas när annat ritas om (t.ex. vid ändringar i molnet)
+    pg.evaluate("__fk.map.closePopup()"); pg.locator('.pin-icon').first.click(); pg.wait_for_timeout(300)
+    n0 = pg.locator('.leaflet-popup').count(); pg.evaluate('__fk.renderAll()'); pg.wait_for_timeout(200)
+    check(n0 == 1 and pg.locator('.leaflet-popup').count() == 1, 'en öppen nålruta ligger kvar när sidan ritas om')
+    pg.evaluate("__fk.map.closePopup()")
+    # Ett id med citattecken (som en elak deltagare skulle kunna skapa) får inte bli kod i sidan
+    pg.evaluate("""(() => { const s = __fk.state(), bad = 'x" onmouseover="window.__pwn=1" y="';
+      s.areas.push({id:bad, name:'Elak mark', visible:true});
+      s.pins.push({id:bad, name:'Elak nål', typeId:'t-pass', areaId:bad, lat:58.72, lng:14.6, note:'', created:1, updated:1});
+      s.types.push({id:bad, name:'Elak typ', color:'#123456', icon:'dot', text:'', visible:true});
+      __fk.renderAll(); })()""")
+    pg.click('#tab-list'); pg.wait_for_timeout(150); pg.click('#tab-filter'); pg.wait_for_timeout(150)
+    pg.evaluate("document.querySelectorAll('*').forEach(e => e.dispatchEvent(new MouseEvent('mouseover', {bubbles:true})))")
+    check(pg.evaluate("document.querySelectorAll('[onmouseover]').length") == 0 and not pg.evaluate("window.__pwn"), 'id:n med citattecken escapas och blir inte kod i sidan')
+    pg.evaluate("(() => { const s = __fk.state(), bad = s.pins.find(p => p.name === 'Elak nål').id; s.pins = s.pins.filter(p => p.id !== bad); s.areas = s.areas.filter(a => a.id !== bad); s.types = s.types.filter(t => t.id !== bad); __fk.renderAll(); })()")
     check(not errors, f'inga JS-fel på dator: {errors[:3]}')
     ctx.close()
 

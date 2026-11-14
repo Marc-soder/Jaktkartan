@@ -726,11 +726,19 @@ const gbifLayer = L.layerGroup().addTo(map);
 const densityLayer = L.layerGroup().addTo(map);
 let meMarker = null, meCircle = null, myPos = null;
 
+/* Nålarna ritas om bara när något som syns har ändrats. Annars skulle en öppen nålruta stängas
+   varje gång något annat ändras i molnet (en observation, ett meddelande, ett svar). */
+const pinMarkers = new Map();   // id -> {m, sig}
 function renderMarkers(){
-  pinLayer.clearLayers(); syncPinLabels();
+  syncPinLabels();
+  const seen = new Set();
   for(const p of state.pins){
     if(!pinVisible(p)) continue;
     const t = typeById(p.typeId);
+    const sig = [p.lat, p.lng, p.name, t.id, t.name, t.color, t.icon, t.text].join('\u0001'), cur = pinMarkers.get(p.id);
+    seen.add(p.id);
+    if(cur && cur.sig === sig) continue;
+    if(cur) pinLayer.removeLayer(cur.m);
     const m = L.marker([p.lat,p.lng], {
       icon: L.divIcon({className:'pin-icon', html:pinSvg(t) + (p.name ? `<span class="pin-label">${esc(p.name)}</span>` : ''), iconSize:[30,40], iconAnchor:[15,39], popupAnchor:[0,-34]}),
       title: p.name || t.name, riseOnHover:true
@@ -738,14 +746,16 @@ function renderMarkers(){
     m.pinId = p.id;
     m.bindPopup(() => pinPopup(p.id), {maxWidth:290, autoPanPaddingTopLeft:[20,70], autoPanPaddingBottomRight:[20, bottomPad()+20]});
     m.addTo(pinLayer);
+    pinMarkers.set(p.id, {m, sig});
   }
+  for(const [id, cur] of pinMarkers) if(!seen.has(id)){ pinLayer.removeLayer(cur.m); pinMarkers.delete(id); }
 }
 /* Namn under nålarna: påslaget från början, och syns bara när man zoomat in så att kartan inte blir rörig. */
 const PIN_LABEL_ZOOM = 14;
 const pinLabelsOn = () => state.settings.pinLabels !== false;
 function syncPinLabels(){ map.getContainer().classList.toggle('pin-labels', pinLabelsOn() && map.getZoom() >= PIN_LABEL_ZOOM); }
 map.on('zoomend', syncPinLabels);
-function findMarker(id){ let f = null; pinLayer.eachLayer(l => { if(l.pinId === id) f = l; }); return f; }
+function findMarker(id){ const c = pinMarkers.get(id); return c ? c.m : null; }
 
 function pinPopup(id){
   const p = pinById(id); const t = typeById(p.typeId); const a = p.areaId ? areaById(p.areaId) : null;
@@ -993,7 +1003,7 @@ function renderList(){
     const row = p => {
       const t = typeById(p.typeId), a = p.areaId ? areaById(p.areaId) : null;
       const meta = [sort !== 'type' ? t.name : null, sort !== 'area' && a ? a.name : null, myPos ? fmtDist(distM(myPos,p)) : null].filter(Boolean).join(' · ');
-      return `<div class="pin-row"><button class="main" type="button" data-act="goto" data-id="${p.id}">${swatch(t)}<span class="txt"><div class="nm">${esc(p.name || t.name)}</div>${meta ? `<div class="meta">${esc(meta)}</div>` : ''}</span></button>
+      return `<div class="pin-row"><button class="main" type="button" data-act="goto" data-id="${esc(p.id)}">${swatch(t)}<span class="txt"><div class="nm">${esc(p.name || t.name)}</div>${meta ? `<div class="meta">${esc(meta)}</div>` : ''}</span></button>
         <a class="navbtn" href="${navUrl(p.lat,p.lng)}" target="_blank" rel="noopener" aria-label="Navigera till ${esc(p.name || t.name)} med Google Maps">${ICON_NAV}Navigera</a></div>`;
     };
     const group = (key, headInner, list) => {
@@ -1034,11 +1044,11 @@ function renderFilter(){
   const sm = state.settings.svampMode;
   let html = `<h3 class="sec">Områden <span><button class="linkbtn" type="button" data-act="areas-all">Visa alla</button> · <button class="linkbtn" type="button" data-act="areas-none">Dölj alla</button></span></h3><div>`;
   for(const a of state.areas){
-    html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ar-${a.id}" data-act="area-toggle" data-id="${a.id}" ${a.visible !== false ? 'checked' : ''} aria-label="Visa ${esc(a.name)}">
-      <label class="fname" for="ar-${a.id}">${esc(a.name)}</label>${a.gid ? `<span class="tag" title="Delas med ${esc(gname(cloud.groups[a.gid]))}">Delat</span>` : ''}<span class="fcount">${cnt(p => p.areaId === a.id)}</span>
-      <button class="iconbtn" type="button" data-act="area-zoom" data-id="${a.id}" aria-label="Zooma till ${esc(a.name)}" title="Zooma till området">${ICON_ZOOM}</button>
-      ${canEditArea(a) ? `<button class="iconbtn" type="button" data-act="area-edit" data-id="${a.id}" aria-label="Ändra ${esc(a.name)}">${ICON_EDIT}</button>` : '<span style="width:36px"></span>'}
-      ${!a.gid || (cloud.groups[a.gid] && isAdminGroup(cloud.groups[a.gid])) ? `<button class="iconbtn" type="button" data-act="area-del" data-id="${a.id}" aria-label="Ta bort ${esc(a.name)}">${ICON_TRASH}</button>` : '<span style="width:36px"></span>'}</div>`;
+    html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ar-${esc(a.id)}" data-act="area-toggle" data-id="${esc(a.id)}" ${a.visible !== false ? 'checked' : ''} aria-label="Visa ${esc(a.name)}">
+      <label class="fname" for="ar-${esc(a.id)}">${esc(a.name)}</label>${a.gid ? `<span class="tag" title="Delas med ${esc(gname(cloud.groups[a.gid]))}">Delat</span>` : ''}<span class="fcount">${cnt(p => p.areaId === a.id)}</span>
+      <button class="iconbtn" type="button" data-act="area-zoom" data-id="${esc(a.id)}" aria-label="Zooma till ${esc(a.name)}" title="Zooma till området">${ICON_ZOOM}</button>
+      ${canEditArea(a) ? `<button class="iconbtn" type="button" data-act="area-edit" data-id="${esc(a.id)}" aria-label="Ändra ${esc(a.name)}">${ICON_EDIT}</button>` : '<span style="width:36px"></span>'}
+      ${!a.gid || (cloud.groups[a.gid] && isAdminGroup(cloud.groups[a.gid])) ? `<button class="iconbtn" type="button" data-act="area-del" data-id="${esc(a.id)}" aria-label="Ta bort ${esc(a.name)}">${ICON_TRASH}</button>` : '<span style="width:36px"></span>'}</div>`;
   }
   html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ar-none" data-act="noarea-toggle" ${state.settings.noAreaVisible !== false ? 'checked' : ''} aria-label="Visa nålar utan område">
     <label class="fname muted" for="ar-none">Utan område</label><span class="fcount">${cnt(p => !p.areaId || !areaById(p.areaId))}</span><span style="width:76px"></span></div></div>
@@ -1048,9 +1058,9 @@ function renderFilter(){
   html += '<div>';
   for(const t of state.types){
     const on = sm ? t.svamp : t.visible !== false;
-    html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ty-${t.id}" data-act="type-toggle" data-id="${t.id}" ${on ? 'checked' : ''} ${sm ? 'disabled' : ''} aria-label="Visa ${esc(t.name)}">
-      ${swatch(t)}<label class="fname" for="ty-${t.id}">${esc(t.name)}</label>${t.svamp ? '<span class="tag">Svamp</span>' : ''}<span class="fcount">${cnt(p => p.typeId === t.id)}</span>
-      <button class="iconbtn" type="button" data-act="type-edit" data-id="${t.id}" aria-label="Ändra ${esc(t.name)}">${ICON_EDIT}</button></div>`;
+    html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ty-${esc(t.id)}" data-act="type-toggle" data-id="${esc(t.id)}" ${on ? 'checked' : ''} ${sm ? 'disabled' : ''} aria-label="Visa ${esc(t.name)}">
+      ${swatch(t)}<label class="fname" for="ty-${esc(t.id)}">${esc(t.name)}</label>${t.svamp ? '<span class="tag">Svamp</span>' : ''}<span class="fcount">${cnt(p => p.typeId === t.id)}</span>
+      <button class="iconbtn" type="button" data-act="type-edit" data-id="${esc(t.id)}" aria-label="Ändra ${esc(t.name)}">${ICON_EDIT}</button></div>`;
   }
   html += '</div>';
   pane.innerHTML = html;
@@ -1068,10 +1078,10 @@ function renderSvampPane(){
   for(const sp of SPECIES){
     const r = gbif.results[sp.id];
     const c = r ? (r.error ? 'fel' : (r.count > r.points.length ? `${fmtInt(r.points.length)} av ${fmtInt(r.count)}` : fmtInt(r.points.length))) : '';
-    html += `<label class="sp-row"><input type="checkbox" data-act="sp" data-id="${sp.id}" ${g.species.includes(sp.id) ? 'checked' : ''}><span class="dot" style="background:${sp.color}"></span><span class="spn">${esc(sp.name)}<i>${esc(sp.sci)}</i></span><span class="spc">${c}</span></label>`;
+    html += `<label class="sp-row"><input type="checkbox" data-act="sp" data-id="${esc(sp.id)}" ${g.species.includes(sp.id) ? 'checked' : ''}><span class="dot" style="background:${sp.color}"></span><span class="spn">${esc(sp.name)}<i>${esc(sp.sci)}</i></span><span class="spc">${c}</span></label>`;
   }
   html += `</div>
-  <div class="row2" style="margin-top:10px"><label class="field"><span>Tidsperiod</span><select class="input" id="gbifYear">${years.map(([v,l]) => `<option value="${v}"${+g.fromYear === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+  <div class="row2" style="margin-top:10px"><label class="field"><span>Tidsperiod</span><select class="input" id="gbifYear">${years.map(([v,l]) => `<option value="${esc(v)}"${+g.fromYear === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
   <label class="field"><span>Översikt, alla år</span><span style="display:flex;align-items:center;gap:10px;min-height:44px"><input class="sw-toggle" type="checkbox" id="gbifDensity" ${g.density ? 'checked' : ''}><span class="small muted">Prickar per ruta</span></span></label></div>
   <div class="btnrow"><button class="btn primary" type="button" id="gbifLoad" ${gbif.busy ? 'disabled' : ''}>${gbif.busy ? 'Hämtar …' : 'Hämta fynd i kartvyn'}</button>${Object.keys(gbif.results).length ? '<button class="btn" type="button" id="gbifClear">Rensa fynd</button>' : ''}</div>
   <div class="status${gbif.err ? ' err' : ''}" id="gbifStatus">${esc(gbif.status)}</div>
@@ -1079,9 +1089,9 @@ function renderSvampPane(){
   <h3 class="sec">Importerade svampkällor <button class="linkbtn" type="button" data-act="import-ext">+ Importera fil</button></h3>`;
   if(!state.external.length) html += `<p class="note" style="margin-top:0">Inga importerade källor. Importera GeoJSON, KML, GPX eller CSV, till exempel en export från Artportalen eller en kompis svampställen.</p>`;
   for(const src of state.external){
-    html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ex-${src.id}" data-act="ext-toggle" data-id="${src.id}" ${src.visible !== false ? 'checked' : ''} aria-label="Visa ${esc(src.name)}">
-      <span class="dot" style="background:#fff;border-color:${esc(src.color)};box-shadow:0 0 0 1px ${esc(src.color)}"></span><label class="fname" for="ex-${src.id}">${esc(src.name)}</label><span class="fcount">${src.points.length}</span>
-      <button class="iconbtn" type="button" data-act="ext-del" data-id="${src.id}" aria-label="Ta bort ${esc(src.name)}">${ICON_TRASH}</button></div>`;
+    html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ex-${esc(src.id)}" data-act="ext-toggle" data-id="${esc(src.id)}" ${src.visible !== false ? 'checked' : ''} aria-label="Visa ${esc(src.name)}">
+      <span class="dot" style="background:#fff;border-color:${esc(src.color)};box-shadow:0 0 0 1px ${esc(src.color)}"></span><label class="fname" for="ex-${esc(src.id)}">${esc(src.name)}</label><span class="fcount">${src.points.length}</span>
+      <button class="iconbtn" type="button" data-act="ext-del" data-id="${esc(src.id)}" aria-label="Ta bort ${esc(src.name)}">${ICON_TRASH}</button></div>`;
   }
   html += `<h3 class="sec">Jämför med</h3><div class="btnrow">
     <a class="btn sm" href="https://svampkartan.se/" target="_blank" rel="noopener">svampkartan.se</a>
@@ -1118,7 +1128,7 @@ function renderStatus(){
   $('#modeChip').hidden = !state.settings.svampMode;
 }
 function renderLayerPop(){
-  $('#baseOpts').innerHTML = Object.entries(BASES).map(([k,b]) => `<label class="base-opt"><input type="radio" name="base" value="${k}" ${state.settings.base === k ? 'checked' : ''}><span>${b.label}<small>${b.sub}</small></span></label>`).join('');
+  $('#baseOpts').innerHTML = Object.entries(BASES).map(([k,b]) => `<label class="base-opt"><input type="radio" name="base" value="${esc(k)}" ${state.settings.base === k ? 'checked' : ''}><span>${b.label}<small>${b.sub}</small></span></label>`).join('');
   $('#satLabels').checked = !!state.settings.satLabels;
   $('#satLabelsRow').hidden = state.settings.base !== 'sat';
   $('#popSvamp').checked = !!state.settings.svampMode;
@@ -1200,9 +1210,9 @@ function closeModal(){ if(modalEl){ modalEl.remove(); modalEl = null; if(lastFoc
 document.addEventListener('keydown', e => { if(e.key === 'Escape'){ if(modalEl) closeModal(); else if(!$('#layerPop').hidden) toggleLayerPop(false); else if(placing) endPlacing(); } });
 
 function areaOptions(sel){
-  return `<option value="">Utan område (privat)</option>${state.areas.filter(canEditArea).map(a => `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.gid ? ' · delat' : ''}</option>`).join('')}<option value="__new">+ Nytt område …</option>`;
+  return `<option value="">Utan område (privat)</option>${state.areas.filter(canEditArea).map(a => `<option value="${esc(a.id)}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.gid ? ' · delat' : ''}</option>`).join('')}<option value="__new">+ Nytt område …</option>`;
 }
-function typeOptions(sel){ return state.types.map(t => `<option value="${t.id}"${t.id === sel ? ' selected' : ''}>${esc(t.name)}${t.svamp ? ' (svamp)' : ''}</option>`).join(''); }
+function typeOptions(sel){ return state.types.map(t => `<option value="${esc(t.id)}"${t.id === sel ? ' selected' : ''}>${esc(t.name)}${t.svamp ? ' (svamp)' : ''}</option>`).join(''); }
 function wireNewArea(m, selId, inputId){
   const sel = m.querySelector('#' + selId), inp = m.querySelector('#' + inputId);
   sel.addEventListener('change', () => { inp.hidden = sel.value !== '__new'; if(!inp.hidden) inp.focus(); });
@@ -1284,7 +1294,7 @@ function openAreaForm(id){
   const canMove = !a.gid || (cloud.groups[a.gid] && isAdminGroup(cloud.groups[a.gid]));
   const n = state.pins.filter(p => p.areaId === id).length, rings = areaRings(a);
   openModal(`<h2>Ändra område</h2><form id="afForm"><label class="field"><span>Namn</span><input class="input" id="afName" maxlength="60" value="${esc(a.name)}"></label>
-    ${mine.length || a.gid ? `<label class="field"><span>Delas med</span><select class="input" id="afShare" ${canMove ? '' : 'disabled'}><option value="">Bara jag (privat)</option>${mine.map(g => `<option value="${g.id}"${a.gid === g.id ? ' selected' : ''}>${esc(gname(g))}</option>`).join('')}</select></label>
+    ${mine.length || a.gid ? `<label class="field"><span>Delas med</span><select class="input" id="afShare" ${canMove ? '' : 'disabled'}><option value="">Bara jag (privat)</option>${mine.map(g => `<option value="${esc(g.id)}"${a.gid === g.id ? ' selected' : ''}>${esc(gname(g))}</option>`).join('')}</select></label>
     <p class="note" style="margin:-4px 0 0">${canMove ? `Delar du området ser alla i jaktlaget dess ${n} ${n === 1 ? 'nål' : 'nålar'}, och medlemmar kan ändra dem.` : 'Bara en admin kan sluta dela området.'}</p>` : '<p class="note" style="margin:-4px 0 0">Logga in under Jakt och skapa ett jaktlag för att kunna dela området.</p>'}
     <div class="field" style="margin-top:14px"><span>Gräns</span>${rings.length ? rings.map((r, k) => `<div class="frow"><span class="fname">${rings.length > 1 ? `Del ${k + 1}` : 'Gränsen'}<br><span class="small muted">${r.length} punkter · ${fmtHa(areaHa(r))}</span></span><button class="btn sm" type="button" data-ring-edit="${k}">Ändra</button><button class="btn sm danger" type="button" data-ring-del="${k}">Ta bort</button></div>`).join('') + (rings.length > 1 ? `<div class="small" style="margin-top:4px">Totalt ${fmtHa(ringsHa(rings))} i ${rings.length} delar.</div>` : '') : '<div class="small">Ingen gräns är ritad.</div>'}
       <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afDraw">${rings.length ? 'Rita en till del' : 'Rita gräns'}</button><button class="btn sm" type="button" id="afImport">Importera från fil</button><button class="btn sm" type="button" id="afShot">Från skärmdump</button></div>
@@ -1292,7 +1302,7 @@ function openAreaForm(id){
     <div class="field" style="margin-top:14px"><span>Egna vägar och stigar</span>${areaLines(a).length ? areaLines(a).map(([lid, l]) => `<div class="frow"><span class="fname">${esc(l.n || LINE_KIND[l.k])}<br><span class="small muted">${LINE_KIND[l.k]} · ${fmtDist(lineLen(parseBorder(l.p)))}</span></span><button class="btn sm" type="button" data-line-edit="${lid}">Ändra</button></div>`).join('') : '<div class="small">Inga egna vägar eller stigar.</div>'}
       <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afLine">Rita väg eller stig</button></div></div>
     ${moveTargets(a).length && (a.border || areaLines(a).length || n) ? `<details class="field" style="margin-top:14px" id="afMoveBox"><summary><span>Flytta till ett annat område</span></summary>
-      <label class="field" style="margin-top:8px"><span>Till</span><select class="input" id="afMoveTo">${moveTargets(a).map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></label>
+      <label class="field" style="margin-top:8px"><span>Till</span><select class="input" id="afMoveTo">${moveTargets(a).map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('')}</select></label>
       ${rings.length ? `<label class="checkline"><input type="checkbox" id="afMvBorder" checked><span>${rings.length > 1 ? `Gränsen (${rings.length} delar)` : 'Gränsen'}</span></label>` : ''}
       ${areaLines(a).length ? `<label class="checkline"><input type="checkbox" id="afMvLines" checked><span>Vägar och stigar (${areaLines(a).length})</span></label>` : ''}
       ${n ? `<label class="checkline"><input type="checkbox" id="afMvPins" checked><span>Nålar och pass (${n})</span></label>` : ''}
@@ -1331,8 +1341,8 @@ function openTypeForm(id, after){
     <form id="tfForm">
       <div class="preview" id="tfPrev"></div>
       <label class="field"><span>Namn</span><input class="input" id="tfName" maxlength="40" value="${esc(t.name)}" placeholder="t.ex. Saltsten" required></label>
-      <div class="field"><span>Färg</span><div class="colors" id="tfColors">${COLOR_PRESETS.map(c => `<button type="button" class="color-opt" data-c="${c}" style="background:${c}" aria-label="Färg ${c}" aria-pressed="${c.toLowerCase() === (t.color||'').toLowerCase()}"></button>`).join('')}<input type="color" class="color-opt" id="tfColor" value="${esc(t.color)}" aria-label="Egen färg"></div></div>
-      <div class="field"><span>Symbol</span><div class="icon-grid" id="tfIcons">${Object.entries(ICONS).map(([k,ic]) => `<button type="button" class="icon-opt" data-i="${k}" aria-pressed="${t.icon === k}" title="${esc(ic.label)}" aria-label="${esc(ic.label)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ic.svg}</svg></button>`).join('')}<button type="button" class="icon-opt" data-i="text" aria-pressed="${t.icon === 'text'}" title="Egen text" aria-label="Egen text"><span class="aa">Aa</span></button></div>
+      <div class="field"><span>Färg</span><div class="colors" id="tfColors">${COLOR_PRESETS.map(c => `<button type="button" class="color-opt" data-c="${esc(c)}" style="background:${c}" aria-label="Färg ${c}" aria-pressed="${c.toLowerCase() === (t.color||'').toLowerCase()}"></button>`).join('')}<input type="color" class="color-opt" id="tfColor" value="${esc(t.color)}" aria-label="Egen färg"></div></div>
+      <div class="field"><span>Symbol</span><div class="icon-grid" id="tfIcons">${Object.entries(ICONS).map(([k,ic]) => `<button type="button" class="icon-opt" data-i="${esc(k)}" aria-pressed="${t.icon === k}" title="${esc(ic.label)}" aria-label="${esc(ic.label)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ic.svg}</svg></button>`).join('')}<button type="button" class="icon-opt" data-i="text" aria-pressed="${t.icon === 'text'}" title="Egen text" aria-label="Egen text"><span class="aa">Aa</span></button></div>
         <input class="input" id="tfText" maxlength="2" placeholder="1–2 tecken, t.ex. S eller 7" value="${esc(t.text || '')}" ${t.icon === 'text' ? '' : 'hidden'} style="margin-top:8px"></div>
       <label class="checkline"><input type="checkbox" id="tfSvamp" ${t.svamp ? 'checked' : ''}><span><b>Svamptyp</b><br><span class="small muted">Visas i svampkartan</span></span></label>
       <div class="actions"><button class="btn primary grow" type="submit">Spara</button>
@@ -1366,7 +1376,7 @@ function openTypeForm(id, after){
         if(!used){ confirmClick(del, 'Bekräfta', () => { state.types = state.types.filter(x => x.id !== id); save(); closeModal(); renderAll(); }); return; }
         const others = state.types.filter(x => x.id !== id);
         openModal(`<h2>Ta bort ”${esc(t.name)}”</h2><p>${used} ${used === 1 ? 'nål' : 'nålar'} får en ny typ:</p>
-          <label class="field"><span>Ny typ för nålarna</span><select class="input" id="tdTo">${others.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select></label>
+          <label class="field"><span>Ny typ för nålarna</span><select class="input" id="tdTo">${others.map(o => `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('')}</select></label>
           <div class="actions"><button class="btn danger grow" type="button" id="tdOk">Ta bort typen</button><button class="btn ghost" type="button" id="tdCancel">Avbryt</button></div>`, m2 => {
           m2.querySelector('#tdCancel').addEventListener('click', closeModal);
           m2.querySelector('#tdOk').addEventListener('click', () => { const to = m2.querySelector('#tdTo').value; state.pins.forEach(p => { if(p.typeId === id) p.typeId = to; }); state.types = state.types.filter(x => x.id !== id); save(); closeModal(); renderAll(); toast('Typen togs bort'); });

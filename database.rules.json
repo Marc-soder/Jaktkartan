@@ -53,7 +53,7 @@
           "$aid": {
             ".read": "((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/hunts/'+root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val()+'/areas/'+$aid).val() === true)",
             ".write": "(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'editor'))",
-            ".validate": "newData.child('name').isString() && newData.child('name').val().length <= 80"
+            ".validate": "($aid.matches(/^[A-Za-z0-9_-]+$/) && $aid.length <= 64) && newData.child('name').isString() && newData.child('name').val().length <= 80"
           }
         },
         "pins": {
@@ -61,8 +61,9 @@
           "$aid": {
             ".read": "((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/hunts/'+root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val()+'/areas/'+$aid).val() === true)",
             ".write": "(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'editor'))",
+            ".validate": "($aid.matches(/^[A-Za-z0-9_-]+$/) && $aid.length <= 64)",
             "$pid": {
-              ".validate": "newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('typeId').isString()"
+              ".validate": "($pid.matches(/^[A-Za-z0-9_-]+$/) && $pid.length <= 64) && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('typeId').isString()"
             }
           }
         },
@@ -70,7 +71,7 @@
           ".read": "(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now)",
           "$tid": {
             ".write": "(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'editor'))",
-            ".validate": "newData.child('name').isString() && newData.child('color').isString()"
+            ".validate": "($tid.matches(/^[A-Za-z0-9_-]+$/) && $tid.length <= 64) && newData.child('name').isString() && newData.child('color').isString()"
           }
         },
         "hunts": {
@@ -78,7 +79,7 @@
           "$hid": {
             ".read": "(auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid",
             ".write": "(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))",
-            ".validate": "newData.hasChildren(['name','expires','code']) && newData.child('expires').isNumber() && (!newData.child('starts').exists() || (newData.child('starts').isNumber() && newData.child('starts').val() < newData.child('expires').val()))"
+            ".validate": "($hid.matches(/^[A-Za-z0-9_-]+$/) && $hid.length <= 64) && newData.hasChildren(['name','expires','code']) && newData.child('expires').isNumber() && (!newData.child('starts').exists() || (newData.child('starts').isNumber() && newData.child('starts').val() < newData.child('expires').val()))"
           }
         },
         "guests": {
@@ -105,7 +106,7 @@
             ".write": "(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()",
             "$oid": {
               ".write": "auth != null && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now)) && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid)) && (newData.exists() ? (newData.child('by').val() === auth.uid && (!data.exists() || data.child('by').val() === auth.uid)) : (data.child('by').val() === auth.uid || (auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))))",
-              ".validate": "newData.hasChildren(['sp','n','lat','lng','t','by']) && newData.child('sp').isString() && newData.child('sp').val().length >= 1 && newData.child('sp').val().length <= 40 && newData.child('n').isNumber() && newData.child('n').val() >= 1 && newData.child('n').val() <= 999 && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000 && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 200)) && (!newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val().length <= 60))"
+              ".validate": "($oid.matches(/^[A-Za-z0-9_-]+$/) && $oid.length <= 64) && newData.hasChildren(['sp','n','lat','lng','t','by']) && newData.child('sp').isString() && newData.child('sp').val().length >= 1 && newData.child('sp').val().length <= 40 && newData.child('n').isNumber() && newData.child('n').val() >= 1 && newData.child('n').val() <= 999 && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000 && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 200)) && (!newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val().length <= 60))"
             }
           }
         },
@@ -113,7 +114,7 @@
           ".read": "(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))",
           "$oid": {
             ".write": "(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))",
-            ".validate": "newData.hasChildren(['sp','n','lat','lng','t']) && newData.child('sp').isString() && newData.child('sp').val().length >= 1 && newData.child('sp').val().length <= 40 && newData.child('n').isNumber() && newData.child('n').val() >= 1 && newData.child('n').val() <= 999 && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000",
+            ".validate": "($oid.matches(/^[A-Za-z0-9_-]+$/) && $oid.length <= 64) && newData.hasChildren(['sp','n','lat','lng','t']) && newData.child('sp').isString() && newData.child('sp').val().length >= 1 && newData.child('sp').val().length <= 40 && newData.child('n').isNumber() && newData.child('n').val() >= 1 && newData.child('n').val() <= 999 && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000",
             "sp": {
               ".validate": true
             },
@@ -144,6 +145,7 @@
             ".write": "(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && (root.child('groups/'+$gid+'/hunts/'+$hid).exists() || !newData.exists())",
             "stands": {
               "$pid": {
+                ".validate": "($pid.matches(/^[A-Za-z0-9_-]+$/) && $pid.length <= 64)",
                 "who": {
                   ".validate": "newData.isString() && newData.val().length <= 60"
                 },
@@ -160,7 +162,7 @@
             },
             "drives": {
               "$did": {
-                ".validate": "newData.hasChildren(['name','ring'])",
+                ".validate": "($did.matches(/^[A-Za-z0-9_-]+$/) && $did.length <= 64) && newData.hasChildren(['name','ring'])",
                 "name": {
                   ".validate": "newData.isString() && newData.val().length <= 60"
                 },
@@ -174,7 +176,7 @@
             },
             "routes": {
               "$rid": {
-                ".validate": "newData.hasChildren(['kind','pts'])",
+                ".validate": "($rid.matches(/^[A-Za-z0-9_-]+$/) && $rid.length <= 64) && newData.hasChildren(['kind','pts'])",
                 "kind": {
                   ".validate": "newData.val() === 'hund' || newData.val() === 'drev'"
                 },
@@ -221,7 +223,7 @@
           "$uid": {
             ".write": "auth != null && (($uid === auth.uid && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now))) || ((auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()))",
             "$did": {
-              ".validate": "newData.hasChildren(['k','name','t']) && ($uid !== auth.uid || root.child('groups/'+$gid+'/members/'+auth.uid).exists() || newData.child('hid').val() === root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val())",
+              ".validate": "($did.matches(/^[A-Za-z0-9_-]+$/) && $did.length <= 64) && newData.hasChildren(['k','name','t']) && ($uid !== auth.uid || root.child('groups/'+$gid+'/members/'+auth.uid).exists() || newData.child('hid').val() === root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val())",
               "k": {
                 ".validate": "newData.isString() && newData.val().length >= 40 && newData.val().length <= 200"
               },
@@ -246,7 +248,7 @@
             ".write": "(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()",
             "$mid": {
               ".write": "auth != null && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now)) && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid)) && (newData.exists() ? (!data.exists() && newData.child('from').val() === auth.uid) : (data.child('from').val() === auth.uid || (auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))))",
-              ".validate": "newData.hasChildren(['from','name','t','iv','ct','spk','keys']) && (newData.child('all').val() === true || newData.hasChild('to'))",
+              ".validate": "($mid.matches(/^[A-Za-z0-9_-]+$/) && $mid.length <= 64) && newData.hasChildren(['from','name','t','iv','ct','spk','keys']) && (newData.child('all').val() === true || newData.hasChild('to'))",
               "from": {
                 ".validate": "newData.isString()"
               },
@@ -291,7 +293,7 @@
             "$uid": {
               ".write": "auth != null && $uid === auth.uid && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now)) && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid))",
               "$pt": {
-                ".validate": "newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000"
+                ".validate": "($pt.matches(/^[A-Za-z0-9_-]+$/) && $pt.length <= 64) && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000"
               }
             }
           }

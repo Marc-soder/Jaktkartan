@@ -275,10 +275,16 @@ function obsAll(){
   return out.sort((a, b) => b.t - a.t);
 }
 const canDelObs = o => o.by === myUid() || (o.g.kind === 'member' && canLeadGroup(o.g));
+/* Som nålarna: bara observationer som ändrats ritas om, så att en öppen ruta inte stängs när någon annan lägger in en. */
+const obsMarkers = new Map();   // lag/jakt/id -> {m, sig}
 function renderObs(){
-  obsLayer.clearLayers();
   const b = $('#btnObs'); if(b) b.hidden = !anyLiveHunt();
+  const seen = new Set();
   for(const o of obsAll()){
+    const key = o.g.id + '/' + o.hid + '/' + o.oid, sig = [o.lat, o.lng, o.sp, o.n, o.note, o.name, o.t, o.by].join('\u0001'), cur = obsMarkers.get(key);
+    seen.add(key);
+    if(cur && cur.sig === sig) continue;
+    if(cur) obsLayer.removeLayer(cur.m);
     const m = L.marker([o.lat, o.lng], {icon:L.divIcon({className:'obs-icon', html:`<span class="obs-dot">${esc(obsKey(o.sp))}</span>${o.n > 1 ? `<span class="obs-n">${o.n}</span>` : ''}`, iconSize:[30, 30], iconAnchor:[15, 15], popupAnchor:[0, -14]}), zIndexOffset:400});
     m.bindPopup(() => {
       const el = h(`<div class="pp"><h4>${esc(o.sp)}${o.n > 1 ? ' × ' + o.n : ''}</h4><div class="pnote">Sedd ${esc(fmtClock(o.t))} (${ago(o.t)})${o.name ? ' av ' + esc(o.name) : ''}${o.note ? '<br>' + esc(o.note) : ''}${myPos ? `<br>${fmtDist(distM(myPos, o))} bort` : ''}</div>${canDelObs(o) ? '<div class="pbtns"><button class="btn sm danger" type="button" data-obs-del>Ta bort</button></div>' : ''}</div>`);
@@ -287,12 +293,14 @@ function renderObs(){
       return el;
     });
     m.addTo(obsLayer);
+    obsMarkers.set(key, {m, sig});
   }
+  for(const [key, cur] of obsMarkers) if(!seen.has(key)){ obsLayer.removeLayer(cur.m); obsMarkers.delete(key); }
 }
 const fmtClock = t => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}.${String(d.getMinutes()).padStart(2, '0')}`; };
 function obsList(g, hid){
   const list = Object.entries(g.huntObs[hid] || {}).filter(([, o]) => o).sort((a, b) => b[1].t - a[1].t);
-  return `<div class="lbl">Viltobservationer</div>` + (list.length ? list.map(([oid, o]) => `<button class="obs-row" type="button" data-j="obs-go" data-g="${g.id}" data-h="${hid}" data-o="${oid}"><span class="obs-dot sm">${esc(obsKey(o.sp))}</span><span><b>${esc(o.sp)}</b>${o.n > 1 ? ' × ' + o.n : ''} <span class="muted">${esc(fmtClock(o.t))}${o.name ? ' · ' + esc(o.name) : ''}</span>${o.note ? `<br><span class="small">${esc(o.note)}</span>` : ''}</span></button>`).join('')
+  return `<div class="lbl">Viltobservationer</div>` + (list.length ? list.map(([oid, o]) => `<button class="obs-row" type="button" data-j="obs-go" data-g="${esc(g.id)}" data-h="${esc(hid)}" data-o="${esc(oid)}"><span class="obs-dot sm">${esc(obsKey(o.sp))}</span><span><b>${esc(o.sp)}</b>${o.n > 1 ? ' × ' + o.n : ''} <span class="muted">${esc(fmtClock(o.t))}${o.name ? ' · ' + esc(o.name) : ''}</span>${o.note ? `<br><span class="small">${esc(o.note)}</span>` : ''}</span></button>`).join('')
     : '<div class="small muted">Inga ännu. Tryck på kikaren på kartan för att lägga in en.</div>');
 }
 function openObsForm(ll){
@@ -302,7 +310,7 @@ function openObsForm(ll){
   const sel = hunts[0], sp = h0 => { const ids = Object.keys((h0.hunt || {}).species || {}).filter(k => h0.hunt.species[k]); return ids.map(viltById).filter(Boolean); };
   const opts = h0 => { const first = sp(h0), rest = VILT.filter(v => !first.includes(v)); return (first.length ? `<optgroup label="Jaktbart i jakten">${first.map(v => `<option>${esc(v.name)}</option>`).join('')}</optgroup>` : '') + `<optgroup label="Övrigt vilt">${rest.map(v => `<option>${esc(v.name)}</option>`).join('')}</optgroup><option value="__other">Annat …</option>`; };
   openModal(`<h2>Viltobservation</h2><form id="obForm">
-    ${hunts.length > 1 ? `<label class="field"><span>Jakt</span><select class="input" id="obHunt">${hunts.map((x, i) => `<option value="${i}">${esc(x.hunt.name)} · ${esc(gname(x.g))}</option>`).join('')}</select></label>` : `<p class="note" style="margin-top:0">Sparas i jakten <b>${esc(sel.hunt.name)}</b> och syns för alla deltagare så länge jakten pågår.</p>`}
+    ${hunts.length > 1 ? `<label class="field"><span>Jakt</span><select class="input" id="obHunt">${hunts.map((x, i) => `<option value="${esc(i)}">${esc(x.hunt.name)} · ${esc(gname(x.g))}</option>`).join('')}</select></label>` : `<p class="note" style="margin-top:0">Sparas i jakten <b>${esc(sel.hunt.name)}</b> och syns för alla deltagare så länge jakten pågår.</p>`}
     <div class="row2"><label class="field"><span>Vilt</span><select class="input" id="obSp">${opts(sel)}</select></label>
     <label class="field"><span>Antal</span><input class="input" id="obN" type="number" inputmode="numeric" min="1" max="999" value="1"></label></div>
     <input class="input" id="obOther" maxlength="40" placeholder="Vilket vilt?" hidden>
@@ -497,9 +505,9 @@ function huntCard(g, hid, hunt, lead){
     ${live && !upcoming ? msgHtml(g, hid) : ''}
     ${live && !upcoming ? obsList(g, hid) : ''}
     ${areas.length ? `<div class="lbl">Områden</div><div class="small">${areas.map(esc).join(', ')}</div>` : ''}
-    ${lead && live ? `<div class="lbl">Tillfällig åtkomst för gäster</div><div class="codebox"><span>Jaktkod <b>${esc(hunt.code)}</b></span><button class="btn sm" type="button" data-j="hunt-link" data-g="${g.id}" data-h="${hid}">Kopiera länk</button></div>
-      ${guests.length ? `<div class="small" style="margin-top:6px">${guests.map(([gu, v]) => `<span class="gst">${esc(v.name)}<button class="x" type="button" data-j="guest-del" data-g="${g.id}" data-u="${gu}" aria-label="Ta bort ${esc(v.name)}">×</button></span>`).join(' ')}</div>` : '<div class="small muted" style="margin-top:6px">Inga gäster har gått med.</div>'}` : ''}
-    ${lead ? `<div class="btnrow" style="margin-top:10px">${live ? `<button class="btn sm" type="button" data-j="hunt-edit" data-g="${g.id}" data-h="${hid}">Ändra jakt</button>` : ''}<button class="btn sm danger" type="button" data-j="hunt-end" data-g="${g.id}" data-h="${hid}">${live ? 'Avsluta jakten' : 'Ta bort'}</button></div>` : ''}</div>`;
+    ${lead && live ? `<div class="lbl">Tillfällig åtkomst för gäster</div><div class="codebox"><span>Jaktkod <b>${esc(hunt.code)}</b></span><button class="btn sm" type="button" data-j="hunt-link" data-g="${esc(g.id)}" data-h="${esc(hid)}">Kopiera länk</button></div>
+      ${guests.length ? `<div class="small" style="margin-top:6px">${guests.map(([gu, v]) => `<span class="gst">${esc(v.name)}<button class="x" type="button" data-j="guest-del" data-g="${esc(g.id)}" data-u="${esc(gu)}" aria-label="Ta bort ${esc(v.name)}">×</button></span>`).join(' ')}</div>` : '<div class="small muted" style="margin-top:6px">Inga gäster har gått med.</div>'}` : ''}
+    ${lead ? `<div class="btnrow" style="margin-top:10px">${live ? `<button class="btn sm" type="button" data-j="hunt-edit" data-g="${esc(g.id)}" data-h="${esc(hid)}">Ändra jakt</button>` : ''}<button class="btn sm danger" type="button" data-j="hunt-end" data-g="${esc(g.id)}" data-h="${esc(hid)}">${live ? 'Avsluta jakten' : 'Ta bort'}</button></div>` : ''}</div>`;
 }
 /* Vilka som deltar, och knappen Jag deltar. Gäster deltar alltid (de har gått med via jaktkoden). */
 function rsvpHtml(g, hid){
@@ -510,7 +518,7 @@ function rsvpHtml(g, hid){
     .sort((a, b) => a.localeCompare(b, 'sv'));
   const me = accepted(g, hid);
   return `<div class="lbl">Deltar${names.length ? ' (' + names.length + ')' : ''}</div><div class="small rsvp-list">${names.length ? names.map(esc).join(', ') : '<span class="muted">Ingen har svarat ännu.</span>'}</div>
-    <div class="btnrow" style="margin-top:6px">${me ? `<span class="tag on">Du deltar</span><button class="btn sm ghost" type="button" data-j="rsvp-no" data-g="${g.id}" data-h="${hid}">Avböj</button>` : `<button class="btn sm primary" type="button" data-j="rsvp" data-g="${g.id}" data-h="${hid}">Jag deltar</button>`}</div>
+    <div class="btnrow" style="margin-top:6px">${me ? `<span class="tag on">Du deltar</span><button class="btn sm ghost" type="button" data-j="rsvp-no" data-g="${esc(g.id)}" data-h="${esc(hid)}">Avböj</button>` : `<button class="btn sm primary" type="button" data-j="rsvp" data-g="${esc(g.id)}" data-h="${esc(hid)}">Jag deltar</button>`}</div>
     <p class="note" style="margin-top:4px">${me ? auto : 'Deltar du delas din position automatiskt med jaktlaget medan jakten pågår.'}</p>`;
 }
 function renderJakt(){
@@ -549,7 +557,7 @@ function renderJakt(){
       if(g.kind === 'guest'){
         const hid = g.guest && g.guest.hid, hunt = hid && g.hunts[hid];
         html += `<h3 class="sec">${esc(gname(g))} <span class="tag">Gäst</span></h3>${hunt ? huntCard(g, hid, hunt, false) : '<div class="empty">Jakten laddas eller är avslutad.</div>'}
-          <div class="btnrow"><button class="btn sm" type="button" data-j="guest-leave" data-g="${g.id}">Lämna jakten</button></div>`;
+          <div class="btnrow"><button class="btn sm" type="button" data-j="guest-leave" data-g="${esc(g.id)}">Lämna jakten</button></div>`;
         continue;
       }
       const role = myRole(g), lead = canLeadGroup(g), adm = isAdminGroup(g);
@@ -558,15 +566,15 @@ function renderJakt(){
       const shared = state.areas.filter(a => a.gid === g.id);
       html += `<h3 class="sec">${esc(gname(g))} <span class="tag">${esc(ROLES[role] || '')}</span></h3>`;
       html += hunts.length ? hunts.map(([hid, hunt]) => huntCard(g, hid, hunt, lead)).join('') : '<p class="note" style="margin-top:0">Ingen jakt är skapad.</p>';
-      if(lead) html += `<div class="btnrow"><button class="btn primary sm" type="button" data-j="hunt-new" data-g="${g.id}">Ny jakt</button></div>`;
+      if(lead) html += `<div class="btnrow"><button class="btn primary sm" type="button" data-j="hunt-new" data-g="${esc(g.id)}">Ny jakt</button></div>`;
       html += `<div class="lbl">Delade områden</div><div class="small">${shared.length ? shared.map(a => esc(a.name)).join(', ') : '<span class="muted">Inga ännu. Öppna Filter, tryck på pennan vid ett område och välj att dela det med laget.</span>'}</div>`;
       html += `<div class="lbl">Medlemmar och rättigheter</div>`;
       for(const [mu, m] of members){
         const isOwner = g.meta.owner === mu;
-        html += `<div class="frow"><span class="fname">${esc(m.name || 'Medlem')}${mu === u.uid ? ' <span class="muted">(du)</span>' : ''}</span>${adm && !isOwner ? `<select class="input rolesel" data-j="role" data-g="${g.id}" data-u="${mu}" aria-label="Rättighet för ${esc(m.name)}">${Object.entries(ROLES).map(([k, l]) => `<option value="${k}"${m.role === k ? ' selected' : ''}>${l}</option>`).join('')}</select><button class="iconbtn" type="button" data-j="member-del" data-g="${g.id}" data-u="${mu}" aria-label="Ta bort ${esc(m.name)}">${ICON_TRASH}</button>` : `<span class="tag">${isOwner ? 'Ägare' : esc(ROLES[m.role] || '')}</span>`}</div>`;
+        html += `<div class="frow"><span class="fname">${esc(m.name || 'Medlem')}${mu === u.uid ? ' <span class="muted">(du)</span>' : ''}</span>${adm && !isOwner ? `<select class="input rolesel" data-j="role" data-g="${esc(g.id)}" data-u="${esc(mu)}" aria-label="Rättighet för ${esc(m.name)}">${Object.entries(ROLES).map(([k, l]) => `<option value="${esc(k)}"${m.role === k ? ' selected' : ''}>${l}</option>`).join('')}</select><button class="iconbtn" type="button" data-j="member-del" data-g="${esc(g.id)}" data-u="${esc(mu)}" aria-label="Ta bort ${esc(m.name)}">${ICON_TRASH}</button>` : `<span class="tag">${isOwner ? 'Ägare' : esc(ROLES[m.role] || '')}</span>`}</div>`;
       }
-      if(adm) html += `<p class="note">${Object.entries(ROLES).map(([k, l]) => `<b>${l}</b>: ${ROLE_HELP[k].toLowerCase()}`).join(' · ')}.</p><div class="btnrow"><button class="btn sm" type="button" data-j="invite" data-g="${g.id}">Bjud in medlem</button></div>`;
-      html += `<div class="btnrow" style="margin-top:8px">${g.meta.owner === u.uid ? `<button class="btn sm danger" type="button" data-j="group-del" data-g="${g.id}">Ta bort jaktlaget</button>` : `<button class="btn sm" type="button" data-j="group-leave" data-g="${g.id}">Lämna jaktlaget</button>`}</div>`;
+      if(adm) html += `<p class="note">${Object.entries(ROLES).map(([k, l]) => `<b>${l}</b>: ${ROLE_HELP[k].toLowerCase()}`).join(' · ')}.</p><div class="btnrow"><button class="btn sm" type="button" data-j="invite" data-g="${esc(g.id)}">Bjud in medlem</button></div>`;
+      html += `<div class="btnrow" style="margin-top:8px">${g.meta.owner === u.uid ? `<button class="btn sm danger" type="button" data-j="group-del" data-g="${esc(g.id)}">Ta bort jaktlaget</button>` : `<button class="btn sm" type="button" data-j="group-leave" data-g="${esc(g.id)}">Lämna jaktlaget</button>`}</div>`;
     }
     html += `<h3 class="sec">Fler jaktlag</h3><div class="btnrow">${canCreate() ? '<button class="btn sm" type="button" data-j="group-new">Skapa jaktlag</button>' : ''}<button class="btn sm" type="button" data-j="join">Gå med med kod</button></div>
       ${u.isAnonymous ? '<p class="note">Som gäst kan du gå med i jakter. Logga in med Google för att bli medlem i ett jaktlag.</p>' : canCreate() ? '' : '<p class="note">Bara ägaren av den här Jaktkartan kan skapa jaktlag. Du går med i ett lag eller en jakt med en kod.</p>'}`;
@@ -596,12 +604,12 @@ function openHuntForm(g, hid){
   openModal(`<h2>${old ? 'Ändra jakt' : 'Ny jakt'}</h2><form id="hfForm">
     ${live ? '<p class="note" style="margin-top:0">Jakten pågår och fortsätter medan du ändrar. Datum och start ligger fast. Positioner, observationer, plan och gäster finns kvar.</p>' : ''}
     <label class="field"><span>Namn</span><input class="input" id="hfName" maxlength="60" value="${esc(old ? old.name : 'Jakt ' + fmtDay(todayISO()))}"></label>
-    <div class="row2"><label class="field"><span>Datum</span><input class="input" type="date" id="hfDay" value="${day0}"${live ? ' disabled' : ''}></label>
-    <label class="field"><span>Startar kl.</span><input class="input" type="time" id="hfStart" value="${old && old.starts ? hmOf(old.starts) : nowHM()}"${live ? ' disabled' : ''}></label></div>
-    <label class="field"><span>Slutar kl.</span><input class="input" type="time" id="hfEnd" value="${old ? hmOf(old.expires) : '23:59'}"></label>
+    <div class="row2"><label class="field"><span>Datum</span><input class="input" type="date" id="hfDay" value="${esc(day0)}"${live ? ' disabled' : ''}></label>
+    <label class="field"><span>Startar kl.</span><input class="input" type="time" id="hfStart" value="${esc(old && old.starts ? hmOf(old.starts) : nowHM())}"${live ? ' disabled' : ''}></label></div>
+    <label class="field"><span>Slutar kl.</span><input class="input" type="time" id="hfEnd" value="${esc(old ? hmOf(old.expires) : '23:59')}"></label>
     <p class="note" style="margin-top:0">Positioner kan bara delas och ses mellan start och slut. Gästernas åtkomst gäller till sluttiden.</p>
     <label class="field"><span>Län</span><select class="input" id="hfLan"><option value="">Välj län</option>${LAN.map(l => `<option${l === lan0 ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
-    <div class="field"><span>Områden som gästerna får se</span>${areas.length ? areas.map(a => `<label class="checkline"><input type="checkbox" data-area="${a.id}"${area0(a) ? ' checked' : ''}><span>${esc(a.name)}</span></label>`).join('') : '<span class="small muted">Laget har inga delade områden ännu. Gäster ser då bara varandras positioner.</span>'}</div>
+    <div class="field"><span>Områden som gästerna får se</span>${areas.length ? areas.map(a => `<label class="checkline"><input type="checkbox" data-area="${esc(a.id)}"${area0(a) ? ' checked' : ''}><span>${esc(a.name)}</span></label>`).join('') : '<span class="small muted">Laget har inga delade områden ännu. Gäster ser då bara varandras positioner.</span>'}</div>
     <div class="field"><span>Jaktbart vilt</span><div id="hfVilt"></div></div>
     <div class="actions">${old ? '<button class="btn primary grow" type="submit" id="hfOk">Spara ändringar</button>' : '<button class="btn primary grow" type="submit" id="hfPlan" data-plan="1">Skapa och planera</button><button class="btn" type="submit" id="hfOk">Skapa jakt</button>'}<button class="btn ghost" type="button" id="hfCancel">Avbryt</button></div></form>`, m => {
     const draw = () => {
@@ -612,7 +620,7 @@ function openHuntForm(g, hid){
         const rows = v.lic ? [] : viltLawful(v, lan, md);
         if(!v.lic && !rows.length){ delete sel[v.id]; continue; }
         const info = v.lic ? 'Enligt licens eller länsstyrelsens beslut' : rows.map(r => [rowLabel(r), fmtPer(r.per), r.note].filter(Boolean).join(' · ')).join(' | ');
-        out += `<label class="checkline"><input type="checkbox" data-vilt="${v.id}" ${sel[v.id] ? 'checked' : ''}><span>${esc(v.name)}<br><span class="small muted">${esc(info)}</span></span></label>`;
+        out += `<label class="checkline"><input type="checkbox" data-vilt="${esc(v.id)}" ${sel[v.id] ? 'checked' : ''}><span>${esc(v.name)}<br><span class="small muted">${esc(info)}</span></span></label>`;
       }
       m.querySelector('#hfVilt').innerHTML = out + '<p class="note">Bara arter med allmän jakttid den dagen i länet visas. Kontrollera alltid mot Jägareförbundets tabell.</p>';
     };
@@ -700,7 +708,7 @@ $('#paneJakt').addEventListener('change', e => {
   fb.db.ref(`groups/${b.dataset.g}/members/${b.dataset.u}/role`).set(b.value).then(() => toast('Rättigheten är ändrad')).catch(fail());
 });
 function openInvite(g){
-  openModal(`<h2>Bjud in till ${esc(gname(g))}</h2><label class="field"><span>Rättighet</span><select class="input" id="ivRole">${['editor','viewer','leader'].map(k => `<option value="${k}">${ROLES[k]} – ${ROLE_HELP[k].toLowerCase()}</option>`).join('')}</select></label>
+  openModal(`<h2>Bjud in till ${esc(gname(g))}</h2><label class="field"><span>Rättighet</span><select class="input" id="ivRole">${['editor','viewer','leader'].map(k => `<option value="${esc(k)}">${ROLES[k]} – ${ROLE_HELP[k].toLowerCase()}</option>`).join('')}</select></label>
     <p class="note" style="margin-top:0">Länken gäller i sju dagar och kan användas av flera. Du kan ändra rättigheten efteråt.</p>
     <div class="actions"><button class="btn primary grow" type="button" id="ivOk">Skapa inbjudan</button><button class="btn ghost" type="button" id="ivCancel">Avbryt</button></div>`, m => {
     m.querySelector('#ivCancel').addEventListener('click', closeModal);

@@ -309,6 +309,13 @@ const gids = () => Object.keys(data.groups || {});
   await C.fill('#msgText', 'Uppfattat, jag går dit nu'); await C.click('#msgSend'); await W(C, 900); await W(B, 500);
   check((await B.innerText('#paneJakt')).includes('Uppfattat, jag går dit nu') && !(await A.innerText('#paneJakt')).includes('Uppfattat'), 'gästens svar når Bob men inte Alice');
   await A.screenshot({path:shot('a_msg.png')}); await C.screenshot({path:shot('c_msg.png')});
+  // En öppen nålruta hos Bob stängs inte när Carl skickar ett meddelande
+  await B.evaluate(() => __fk.map.setView([58.72, 14.6], 15, {animate:false})); await W(B, 300);
+  await B.evaluate(() => { let m = null; __fk.map.eachLayer(l => { if(l.pinId && !m) m = l; }); m.openPopup(); }); await W(B, 300);
+  const popBefore = await B.locator('.leaflet-popup').count();
+  await C.click(`[data-j="msg-new"][data-h="${hid}"]`); await W(C, 200); await C.fill('#msgText', 'Jag ser en räv'); await C.click('#msgSend'); await W(C, 900); await W(B, 600);
+  check(popBefore === 1 && await B.locator('.leaflet-popup').count() === 1 && (await B.innerText('#paneJakt')).includes('Jag ser en räv'), 'Bobs öppna nålruta ligger kvar när ett nytt meddelande kommer');
+  await B.evaluate(() => __fk.map.closePopup());
   // Försök att lura systemet
   const fake = await A.evaluate(([g, h, m]) => Promise.all([
     firebase.database().ref(`groups/${g}/huntMsg/${h}/mfake1`).set(Object.assign({}, m, {from:'bob', t:Date.now()})).then(() => 'ok', () => 'denied'),
@@ -492,6 +499,9 @@ const gids = () => Object.keys(data.groups || {});
   check(!D('e').write('/groups/g/huntMsg/h2/m1', MS('e')).allowed && !D('e', t0 + 2000).write('/groups/g/huntMsg/h/m1', MS('e')).allowed && !D('v', t0 + 2000).read('/groups/g/huntMsg/h').allowed && D('v').read('/groups/g/huntMsg/h').allowed && D('gu').read('/groups/g/huntMsg/h').allowed && !D('gu').read('/groups/g/huntMsg/h2').allowed && !D('x').read('/groups/g/huntMsg/h').allowed, 'regel: meddelanden finns bara medan jakten pågår, och bara för jaktens deltagare');
   check(!D('e').write('/groups/g/huntMsg/h/m1', MS('e', {text:'klartext'})).allowed && !D('e').write('/groups/g/huntMsg/h/m1', MS('e', {all:null})).allowed && D('e').write('/groups/g/huntMsg/h/m1', MS('e', {all:null, to:{v:true}})).allowed, 'regel: inga extra fält (ingen klartext), och mottagare måste anges');
   check(!D('e').write('/groups/g/huntMsg/h/m0', MS('e')).allowed && D('e').write('/groups/g/huntMsg/h/m0', null).allowed && !D('v').write('/groups/g/huntMsg/h/m0', null).allowed && D('a2').write('/groups/g/huntMsg/h/m0', null).allowed && D('a2').write('/groups/g/huntMsg/h', null).allowed, 'regel: ett meddelande kan inte ändras, avsändaren och jaktledaren kan ta bort det');
+  { const bad = 'x" onmouseover="alert(1)';
+    check(!D('e').write('/groups/g/pins/ar/' + bad, {lat:1, lng:2, typeId:'t'}).allowed && !D('e').write('/groups/g/areas/' + bad, {name:'X'}).allowed && !D('e').write('/groups/g/types/' + bad, {name:'X', color:'#000'}).allowed && !D('gu').write('/groups/g/huntObs/h/' + bad, O('gu')).allowed && !D('e').write('/groups/g/huntMsg/h/' + bad, MS('e')).allowed && !D('a2').write('/groups/g/huntPlan/h2/drives/' + bad, {name:'S', ring:'1,1;1,2;2,2'}).allowed && !D('e').write('/groups/g/huntTrail/h/e/' + bad, T).allowed && !D('e').write('/groups/g/msgKeys/e/' + bad, K()).allowed, 'regel: nycklar med andra tecken än bokstäver, siffror, - och _ nekas');
+    check(D('e').write('/groups/g/pins/ar/-Nab_c1', {lat:1, lng:2, typeId:'t'}).allowed && D('gu').write('/groups/g/huntObs/h/-Nab_c1', O('gu')).allowed && !D('e').write('/groups/g/pins/ar/' + 'a'.repeat(65), {lat:1, lng:2, typeId:'t'}).allowed, 'regel: vanliga nycklar (även Firebase push-nycklar) godtas, för långa nekas'); }
   check(!D('x').write('/groups/n2/meta', {name:'N', owner:'x'}).allowed && !D('e').write('/groups/n2/meta', {name:'N', owner:'e'}).allowed && D('o').write('/groups/n2/meta', {name:'N', owner:'o'}).allowed && D('c1').write('/groups/n2/meta', {name:'N', owner:'c1'}).allowed, 'regel: bara ägaren och godkända kan skapa jaktlag');
   check(!D('x').write('/owner', 'x').allowed && !D('o').write('/owner', 'x').allowed && !D('x').write('/creators/x', true).allowed && D('o').write('/creators/x', true).allowed, 'regel: ägarskapet kan inte tas över, bara ägaren godkänner fler');
   { const e0 = targaryen.database(rules, {}, t0); check(e0.as(tok('first')).write('/owner', 'first', undefined, t0).allowed && !e0.as(tok('anon-z')).write('/owner', 'anon-z', undefined, t0).allowed && !e0.as(tok('first')).write('/owner', 'other', undefined, t0).allowed, 'regel: första Google-inloggade blir ägare, inte en gäst och inte åt någon annan'); }

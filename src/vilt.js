@@ -85,7 +85,7 @@ function renderVilt(){
   const pane = $('#paneVilt'); if(!pane) return;
   const lan = state.settings.lan || '', day = viltDay || todayISO(), md = day.slice(5);
   let html = `<div class="row2"><label class="field"><span>Län</span><select class="input" id="viltLan"><option value="">Välj län</option>${LAN.map(l => `<option${l === lan ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
-    <label class="field"><span>Datum</span><input class="input" type="date" id="viltDay" value="${day}"></label></div>`;
+    <label class="field"><span>Datum</span><input class="input" type="date" id="viltDay" value="${esc(day)}"></label></div>`;
   if(!lan){ html += `<div class="empty">Välj län för att se vad som är lovligt.</div>`; }
   else {
     const row = r => `<div class="vrow"><span class="vper">${fmtPer(r.per)}</span>${rowLabel(r) ? `<span class="vcls">${esc(rowLabel(r))}</span>` : ''}${r.note ? `<span class="vnote">${esc(r.note)}</span>` : ''}</div>`;

@@ -17,6 +17,8 @@ const invite = `root.child('invites/'+newData.child('code').val())`;
 const hunt = `root.child(${G}+'/hunts/'+$hid)`;
 // Jakten pågår: sluttiden har inte passerat och starttiden (om den finns) har passerat.
 const huntLive = `(${hunt}.child('expires').val() > now && (!${hunt}.child('starts').exists() || ${hunt}.child('starts').val() <= now))`;
+// Nycklar som deltagare själva väljer: bara bokstäver, siffror, - och _. Då kan en nyckel aldrig bära med sig kod in i sidan.
+const KEY = v => `(${v}.matches(/^[A-Za-z0-9_-]+$/) && ${v}.length <= 64)`;
 const hcode = `root.child('huntCodes/'+newData.child('code').val())`;
 
 const rules = { rules: {
@@ -57,20 +59,20 @@ const rules = { rules: {
     },
     areas: {
       '.read': isMember,
-      '$aid': { '.read': guestArea, '.write': canEdit, '.validate': `newData.child('name').isString() && newData.child('name').val().length <= 80` }
+      '$aid': { '.read': guestArea, '.write': canEdit, '.validate': `${KEY('$aid')} && newData.child('name').isString() && newData.child('name').val().length <= 80` }
     },
     pins: {
       '.read': isMember,
-      '$aid': { '.read': guestArea, '.write': canEdit,
-        '$pid': { '.validate': `newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('typeId').isString()` } }
+      '$aid': { '.read': guestArea, '.write': canEdit, '.validate': KEY('$aid'),
+        '$pid': { '.validate': `${KEY('$pid')} && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('typeId').isString()` } }
     },
-    types: { '.read': `${isMember} || ${isGuest}`, '$tid': { '.write': canEdit, '.validate': `newData.child('name').isString() && newData.child('color').isString()` } },
+    types: { '.read': `${isMember} || ${isGuest}`, '$tid': { '.write': canEdit, '.validate': `${KEY('$tid')} && newData.child('name').isString() && newData.child('color').isString()` } },
     hunts: {
       '.read': isMember,
       '$hid': {
         '.read': `${isGuest} && ${guest}.child('hid').val() === $hid`,
         '.write': canLead,
-        '.validate': `newData.hasChildren(['name','expires','code']) && newData.child('expires').isNumber() && (!newData.child('starts').exists() || (newData.child('starts').isNumber() && newData.child('starts').val() < newData.child('expires').val()))`
+        '.validate': `${KEY('$hid')} && newData.hasChildren(['name','expires','code']) && newData.child('expires').isNumber() && (!newData.child('starts').exists() || (newData.child('starts').isNumber() && newData.child('starts').val() < newData.child('expires').val()))`
       }
     },
     guests: {
@@ -101,7 +103,7 @@ const rules = { rules: {
         '.write': `${canLead} && !newData.exists()`,
         '$oid': {
           '.write': `${signed} && ${huntLive} && (${me}.exists() || (${isGuest} && ${guest}.child('hid').val() === $hid)) && (newData.exists() ? (newData.child('by').val() === auth.uid && (!data.exists() || data.child('by').val() === auth.uid)) : (data.child('by').val() === auth.uid || ${canLead}))`,
-          '.validate': `newData.hasChildren(['sp','n','lat','lng','t','by']) && newData.child('sp').isString() && newData.child('sp').val().length >= 1 && newData.child('sp').val().length <= 40 && newData.child('n').isNumber() && newData.child('n').val() >= 1 && newData.child('n').val() <= 999 && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000 && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 200)) && (!newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val().length <= 60))`
+          '.validate': `${KEY('$oid')} && newData.hasChildren(['sp','n','lat','lng','t','by']) && newData.child('sp').isString() && newData.child('sp').val().length >= 1 && newData.child('sp').val().length <= 40 && newData.child('n').isNumber() && newData.child('n').val() >= 1 && newData.child('n').val() <= 999 && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000 && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 200)) && (!newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val().length <= 60))`
         }
       }
     },
@@ -111,7 +113,7 @@ const rules = { rules: {
       '.read': canLead,
       '$oid': {
         '.write': canLead,
-        '.validate': `newData.hasChildren(['sp','n','lat','lng','t']) && newData.child('sp').isString() && newData.child('sp').val().length >= 1 && newData.child('sp').val().length <= 40 && newData.child('n').isNumber() && newData.child('n').val() >= 1 && newData.child('n').val() <= 999 && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000`,
+        '.validate': `${KEY('$oid')} && newData.hasChildren(['sp','n','lat','lng','t']) && newData.child('sp').isString() && newData.child('sp').val().length >= 1 && newData.child('sp').val().length <= 40 && newData.child('n').isNumber() && newData.child('n').val() >= 1 && newData.child('n').val() <= 999 && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000`,
         sp: {'.validate': true}, n: {'.validate': true}, lat: {'.validate': true}, lng: {'.validate': true}, t: {'.validate': true},
         hid: {'.validate': 'newData.isString() && newData.val().length <= 40'},
         '$other': {'.validate': false}
@@ -126,19 +128,20 @@ const rules = { rules: {
         '.read': `${isGuest} && ${guest}.child('hid').val() === $hid`,
         '.write': `${canLead} && (${hunt}.exists() || !newData.exists())`,
         stands: { '$pid': {
+          '.validate': KEY('$pid'),
           who: {'.validate': 'newData.isString() && newData.val().length <= 60'},
           uid: {'.validate': 'newData.isString() && newData.val().length <= 128'},
           no: {'.validate': 'newData.isNumber() && newData.val() >= 0 && newData.val() <= 65535 && newData.val() % 1 === 0'},
           '$other': {'.validate': false}
         } },
         drives: { '$did': {
-          '.validate': `newData.hasChildren(['name','ring'])`,
+          '.validate': `${KEY('$did')} && newData.hasChildren(['name','ring'])`,
           name: {'.validate': 'newData.isString() && newData.val().length <= 60'},
           ring: {'.validate': 'newData.isString() && newData.val().length <= 20000'},
           '$other': {'.validate': false}
         } },
         routes: { '$rid': {
-          '.validate': `newData.hasChildren(['kind','pts'])`,
+          '.validate': `${KEY('$rid')} && newData.hasChildren(['kind','pts'])`,
           kind: {'.validate': "newData.val() === 'hund' || newData.val() === 'drev'"},
           who: {'.validate': 'newData.isString() && newData.val().length <= 60'},
           uid: {'.validate': 'newData.isString() && newData.val().length <= 128'},
@@ -171,7 +174,7 @@ const rules = { rules: {
       '$uid': {
         '.write': `${signed} && (($uid === auth.uid && (${me}.exists() || ${isGuest})) || (${canLead} && !newData.exists()))`,
         '$did': {
-          '.validate': `newData.hasChildren(['k','name','t']) && ($uid !== auth.uid || ${me}.exists() || newData.child('hid').val() === ${guest}.child('hid').val())`,
+          '.validate': `${KEY('$did')} && newData.hasChildren(['k','name','t']) && ($uid !== auth.uid || ${me}.exists() || newData.child('hid').val() === ${guest}.child('hid').val())`,
           k: {'.validate': 'newData.isString() && newData.val().length >= 40 && newData.val().length <= 200'},
           name: {'.validate': 'newData.isString() && newData.val().length <= 60'},
           t: {'.validate': 'newData.isNumber() && newData.val() <= now + 60000'},
@@ -189,7 +192,7 @@ const rules = { rules: {
         '.write': `${canLead} && !newData.exists()`,
         '$mid': {
           '.write': `${signed} && ${huntLive} && (${me}.exists() || (${isGuest} && ${guest}.child('hid').val() === $hid)) && (newData.exists() ? (!data.exists() && newData.child('from').val() === auth.uid) : (data.child('from').val() === auth.uid || ${canLead}))`,
-          '.validate': `newData.hasChildren(['from','name','t','iv','ct','spk','keys']) && (newData.child('all').val() === true || newData.hasChild('to'))`,
+          '.validate': `${KEY('$mid')} && newData.hasChildren(['from','name','t','iv','ct','spk','keys']) && (newData.child('all').val() === true || newData.hasChild('to'))`,
           from: {'.validate': 'newData.isString()'},
           name: {'.validate': 'newData.isString() && newData.val().length <= 60'},
           t: {'.validate': 'newData.isNumber() && newData.val() <= now + 60000'},
@@ -210,7 +213,7 @@ const rules = { rules: {
         '.write': `${canLead} && !newData.exists()`,
         '$uid': {
           '.write': `${signed} && $uid === auth.uid && ${huntLive} && (${me}.exists() || (${isGuest} && ${guest}.child('hid').val() === $hid))`,
-          '$pt': { '.validate': `newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000` }
+          '$pt': { '.validate': `${KEY('$pt')} && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000` }
         }
       }
     }

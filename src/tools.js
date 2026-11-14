@@ -427,7 +427,7 @@ function openRenumber(){
     <p class="note" style="margin-top:0">Passen får nummer i ordning efter var de ligger. Varje jaktmark numreras för sig. Text efter numret behålls.</p>
     <div class="row2">
       <label class="field"><span>Jaktmark</span><select class="input" id="rnArea">${areas.map(a => `<option value="${esc(a.id)}"${a.id === areaKey ? ' selected' : ''}>${esc(a.name)} (${a.n})</option>`).join('')}${areas.length > 1 ? `<option value="*"${areaKey === '*' ? ' selected' : ''}>Alla, var för sig</option>` : ''}</select></label>
-      <label class="field"><span>Ordning</span><select class="input" id="rnDir">${Object.entries(RENUM_DIRS).map(([k, v]) => `<option value="${k}"${k === dir ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+      <label class="field"><span>Ordning</span><select class="input" id="rnDir">${Object.entries(RENUM_DIRS).map(([k, v]) => `<option value="${esc(k)}"${k === dir ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
     </div>
     <label class="field rn-start"><span>Börja på nummer</span><input class="input" id="rnStart" type="number" inputmode="numeric" min="1" max="999" step="1" value="1"></label>
     <div class="field"><span>Så här blir det</span><div id="rnPreview" class="rn-preview"></div></div>

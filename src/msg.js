@@ -119,8 +119,8 @@ function msgHtml(g, hid){
     if(!p) msgLoad(g, mid, m);
     return `<div class="msg${mine ? ' me' : ''}"><div class="msg-h"><b>${esc(mine ? 'Du' : m.name || 'Deltagare')}</b> till ${esc(msgToText(g, hid, m))} <span class="muted">· ${esc(fmtClock(m.t))}</span></div>
       <div class="msg-t">${p ? (p.text != null ? esc(p.text) : `<span class="muted">${esc(p.err)}</span>`) : '<span class="muted">Låser upp …</span>'}</div>
-      ${!mine ? `<button class="linkbtn" type="button" data-j="msg-reply" data-g="${g.id}" data-h="${hid}" data-u="${esc(m.from)}">Svara</button>` : ''}</div>`; }).join('')}</div>`;
-  h += `<div class="btnrow" style="margin-top:6px"><button class="btn sm primary" type="button" data-j="msg-new" data-g="${g.id}" data-h="${hid}">Nytt meddelande</button></div>`;
+      ${!mine ? `<button class="linkbtn" type="button" data-j="msg-reply" data-g="${esc(g.id)}" data-h="${esc(hid)}" data-u="${esc(m.from)}">Svara</button>` : ''}</div>`; }).join('')}</div>`;
+  h += `<div class="btnrow" style="margin-top:6px"><button class="btn sm primary" type="button" data-j="msg-new" data-g="${esc(g.id)}" data-h="${esc(hid)}">Nytt meddelande</button></div>`;
   return h;
 }
 function msgLoad(g, mid, m){
