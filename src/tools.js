@@ -261,7 +261,9 @@ function onOrient(e){
 /* Kompassen uppe till vänster. Syns på telefon (och på dator om den ger en riktning). */
 function renderCompass(){
   const btn = $('#compassBtn'); if(!btn) return;
-  btn.hidden = !compassOn() || !(isTouch() || compass.heading != null);
+  // Är panelen så utdragen att kartan bara är en smal remsa skulle kompassen krocka med vinden: dölj den då.
+  const roomy = isDesktop() || window.innerHeight - bottomPad() >= 330;
+  btn.hidden = !compassOn() || !(isTouch() || compass.heading != null) || !roomy;
   const h = compass.heading;
   btn.classList.toggle('off', h == null);
   if(h == null){ $('#compassTxt').textContent = compass.on ? 'Väntar …' : 'Kompass'; btn.setAttribute('aria-label', compass.on ? 'Kompass: väntar på telefonens riktning' : 'Kompass: tryck för att starta'); return; }
