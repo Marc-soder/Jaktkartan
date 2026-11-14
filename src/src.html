@@ -293,6 +293,7 @@ textarea.input{min-height:84px;resize:vertical}
 .userrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .userrow .grow{flex:1;min-width:0;overflow-wrap:anywhere}
 .rolesel{width:auto;flex:none;min-height:38px;padding:6px 8px;font-size:14px}
+.frow select.rolesel{width:auto;max-width:48%;flex:0 1 auto}
 .steps{margin:8px 0 12px;padding-left:20px;font-size:14px;display:grid;gap:4px}
 .pos-icon{background:none;border:0;overflow:visible}
 .pos-dot{width:32px;height:32px;border-radius:50%;background:#1a73e8;color:#fff;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4);display:grid;place-items:center;font:700 12px/1 var(--font-body);flex:none}
@@ -923,6 +924,7 @@ function setSheet(s, noAnim){
   if(noAnim) panel.classList.add('dragging');
   document.documentElement.style.setProperty('--sheet-h', px + 'px');
   panel.style.height = `calc(${px}px + env(safe-area-inset-bottom, 0px))`;
+  if(typeof renderCompass === 'function') renderCompass();
   if(noAnim) requestAnimationFrame(() => panel.classList.remove('dragging'));
   setTimeout(syncCross, 280);
 }
@@ -933,7 +935,7 @@ function bottomPad(){ return isDesktop() ? 0 : (parseFloat(getComputedStyle(docu
   const panel = $('#panel'); let startY = 0, startH = 0, moved = false, active = false;
   const down = e => { if(isDesktop()) return; active = true; moved = false; startY = e.clientY; startH = panel.getBoundingClientRect().height; panel.classList.add('dragging'); e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId); };
   const move = e => { if(!active) return; const dy = startY - e.clientY; if(Math.abs(dy) > 6) moved = true; if(!moved) return;
-    const hpx = Math.max(minH(), Math.min(window.innerHeight - 40, startH + dy)); panel.style.height = hpx + 'px'; document.documentElement.style.setProperty('--sheet-h', hpx + 'px'); syncCross(); };
+    const hpx = Math.max(minH(), Math.min(window.innerHeight - 40, startH + dy)); panel.style.height = hpx + 'px'; document.documentElement.style.setProperty('--sheet-h', hpx + 'px'); syncCross(); if(typeof renderCompass === 'function') renderCompass(); };
   const up = e => { if(!active) return; active = false; panel.classList.remove('dragging');
     if(!moved){ if(e.currentTarget.id === 'handle') setSheet(sheet === 'min' ? 'peek' : sheet === 'peek' ? 'half' : sheet === 'half' ? 'full' : 'peek'); else setSheet(sheet); return; }
     const hpx = panel.getBoundingClientRect().height, opts = ['min','peek','half','full'];

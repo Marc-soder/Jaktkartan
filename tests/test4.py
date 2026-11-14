@@ -90,6 +90,11 @@ with sync_playwright() as p:
         check(db['x'] + db['width'] < cb['x'] and db['y'] < 40, f'{name}: kompassen ligger uppe till vänster, fri från knapparna {db}')
         os.makedirs(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'shots'), exist_ok=True)
         pg.screenshot(path=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'shots', f'compass_{name}.png'))
+        if name == 'mobil':
+            pg.evaluate("__fk.setSheet('full', true)"); pg.wait_for_timeout(300)
+            check(not pg.is_visible('#compassBtn'), 'mobil: kompassen döljs när panelen är utdragen, så att den inte krockar med vinden')
+            pg.evaluate("__fk.setSheet('peek', true)"); pg.wait_for_timeout(300)
+            check(pg.is_visible('#compassBtn'), 'mobil: kompassen kommer tillbaka när panelen fälls ned')
         pg.click('#btnLayers'); pg.wait_for_timeout(200)
         check(pg.is_checked('#popCompass'), f'{name}: Kompass är påslagen i lagermenyn')
         pg.uncheck('#popCompass'); pg.wait_for_timeout(100)
