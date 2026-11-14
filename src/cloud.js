@@ -504,6 +504,7 @@ function huntCard(g, hid, hunt, lead){
   return `<div class="card${live ? '' : ' dim'}"><div class="card-h"><strong>${esc(hunt.name)}</strong><span class="tag${live && !upcoming ? ' on' : ''}">${upcoming ? 'Kommande' : live ? 'Pågår' : 'Avslutad'}</span></div>
     ${!live ? `<div class="small muted">Tas bort automatiskt ${esc(fmtTime(hunt.expires + cloud.cleanAfter))}, och observationerna sparas till värmekartan.</div>` : ''}
     <div class="small muted">${esc(fmtDay(hunt.day))}${hunt.lan ? ' · ' + esc(hunt.lan) : ''}${hunt.starts ? ` · startar ${esc(fmtTime(hunt.starts))}` : ''} · gäller till ${esc(fmtTime(hunt.expires))}</div>
+    ${live ? sunHtml(hunt.day || todayISO(), huntPlace(g, hunt)) : ''}
     <div class="lbl">Jaktbart vilt</div>${huntChips(hunt)}
     ${live ? rsvpHtml(g, hid) : ''}
     ${live ? planCardHtml(g, hid, hunt, lead) : ''}
@@ -515,6 +516,12 @@ function huntCard(g, hid, hunt, lead){
     ${lead ? `<div class="btnrow" style="margin-top:10px">${live ? `<button class="btn sm" type="button" data-j="hunt-edit" data-g="${esc(g.id)}" data-h="${esc(hid)}">Ändra jakt</button>` : ''}<button class="btn sm danger" type="button" data-j="hunt-end" data-g="${esc(g.id)}" data-h="${esc(hid)}">${live ? 'Avsluta jakten' : 'Ta bort'}</button></div>` : ''}</div>`;
 }
 /* Vilka som deltar, och knappen Jag deltar. Gäster deltar alltid (de har gått med via jaktkoden). */
+/* Skjutljus för jakten: min position, annars mitten av jaktens första område med gräns, annars kartans mitt. */
+function huntPlace(g, hunt){
+  if(myPos) return {lat:myPos.lat, lng:myPos.lng, mine:true};
+  for(const aid of Object.keys(hunt.areas || {})){ const a = areaById(aid), r = a ? areaRings(a)[0] : null; if(r && r.length){ const c = L.latLngBounds(r).getCenter(); return {lat:c.lat, lng:c.lng, mine:false}; } }
+  return sunPlace();
+}
 function rsvpHtml(g, hid){
   const auto = 'Din position delas automatiskt med jaktlaget medan jakten pågår och appen är öppen.';
   if(g.kind !== 'member') return `<p class="note">${auto}</p>`;
