@@ -377,6 +377,7 @@ const gids = () => Object.keys(data.groups || {});
   check(!(await A.isChecked('#shareToggle')) && !hp().alice, 'stänger man av själv startas delningen inte igen automatiskt under samma jakt');
   // Kommande jakt: delningen startar själv när jakten startar och slutar när den är slut
   const h2 = 'h2kvall', t2 = Date.now();
+  await B.evaluate(() => { __fk.cloud.cleanAfter = 3000; });   // i appen: en timme efter sluttiden
   await B.evaluate(([g, h, t]) => firebase.database().ref().update({[`groups/${g}/hunts/${h}`]: {name:'Kvällsjakt', day:'2026-11-14', starts:t + 5000, expires:t + 16000, code:'KVALL234', by:'bob', created:t, areas:{}, species:{}}, 'huntCodes/KVALL234': {gid:g, hid:h, expires:t + 16000}}), [gid, h2, t2]); await W(A, 500);
   check((await A.innerText('#paneJakt')).includes('Kvällsjakt') && (await A.innerText('#paneJakt')).includes('KOMMANDE'), 'Alice ser den kommande jakten');
   await A.click(`[data-j="rsvp"][data-h="${h2}"]`); await W(A, 600);
@@ -387,8 +388,10 @@ const gids = () => Object.keys(data.groups || {});
   await A.waitForTimeout(Math.max(0, t2 + 16000 - Date.now()) + 1800);
   check(!(await A.isChecked('#shareToggle')) && (await A.evaluate(() => __fk.cloud.sharing)) === false, 'när kvällsjakten är slut slutar delningen av sig själv');
   await B.click('#tab-jakt'); await W(B, 200);
-  await B.click(`[data-j="hunt-end"][data-h="${h2}"]`); await B.click(`[data-j="hunt-end"][data-h="${h2}"]`); await W(B, 700);
-  check(!data.groups[gid].hunts[h2] && !(data.groups[gid].huntRsvp || {})[h2] && !(data.groups[gid].huntPos || {})[h2], 'den avslutade kvällsjakten tas bort med svar och positioner');
+  check(!!data.groups[gid].hunts[h2] && (await B.innerText('#paneJakt')).includes('Tas bort automatiskt'), 'en jakt som passerat sluttiden finns kvar en stund, med besked om när den tas bort');
+  await B.waitForTimeout(Math.max(0, t2 + 16000 + 3000 - Date.now()) + 2500);
+  check(!data.groups[gid].hunts[h2] && !(data.groups[gid].huntRsvp || {})[h2] && !(data.groups[gid].huntPos || {})[h2] && !(data.huntCodes || {})['KVALL234'], 'kvällsjakten städas bort av sig själv efter sluttiden, med kod, svar och positioner');
+  await B.evaluate(() => { __fk.cloud.cleanAfter = 3600000; });
   // ---- Avsluta jakten ----
   await B.click('[data-j="hunt-end"]'); await B.click('[data-j="hunt-end"]'); await W(B, 900);
   check(!data.groups[gid].hunts && !data.huntCodes && !(data.groups[gid].guests || {})['anon-carl'], 'jakten, koden och gästposten är borta');
