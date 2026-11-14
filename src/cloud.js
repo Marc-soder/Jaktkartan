@@ -88,17 +88,18 @@ function purgeLocal(gid){
 }
 function dropGroup(gid){
   const g = cloud.groups[gid]; if(!g) return;
-  g.refs.forEach(r => r.off()); Object.values(g.posRefs).forEach(r => r.off()); Object.values(g.trailRefs).forEach(r => r.off()); Object.values(g.obsRefs).forEach(r => r.off()); delete cloud.groups[gid];
+  g.refs.forEach(r => r.off()); Object.values(g.posRefs).forEach(r => r.off()); Object.values(g.trailRefs).forEach(r => r.off()); Object.values(g.obsRefs).forEach(r => r.off()); Object.values(g.msgRefs).forEach(r => r.off()); delete cloud.groups[gid];
   purgeLocal(gid); scheduleRender(); renderPositions();
 }
 function forgetGroup(gid){ if(fb && cloud.user) fb.db.ref('userGroups/' + myUid() + '/' + gid).remove().catch(() => {}); dropGroup(gid); }
 function subGroup(gid, kind){
-  const g = cloud.groups[gid] = {id:gid, kind, meta:null, members:{}, areas:{}, pins:{}, types:{}, hunts:{}, guests:{}, guest:null, refs:[], areaRefs:{}, huntRef:null, posRefs:{}, huntPos:{}, trailRefs:{}, huntTrail:{}, obsRefs:{}, huntObs:{}, huntPlan:{}, huntRsvp:{}, disc:{}};
+  const g = cloud.groups[gid] = {id:gid, kind, meta:null, members:{}, areas:{}, pins:{}, types:{}, hunts:{}, guests:{}, guest:null, refs:[], areaRefs:{}, huntRef:null, posRefs:{}, huntPos:{}, trailRefs:{}, huntTrail:{}, obsRefs:{}, huntObs:{}, huntPlan:{}, huntRsvp:{}, msgRefs:{}, huntMsg:{}, msgKeys:{}, disc:{}};
   const on = (path, fn) => { const r = fb.db.ref('groups/' + gid + '/' + path); r.on('value', s => { if(cloud.groups[gid] === g) fn(s.val()); }, () => { if(cloud.groups[gid] === g) fn(null, true); }); g.refs.push(r); return r; };
   on('meta', v => { g.meta = v; if(!v){ forgetGroup(gid); toast('Du har inte längre åtkomst till ett jaktlag eller en jakt.'); return; } scheduleRender(); });
   on('types', v => { g.types = v || {}; applyRemote(gid); });
+  on('msgKeys', v => { g.msgKeys = v || {}; msgPublish(g); scheduleRender(); });
   if(kind === 'member'){
-    on('members', v => { g.members = v || {}; scheduleRender(); });
+    on('members', v => { g.members = v || {}; msgPublish(g); scheduleRender(); });
     on('areas', v => { g.areas = v || {}; applyRemote(gid); });
     on('pins', v => { g.pins = v || {}; applyRemote(gid); });
     on('hunts', v => { g.hunts = v || {}; scheduleRender(); syncHuntPos(); });
@@ -109,6 +110,7 @@ function subGroup(gid, kind){
     on('guests/' + myUid(), v => {
       g.guest = v;
       if(!v) return;
+      msgPublish(g);
       if(g.huntRef) return;
       on('huntPlan/' + v.hid, pv => { g.huntPlan = pv ? {[v.hid]: pv} : {}; scheduleRender(); });
       g.huntRef = on('hunts/' + v.hid, hv => {
@@ -210,7 +212,13 @@ function syncHuntPos(){
     for(const hid of Object.keys(g.posRefs)) if(!live.has(hid)){ g.posRefs[hid].off(); delete g.posRefs[hid]; delete g.huntPos[hid]; delete g.disc[hid]; }
     for(const hid of Object.keys(g.trailRefs)) if(!live.has(hid)){ g.trailRefs[hid].off(); delete g.trailRefs[hid]; delete g.huntTrail[hid]; }
     for(const hid of Object.keys(g.obsRefs)) if(!live.has(hid)){ g.obsRefs[hid].off(); delete g.obsRefs[hid]; delete g.huntObs[hid]; }
+    for(const hid of Object.keys(g.msgRefs)) if(!live.has(hid)){ g.msgRefs[hid].off(); delete g.msgRefs[hid]; delete g.huntMsg[hid]; }
     for(const hid of live){
+      if(!g.msgRefs[hid] && msgCryptoOk()){
+        const mr = fb.db.ref(`groups/${g.id}/huntMsg/${hid}`);
+        mr.on('value', s => { if(g.msgRefs[hid] === mr){ g.huntMsg[hid] = s.val() || {}; msgOnData(g, hid); scheduleRender(); } }, () => { if(g.msgRefs[hid] === mr){ delete g.msgRefs[hid]; delete g.huntMsg[hid]; } });
+        g.msgRefs[hid] = mr;
+      }
       if(!g.obsRefs[hid]){
         const or = fb.db.ref(`groups/${g.id}/huntObs/${hid}`);
         or.on('value', s => { if(g.obsRefs[hid] === or){ g.huntObs[hid] = s.val() || {}; renderObs(); scheduleRender(); } }, () => { if(g.obsRefs[hid] === or){ delete g.obsRefs[hid]; delete g.huntObs[hid]; renderObs(); } });
@@ -486,6 +494,7 @@ function huntCard(g, hid, hunt, lead){
     <div class="lbl">Jaktbart vilt</div>${huntChips(hunt)}
     ${live ? rsvpHtml(g, hid) : ''}
     ${live ? planCardHtml(g, hid, hunt, lead) : ''}
+    ${live && !upcoming ? msgHtml(g, hid) : ''}
     ${live && !upcoming ? obsList(g, hid) : ''}
     ${areas.length ? `<div class="lbl">Områden</div><div class="small">${areas.map(esc).join(', ')}</div>` : ''}
     ${lead && live ? `<div class="lbl">Tillfällig åtkomst för gäster</div><div class="codebox"><span>Jaktkod <b>${esc(hunt.code)}</b></span><button class="btn sm" type="button" data-j="hunt-link" data-g="${g.id}" data-h="${hid}">Kopiera länk</button></div>
@@ -654,7 +663,7 @@ $('#paneJakt').addEventListener('click', e => {
   else if(act === 'login-google') fb.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(err => toast(err && err.code === 'auth/unauthorized-domain' ? 'Webbadressen är inte godkänd i Firebase. Lägg till den under Authentication, Settings, Authorized domains.' : 'Inloggningen avbröts.', 6000));
   else if(act === 'login-guest'){ const n = $('#gName').value.trim(), c = $('#gCode').value.trim(); if(!n || !c){ toast('Fyll i namn och jaktkod.'); return; } lsSet(NAMEKEY, n); cloud.pending = c.toUpperCase(); fb.auth.signInAnonymously().catch(() => toast('Gästinloggning är inte påslagen i Firebase (Anonym).', 6000)); }
   else if(act === 'logout'){ stopSharing(); fb.auth.signOut(); }
-  else if(act === 'name') askText('Byt namn', 'Namn som syns för andra', myName(), 'Spara', v => { lsSet(NAMEKEY, v); for(const gr of Object.values(cloud.groups)){ if(gr.kind === 'member'){ fb.db.ref(`groups/${gr.id}/members/${myUid()}/name`).set(v).catch(() => {}); for(const [h, r] of Object.entries(gr.huntRsvp || {})) if(r && r[myUid()]) fb.db.ref(`groups/${gr.id}/huntRsvp/${h}/${myUid()}/name`).set(v).catch(() => {}); } else fb.db.ref(`groups/${gr.id}/guests/${myUid()}/name`).set(v).catch(() => {}); } renderJakt(); }, 40);
+  else if(act === 'name') askText('Byt namn', 'Namn som syns för andra', myName(), 'Spara', v => { lsSet(NAMEKEY, v); for(const gr of Object.values(cloud.groups)){ if(gr.kind === 'member'){ fb.db.ref(`groups/${gr.id}/members/${myUid()}/name`).set(v).catch(() => {}); for(const [h, r] of Object.entries(gr.huntRsvp || {})) if(r && r[myUid()]) fb.db.ref(`groups/${gr.id}/huntRsvp/${h}/${myUid()}/name`).set(v).catch(() => {}); } else fb.db.ref(`groups/${gr.id}/guests/${myUid()}/name`).set(v).catch(() => {}); msgPublish(gr); } renderJakt(); }, 40);
   else if(act === 'group-new') askText('Skapa jaktlag', 'Namn på jaktlaget', '', 'Skapa', v => createGroup(v), 60);
   else if(act === 'join') askText('Gå med med kod', 'Inbjudningskod eller jaktkod', '', 'Gå med', v => joinByCode(v), 14);
   else if(!g) return;
@@ -662,6 +671,8 @@ $('#paneJakt').addEventListener('click', e => {
   else if(act === 'hunt-new') openHuntForm(g);
   else if(act === 'hunt-edit') openHuntForm(g, hid);
   else if(act === 'plan') openPlan(g, hid);
+  else if(act === 'msg-new') openMsgForm(g, hid);
+  else if(act === 'msg-reply') openMsgForm(g, hid, u);
   else if(act === 'rsvp'){ delete cloud.autoOff[g.id + '/' + hid]; fb.db.ref(`groups/${g.id}/huntRsvp/${hid}/${myUid()}`).set({name:myName(), t:Date.now()}).then(() => toast(huntLive(g.hunts[hid]) ? 'Du deltar. Din position delas med jaktlaget.' : 'Du deltar. Din position delas automatiskt när jakten startar.', 4500)).catch(fail()); }
   else if(act === 'rsvp-no') fb.db.ref(`groups/${g.id}/huntRsvp/${hid}/${myUid()}`).remove().catch(fail());
   else if(act === 'plan-go') gotoPin(b.dataset.p);
@@ -673,8 +684,8 @@ $('#paneJakt').addEventListener('click', e => {
     for(const [oid, o] of Object.entries(obs)) if(o && typeof o.lat === 'number' && typeof o.lng === 'number' && typeof o.sp === 'string' && o.n >= 1){
       up[`groups/${g.id}/obsArchive/${oid}`] = {sp:o.sp.slice(0, 40), n:Math.min(999, Math.round(o.n)), lat:o.lat, lng:o.lng, t:Math.min(o.t || Date.now(), Date.now()), hid:String(hid).slice(0, 40)}; na++;
     }
-    up[`groups/${g.id}/hunts/${hid}`] = null; up[`groups/${g.id}/huntPos/${hid}`] = null; up[`groups/${g.id}/huntTrail/${hid}`] = null; up[`groups/${g.id}/huntObs/${hid}`] = null; up[`groups/${g.id}/huntPlan/${hid}`] = null; up[`groups/${g.id}/huntRsvp/${hid}`] = null; if(hunt && hunt.code) up[`huntCodes/${hunt.code}`] = null;
-    for(const [gu, v] of Object.entries(g.guests || {})) if(v && v.hid === hid) up[`groups/${g.id}/guests/${gu}`] = null;
+    up[`groups/${g.id}/hunts/${hid}`] = null; up[`groups/${g.id}/huntPos/${hid}`] = null; up[`groups/${g.id}/huntTrail/${hid}`] = null; up[`groups/${g.id}/huntObs/${hid}`] = null; up[`groups/${g.id}/huntPlan/${hid}`] = null; up[`groups/${g.id}/huntRsvp/${hid}`] = null; up[`groups/${g.id}/huntMsg/${hid}`] = null; if(hunt && hunt.code) up[`huntCodes/${hunt.code}`] = null;
+    for(const [gu, v] of Object.entries(g.guests || {})) if(v && v.hid === hid){ up[`groups/${g.id}/guests/${gu}`] = null; up[`groups/${g.id}/msgKeys/${gu}`] = null; }
     fb.db.ref().update(up).then(() => toast('Jakten är avslutad. Gästernas åtkomst är borttagen.' + (na ? ` ${na === 1 ? 'En observation' : na + ' observationer'} sparades till värmekartan.` : ''), 5000)).catch(fail()); });
   else if(act === 'guest-del') fb.db.ref(`groups/${g.id}/guests/${u}`).remove().catch(fail());
   else if(act === 'member-del') confirmClick(b, 'Bekräfta', () => fb.db.ref(`groups/${g.id}/members/${u}`).remove().then(() => toast('Medlemmen är borttagen')).catch(fail()));
