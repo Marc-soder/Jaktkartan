@@ -26,6 +26,7 @@ with sync_playwright() as p:
         pg.on('pageerror', lambda e: errs.append(str(e)))
         pg.goto(APP); pg.wait_for_timeout(1200)
         pg.evaluate('__fk.map.setView([58.72, 14.61], 15, {animate:false})'); pg.wait_for_timeout(3000)
+        check(pg.is_visible('#compassBtn') == (name == 'mobil') and (name == 'desktop' or pg.inner_text('#compassTxt') in ('Kompass', 'Väntar …')), f'{name}: kompassen syns på telefon redan innan den fått en riktning, inte på dator')
 
         # ---- Vind ----
         check(pg.is_visible('#windChip') and len(meteo) >= 1 and pg.locator('path.wind-sector').count() == 1, f'{name}: vinden är påslagen från början')
@@ -77,6 +78,24 @@ with sync_playwright() as p:
         check(rot == 'rotate(45deg)', f'{name}: iPhone-kompass (45°) ger en pil mot nordost: {rot}')
         pg.evaluate('__fk.showMe(58.7201, 14.6001, 8)'); pg.wait_for_timeout(150)
         check(pg.evaluate("document.querySelector('.me-icon .me-cone').style.transform") == 'rotate(45deg)', f'{name}: pilen ligger kvar när positionen uppdateras')
+        # ---- Kompassen uppe till vänster ----
+        r0 = pg.evaluate('__fk.compassState().rot')
+        pg.evaluate("window.dispatchEvent(new DeviceOrientationEvent('deviceorientationabsolute', {alpha: 90, beta: 0, gamma: 0, absolute: true}))"); pg.wait_for_timeout(200)
+        cs = pg.evaluate('__fk.compassState()'); txt = pg.inner_text('#compassTxt'); r1 = cs['rot']
+        check(pg.is_visible('#compassBtn') and txt == 'V 270°' and round((-cs['rot']) % 360) == 90 and abs(r1 - r0) <= 180, f'{name}: kompassen visar att telefonen pekar mot väster: {txt}, rosen vriden {(-cs["rot"]) % 360:.0f}°')
+        pg.evaluate("(() => { const e = new Event('deviceorientation'); Object.defineProperty(e, 'webkitCompassHeading', {value: 10}); window.dispatchEvent(e); })()"); pg.wait_for_timeout(200)
+        cs = pg.evaluate('__fk.compassState()')
+        check(pg.inner_text('#compassTxt') == 'N 10°' and abs(cs['rot'] - r1 - 100) < 1e-6, f'{name}: från väster till norr vrids rosen kortaste vägen, 100° medurs (rot {r1} -> {cs["rot"]})')
+        db = pg.locator('#compassBtn').bounding_box(); cb = pg.locator('#btnLayers').bounding_box()
+        check(db['x'] + db['width'] < cb['x'] and db['y'] < 40, f'{name}: kompassen ligger uppe till vänster, fri från knapparna {db}')
+        os.makedirs(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'shots'), exist_ok=True)
+        pg.screenshot(path=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'shots', f'compass_{name}.png'))
+        pg.click('#btnLayers'); pg.wait_for_timeout(200)
+        check(pg.is_checked('#popCompass'), f'{name}: Kompass är påslagen i lagermenyn')
+        pg.uncheck('#popCompass'); pg.wait_for_timeout(100)
+        check(not pg.is_visible('#compassBtn'), f'{name}: kompassen går att stänga av')
+        pg.check('#popCompass'); pg.keyboard.press('Escape'); pg.wait_for_timeout(200)
+        check(pg.is_visible('#compassBtn'), f'{name}: och slå på igen')
 
         # ---- Kryss med avståndsringar (utan känd position) ----
         pg.evaluate('__fk.forgetMe()')

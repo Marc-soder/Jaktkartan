@@ -244,9 +244,11 @@ $('#mClose').addEventListener('click', endMeasure);
 map.whenReady(() => setTimeout(() => { pan.ready = true; if(windOn()) setWind(true); }, 400));
 
 /* ---------- Riktningen jag tittar åt ----------
-   En blå kon från positionspricken, efter telefonens kompass. Startas av ett tryck på positionsknappen
+   En blå kon från positionspricken och en kompass uppe till vänster, efter telefonens kompass. Startas av ett tryck på positionsknappen
    (på iPhone krävs ett tryck för att få tillåtelse att läsa kompassen). */
-const compass = {on:false, heading:null, raf:0};
+const compass = {on:false, heading:null, raf:0, rot:0, timer:null};
+const compassOn = () => state.settings.compass !== false;
+const isTouch = () => !!(window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
 const screenAngle = () => (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (typeof window.orientation === 'number' ? window.orientation : 0);
 function onOrient(e){
   let hd = null;
@@ -256,7 +258,22 @@ function onOrient(e){
   compass.heading = ((hd + screenAngle()) % 360 + 360) % 360;
   if(!compass.raf) compass.raf = requestAnimationFrame(() => { compass.raf = 0; renderHeading(); });
 }
+/* Kompassen uppe till vänster. Syns på telefon (och på dator om den ger en riktning). */
+function renderCompass(){
+  const btn = $('#compassBtn'); if(!btn) return;
+  btn.hidden = !compassOn() || !(isTouch() || compass.heading != null);
+  const h = compass.heading;
+  btn.classList.toggle('off', h == null);
+  if(h == null){ $('#compassTxt').textContent = compass.on ? 'Väntar …' : 'Kompass'; btn.setAttribute('aria-label', compass.on ? 'Kompass: väntar på telefonens riktning' : 'Kompass: tryck för att starta'); return; }
+  // Vrid kortaste vägen så att rosen inte snurrar ett helt varv när riktningen passerar norr
+  const last = ((compass.rot % 360) + 360) % 360; let d = h - last; if(d > 180) d -= 360; if(d < -180) d += 360;
+  compass.rot += d;
+  $('#compassDial').style.transform = `rotate(${-compass.rot}deg)`;
+  const t = `${dirName(h)} ${Math.round(h) % 360}°`;
+  $('#compassTxt').textContent = t; btn.setAttribute('aria-label', 'Telefonen pekar mot ' + t);
+}
 function renderHeading(){
+  renderCompass();
   const el = typeof meMarker !== 'undefined' && meMarker && meMarker.getElement(), cone = el && el.querySelector('.me-cone');
   if(!cone) return;
   // SVG-element har ingen hidden-egenskap, så attributet sätts direkt
@@ -266,7 +283,9 @@ function renderHeading(){
 function startCompass(){
   if(compass.on) return;
   const go = () => {
-    compass.on = true;
+    compass.on = true; renderCompass();
+    clearTimeout(compass.timer);
+    compass.timer = setTimeout(() => { if(compass.heading == null && compassOn() && isTouch()) toast('Telefonen ger ingen kompassriktning. Kontrollera att sidan får använda rörelse och orientering i webbläsarens inställningar.', 6000); }, 4000);
     window.addEventListener('deviceorientationabsolute', onOrient);
     window.addEventListener('deviceorientation', e => { if(typeof e.webkitCompassHeading === 'number' || e.absolute) onOrient(e); });
   };
@@ -276,6 +295,12 @@ function startCompass(){
   } catch(e){}
 }
 $('#btnLocate').addEventListener('click', startCompass);
+$('#compassBtn').addEventListener('click', () => { if(!compass.on) startCompass(); else if(compass.heading != null) toast(`Telefonen pekar mot ${dirName(compass.heading)}, ${Math.round(compass.heading) % 360}°.`, 2500); });
+$('#popCompass').addEventListener('change', e => { state.settings.compass = e.target.checked; save(); renderCompass(); if(e.target.checked) startCompass(); });
+map.whenReady(renderCompass);
+// Försök starta direkt. Där tillåtelse ges utan tryck (t.ex. Android) startar kompassen av sig själv.
+// iPhone nekar utan ett tryck: då väntar kompassen på ett tryck (på kompassen eller positionsknappen).
+if(compassOn()) startCompass();
 $('#popTrailRec').addEventListener('change', startCompass);
 $('#paneJakt').addEventListener('change', e => { if(e.target.id === 'shareToggle') startCompass(); });
 $('#btnObs').addEventListener('click', () => { if(!blocked() && !measure) startPlacing({mode:'obs'}); });

@@ -34,6 +34,7 @@ Efter merge klistrar du in den nya filen i Firebase-konsolen under Realtime Data
 | `src/plan.js` | Jaktplan: vem som står på vilket pass, förbjudna skjutriktningar, såtar och vägar för hundförare och drevkarlar. |
 | `src/rules.js` | Säkerhetsreglerna för Firebase. |
 | `src/build.py` | Bygger `index.html` och `database.rules.json`. |
+| `TODO.md` | Saker som väntar, med beskrivning av hur de kan byggas. |
 | `tests/` | Webbläsartester med Playwright, och testfiler. |
 
 ## Bygga och testa lokalt

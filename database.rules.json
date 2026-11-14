@@ -29,7 +29,7 @@
     "huntCodes": {
       "$code": {
         ".read": "auth != null",
-        ".write": "auth != null && ((!data.exists() && (root.child('groups/'+newData.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin' || root.child('groups/'+newData.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'leader')) || (data.exists() && !newData.exists() && (root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin' || root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'leader')))",
+        ".write": "auth != null && ((!data.exists() && (root.child('groups/'+newData.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin' || root.child('groups/'+newData.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'leader')) || (data.exists() && !newData.exists() && (root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin' || root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'leader')) || (data.exists() && newData.exists() && (root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin' || root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'leader') && newData.child('gid').val() === data.child('gid').val() && newData.child('hid').val() === data.child('hid').val()))",
         ".validate": "$code.length >= 6 && newData.hasChildren(['gid','hid','expires']) && newData.child('expires').isNumber()"
       }
     },

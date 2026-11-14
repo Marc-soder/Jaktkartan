@@ -261,6 +261,24 @@ const gids = () => Object.keys(data.groups || {});
   const rw = await C.evaluate(([g, h]) => firebase.database().ref('groups/' + g + '/huntRsvp/' + h + '/bob').set({name:'Bob', t:Date.now()}).then(() => 'ok', () => 'denied'), [gid, hid]);
   const rw2 = await B.evaluate(([g, h]) => firebase.database().ref('groups/' + g + '/huntRsvp/' + h + '/alice').set({name:'Fejk', t:Date.now()}).then(() => 'ok', () => 'denied'), [gid, hid]);
   check(rw === 'denied' && rw2 === 'denied', 'man kan bara svara för sig själv');
+  // ---- Ändra en pågående jakt utan att bryta den ----
+  await B.click('#tab-jakt'); await W(B, 200);
+  check(await B.locator(`[data-j="hunt-edit"][data-h="${hid}"]`).count() === 1 && await C.locator('[data-j="hunt-edit"]').count() === 0, 'jaktledaren kan ändra jakten, gästen kan inte');
+  const hunt0 = JSON.parse(JSON.stringify(data.groups[gid].hunts[hid]));
+  await B.click(`[data-j="hunt-edit"][data-h="${hid}"]`); await W(B, 300);
+  check(await B.isDisabled('#hfDay') && await B.isDisabled('#hfStart') && (await B.inputValue('#hfName')) === hunt0.name && await B.isChecked('#hfVilt [data-vilt="radjur"]'), 'formuläret är ifyllt, och datum och start ligger fast medan jakten pågår');
+  const newEnd = new Date(hunt0.expires - 60000), hhmm = String(newEnd.getHours()).padStart(2, '0') + ':' + String(newEnd.getMinutes()).padStart(2, '0');
+  await B.fill('#hfName', 'Älgjakt, eftermiddag'); await B.fill('#hfEnd', hhmm);
+  const hasAlg = await B.locator('#hfVilt [data-vilt="alg"]').count();
+  if(hasAlg) await B.check('#hfVilt [data-vilt="alg"]');
+  await B.click('#hfOk'); await W(B, 700);
+  const hunt1 = data.groups[gid].hunts[hid], newExp = hunt1.expires;
+  check(hunt1.name === 'Älgjakt, eftermiddag' && hunt1.code === hunt0.code && hunt1.starts === hunt0.starts && hunt1.created === hunt0.created && newExp === new Date(newEnd.getFullYear(), newEnd.getMonth(), newEnd.getDate(), newEnd.getHours(), newEnd.getMinutes(), 59).getTime(), 'jakten har nytt namn och ny sluttid, men samma kod och start');
+  check(!hasAlg || (hunt1.species.alg && hunt1.species.radjur), 'nytt vilt läggs till, det gamla finns kvar');
+  check(data.huntCodes[hunt0.code].expires === newExp && data.groups[gid].guests['anon-carl'].expires === newExp, 'jaktkoden och gästens åtkomst följer den nya sluttiden');
+  check(hp()['anon-carl'] && ((data.groups[gid].huntPlan || {})[hid] || {}).stands && rs().alice, 'positioner, plan och svar finns kvar efter ändringen');
+  await W(C, 500);
+  check((await C.innerText('#paneJakt')).includes('Älgjakt, eftermiddag') && await C.isChecked('#shareToggle'), 'gästen ser det nya namnet och delar fortfarande sin position');
   // ---- Positioner ----
   await A.click('#tab-jakt'); await A.locator('#shareToggle').check({force:true}); await W(A, 900);
   check(hp().alice && Math.abs(hp().alice.lat - 58.72) < 1e-6 && !data.groups[gid].positions, 'Alice delar sin position i den pågående jakten');
@@ -422,6 +440,7 @@ const gids = () => Object.keys(data.groups || {});
   check(D('e').write('/groups/g/huntRsvp/h2/e', {name:'E', t:t0}).allowed && D('gu').read('/groups/g/huntRsvp').allowed === false && D('v').read('/groups/g/huntRsvp').allowed, 'regel: medlemmar svarar Jag deltar, laget ser svaren, gäster ser dem inte');
   check(!D('e').write('/groups/g/huntRsvp/h2/v', {name:'V', t:t0}).allowed && !D('x').write('/groups/g/huntRsvp/h2/x', {name:'X', t:t0}).allowed && !D('e').write('/groups/g/huntRsvp/nojakt/e', {name:'E', t:t0}).allowed && !D('e').write('/groups/g/huntRsvp/h2/e', {name:'E', t:t0, extra:1}).allowed, 'regel: man svarar bara för sig själv, för en jakt som finns, utan extra fält');
   check(D('a2').write('/groups/g/huntRsvp/h2', null).allowed && !D('e').write('/groups/g/huntRsvp/h2', null).allowed, 'regel: bara jaktledare och admin raderar alla svar för en jakt');
+  check(D('a2').write('/huntCodes/HUNTCODE', {gid:'g', hid:'h', expires:t0 + 5000}).allowed && !D('a2').write('/huntCodes/HUNTCODE', {gid:'g', hid:'h2', expires:t0 + 5000}).allowed && !D('a2').write('/huntCodes/HUNTCODE', {gid:'n2', hid:'h', expires:t0 + 5000}).allowed && !D('e').write('/huntCodes/HUNTCODE', {gid:'g', hid:'h', expires:t0 + 5000}).allowed, 'regel: jaktledaren kan ändra jaktkodens sluttid, men inte flytta den till en annan jakt, och en vanlig medlem kan inte ändra den');
   check(!D('x').write('/groups/n2/meta', {name:'N', owner:'x'}).allowed && !D('e').write('/groups/n2/meta', {name:'N', owner:'e'}).allowed && D('o').write('/groups/n2/meta', {name:'N', owner:'o'}).allowed && D('c1').write('/groups/n2/meta', {name:'N', owner:'c1'}).allowed, 'regel: bara ägaren och godkända kan skapa jaktlag');
   check(!D('x').write('/owner', 'x').allowed && !D('o').write('/owner', 'x').allowed && !D('x').write('/creators/x', true).allowed && D('o').write('/creators/x', true).allowed, 'regel: ägarskapet kan inte tas över, bara ägaren godkänner fler');
   { const e0 = targaryen.database(rules, {}, t0); check(e0.as(tok('first')).write('/owner', 'first', undefined, t0).allowed && !e0.as(tok('anon-z')).write('/owner', 'anon-z', undefined, t0).allowed && !e0.as(tok('first')).write('/owner', 'other', undefined, t0).allowed, 'regel: första Google-inloggade blir ägare, inte en gäst och inte åt någon annan'); }

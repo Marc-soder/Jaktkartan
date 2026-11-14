@@ -31,7 +31,8 @@ const rules = { rules: {
   } },
   huntCodes: { '$code': {
     '.read': signed,
-    '.write': `${signed} && ((!data.exists() && ${leadOf("newData.child('gid').val()")}) || (data.exists() && !newData.exists() && ${leadOf("data.child('gid').val()")}))`,
+    // Jaktledaren skapar och tar bort koden, och kan ändra sluttiden när jakten ändras (men inte flytta koden till en annan jakt).
+    '.write': `${signed} && ((!data.exists() && ${leadOf("newData.child('gid').val()")}) || (data.exists() && !newData.exists() && ${leadOf("data.child('gid').val()")}) || (data.exists() && newData.exists() && ${leadOf("data.child('gid').val()")} && newData.child('gid').val() === data.child('gid').val() && newData.child('hid').val() === data.child('hid').val()))`,
     '.validate': `$code.length >= 6 && newData.hasChildren(['gid','hid','expires']) && newData.child('expires').isNumber()`
   } },
   groups: { '$gid': {
