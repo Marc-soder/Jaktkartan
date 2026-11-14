@@ -2975,7 +2975,7 @@ function openHuntForm(g){
     <label class="field"><span>Län</span><select class="input" id="hfLan"><option value="">Välj län</option>${LAN.map(l => `<option${l === state.settings.lan ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
     <div class="field"><span>Områden som gästerna får se</span>${areas.length ? areas.map(a => `<label class="checkline"><input type="checkbox" data-area="${a.id}" checked><span>${esc(a.name)}</span></label>`).join('') : '<span class="small muted">Laget har inga delade områden ännu. Gäster ser då bara varandras positioner.</span>'}</div>
     <div class="field"><span>Jaktbart vilt</span><div id="hfVilt"></div></div>
-    <div class="actions"><button class="btn primary grow" type="submit">Skapa jakt</button><button class="btn ghost" type="button" id="hfCancel">Avbryt</button></div></form>`, m => {
+    <div class="actions"><button class="btn primary grow" type="submit" id="hfPlan" data-plan="1">Skapa och planera</button><button class="btn" type="submit" id="hfOk">Skapa jakt</button><button class="btn ghost" type="button" id="hfCancel">Avbryt</button></div></form>`, m => {
     const draw = () => {
       const lan = m.querySelector('#hfLan').value, md = (m.querySelector('#hfDay').value || todayISO()).slice(5);
       if(!lan){ m.querySelector('#hfVilt').innerHTML = '<span class="small muted">Välj län för att se vad som är lovligt den dagen.</span>'; return; }
@@ -2993,6 +2993,7 @@ function openHuntForm(g){
     m.querySelector('#hfCancel').addEventListener('click', closeModal);
     m.querySelector('#hfForm').addEventListener('submit', e => {
       e.preventDefault();
+      const plan = !!(e.submitter && e.submitter.dataset.plan);   // Skapa och planera: öppna planeringen direkt
       const name = m.querySelector('#hfName').value.trim() || 'Jakt', day = m.querySelector('#hfDay').value || todayISO(), end = m.querySelector('#hfEnd').value || '23:59', lan = m.querySelector('#hfLan').value;
       const [y, mo, d] = day.split('-').map(Number), [hh, mm] = end.split(':').map(Number), [sh, sm] = (m.querySelector('#hfStart').value || '00:00').split(':').map(Number);
       const expires = new Date(y, mo - 1, d, hh, mm, 59).getTime(), starts = new Date(y, mo - 1, d, sh, sm, 0).getTime();
@@ -3005,7 +3006,10 @@ function openHuntForm(g){
       up[`groups/${g.id}/hunts/${hid}`] = hunt; up[`huntCodes/${hunt.code}`] = {gid:g.id, hid, expires};
       if(lan){ state.settings.lan = lan; save(); }
       closeModal();
-      fb.db.ref().update(up).then(() => toast('Jakten är skapad. Dela jaktkoden med gästerna.')).catch(fail());
+      fb.db.ref().update(up).then(() => {
+        toast('Jakten är skapad. Dela jaktkoden med gästerna.');
+        if(plan){ if(!g.hunts) g.hunts = {}; if(!g.hunts[hid]) g.hunts[hid] = hunt; openPlan(g, hid); }
+      }).catch(fail());
     });
   });
 }
