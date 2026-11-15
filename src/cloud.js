@@ -93,11 +93,12 @@ function dropGroup(gid){
 }
 function forgetGroup(gid){ if(fb && cloud.user) fb.db.ref('userGroups/' + myUid() + '/' + gid).remove().catch(() => {}); dropGroup(gid); }
 function subGroup(gid, kind){
-  const g = cloud.groups[gid] = {id:gid, kind, meta:null, members:{}, areas:{}, pins:{}, types:{}, hunts:{}, guests:{}, guest:null, refs:[], areaRefs:{}, huntRef:null, posRefs:{}, huntPos:{}, trailRefs:{}, huntTrail:{}, obsRefs:{}, huntObs:{}, huntPlan:{}, huntRsvp:{}, msgRefs:{}, huntMsg:{}, msgKeys:{}, checkRefs:{}, huntCheck:{}, disc:{}};
+  const g = cloud.groups[gid] = {id:gid, kind, meta:null, members:{}, areas:{}, pins:{}, types:{}, hunts:{}, guests:{}, guest:null, refs:[], areaRefs:{}, huntRef:null, posRefs:{}, huntPos:{}, trailRefs:{}, huntTrail:{}, obsRefs:{}, huntObs:{}, huntPlan:{}, huntRsvp:{}, msgRefs:{}, huntMsg:{}, msgKeys:{}, checkRefs:{}, huntCheck:{}, sos:{}, disc:{}};
   const on = (path, fn) => { const r = fb.db.ref('groups/' + gid + '/' + path); r.on('value', s => { if(cloud.groups[gid] === g) fn(s.val()); }, () => { if(cloud.groups[gid] === g) fn(null, true); }); g.refs.push(r); return r; };
   on('meta', v => { g.meta = v; if(!v){ forgetGroup(gid); toast('Du har inte längre åtkomst till ett jaktlag eller en jakt.'); return; } scheduleRender(); });
   on('types', v => { g.types = v || {}; applyRemote(gid); });
   on('msgKeys', v => { g.msgKeys = v || {}; msgPublish(g); scheduleRender(); });
+  if(kind === 'member') on('sos', v => { const prev = g.sosLoaded ? g.sos : undefined; g.sos = v || {}; g.sosLoaded = true; sosOnData(g, prev); });
   if(kind === 'member'){
     on('members', v => { g.members = v || {}; msgPublish(g); scheduleRender(); });
     on('areas', v => { g.areas = v || {}; applyRemote(gid); });
@@ -112,6 +113,7 @@ function subGroup(gid, kind){
       if(!v) return;
       msgPublish(g);
       if(g.huntRef) return;
+      on('sos', sv => { const prev = g.sosLoaded ? g.sos : undefined; g.sos = sv || {}; g.sosLoaded = true; sosOnData(g, prev); });
       on('huntPlan/' + v.hid, pv => { g.huntPlan = pv ? {[v.hid]: pv} : {}; scheduleRender(); });
       // Nekas en läsning (t.ex. om den hinner före gästposten i databasen) försöker vi igen efter en stund,
       // annars skulle gästen sakna jaktens områden och nålar tills sidan laddas om.
@@ -300,13 +302,13 @@ function renderObs(){
   const b = $('#btnObs'); if(b) b.hidden = !anyLiveHunt();
   const seen = new Set();
   for(const o of obsAll()){
-    const key = o.g.id + '/' + o.hid + '/' + o.oid, sig = [o.lat, o.lng, o.sp, o.n, o.note, o.name, o.t, o.by].join('\u0001'), cur = obsMarkers.get(key);
+    const key = o.g.id + '/' + o.hid + '/' + o.oid, sig = [o.lat, o.lng, o.sp, o.n, o.note, o.name, o.t, o.by, o.kind, o.sex, o.age, o.shooter].join('\u0001'), cur = obsMarkers.get(key);
     seen.add(key);
     if(cur && cur.sig === sig) continue;
     if(cur) obsLayer.removeLayer(cur.m);
-    const m = L.marker([o.lat, o.lng], {icon:L.divIcon({className:'obs-icon', html:`<span class="obs-dot">${esc(obsKey(o.sp))}</span>${o.n > 1 ? `<span class="obs-n">${o.n}</span>` : ''}`, iconSize:[30, 30], iconAnchor:[15, 15], popupAnchor:[0, -14]}), zIndexOffset:400});
+    const m = L.marker([o.lat, o.lng], {icon:L.divIcon({className:'obs-icon', html:`<span class="obs-dot${o.kind === 'kill' ? ' kill' : ''}">${esc(obsKey(o.sp))}</span>${o.n > 1 ? `<span class="obs-n">${o.n}</span>` : ''}`, iconSize:[30, 30], iconAnchor:[15, 15], popupAnchor:[0, -14]}), zIndexOffset:400});
     m.bindPopup(() => {
-      const el = h(`<div class="pp"><h4>${esc(o.sp)}${o.n > 1 ? ' × ' + o.n : ''}</h4><div class="pnote">Sedd ${esc(fmtClock(o.t))} (${ago(o.t)})${o.name ? ' av ' + esc(o.name) : ''}${o.note ? '<br>' + esc(o.note) : ''}${myPos ? `<br>${fmtDist(distM(myPos, o))} bort` : ''}</div>${canDelObs(o) ? '<div class="pbtns"><button class="btn sm danger" type="button" data-obs-del>Ta bort</button></div>' : ''}</div>`);
+      const el = h(`<div class="pp"><h4>${o.kind === 'kill' ? 'Fällt: ' : ''}${esc(o.sp)}${o.n > 1 ? ' × ' + o.n : ''}</h4>${o.kind === 'kill' && killText(o) ? `<div class="pnote">${esc(killText(o))}</div>` : ''}<div class="pnote">${o.kind === 'kill' ? 'Fällt' : 'Sedd'} ${esc(fmtClock(o.t))} (${ago(o.t)})${o.name ? ' av ' + esc(o.name) : ''}${o.note ? '<br>' + esc(o.note) : ''}${myPos ? `<br>${fmtDist(distM(myPos, o))} bort` : ''}</div>${canDelObs(o) ? '<div class="pbtns"><button class="btn sm danger" type="button" data-obs-del>Ta bort</button></div>' : ''}</div>`);
       const d = el.querySelector('[data-obs-del]');
       if(d) d.addEventListener('click', () => confirmClick(d, 'Bekräfta', () => { map.closePopup(); fb.db.ref(`groups/${o.g.id}/huntObs/${o.hid}/${o.oid}`).remove().then(() => toast('Observationen är borttagen.')).catch(fail()); }));
       return el;
@@ -317,22 +319,34 @@ function renderObs(){
   for(const [key, cur] of obsMarkers) if(!seen.has(key)){ obsLayer.removeLayer(cur.m); obsMarkers.delete(key); }
 }
 const fmtClock = t => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}.${String(d.getMinutes()).padStart(2, '0')}`; };
+const killText = o => [o.n > 1 ? o.n + ' st' : '', SEX[o.sex] && o.sex !== 'u' ? SEX[o.sex].toLowerCase() : '', AGE[o.age] && o.age !== 'u' ? (o.age === 'juv' ? 'ungdjur' : 'vuxen') : '', o.shooter ? 'skytt ' + o.shooter : ''].filter(Boolean).join(', ');
 function obsList(g, hid){
-  const list = Object.entries(g.huntObs[hid] || {}).filter(([, o]) => o).sort((a, b) => b[1].t - a[1].t);
-  return `<div class="lbl">Viltobservationer</div>` + (list.length ? list.map(([oid, o]) => `<button class="obs-row" type="button" data-j="obs-go" data-g="${esc(g.id)}" data-h="${esc(hid)}" data-o="${esc(oid)}"><span class="obs-dot sm">${esc(obsKey(o.sp))}</span><span><b>${esc(o.sp)}</b>${o.n > 1 ? ' × ' + o.n : ''} <span class="muted">${esc(fmtClock(o.t))}${o.name ? ' · ' + esc(o.name) : ''}</span>${o.note ? `<br><span class="small">${esc(o.note)}</span>` : ''}</span></button>`).join('')
-    : '<div class="small muted">Inga ännu. Tryck på kikaren på kartan för att lägga in en.</div>');
+  const all = Object.entries(g.huntObs[hid] || {}).filter(([, o]) => o).sort((a, b) => b[1].t - a[1].t);
+  const row = ([oid, o]) => { const kill = o.kind === 'kill';
+    return `<button class="obs-row" type="button" data-j="obs-go" data-g="${esc(g.id)}" data-h="${esc(hid)}" data-o="${esc(oid)}"><span class="obs-dot sm${kill ? ' kill' : ''}">${esc(obsKey(o.sp))}</span><span><b>${esc(o.sp)}</b>${!kill && o.n > 1 ? ' × ' + o.n : ''} <span class="muted">${esc(fmtClock(o.t))}${o.name ? ' · ' + esc(o.name) : ''}</span>${kill && killText(o) ? `<br><span class="small">${esc(killText(o))}</span>` : ''}${o.note ? `<br><span class="small muted">${esc(o.note)}</span>` : ''}</span></button>`; };
+  const kills = all.filter(([, o]) => o.kind === 'kill'), seen = all.filter(([, o]) => o.kind !== 'kill');
+  const sum = {}; for(const [, o] of kills) sum[o.sp] = (sum[o.sp] || 0) + (o.n || 1);
+  return (kills.length ? `<div class="lbl">Fällt vilt (${kills.reduce((n, [, o]) => n + (o.n || 1), 0)})</div><div class="small">${Object.entries(sum).map(([k, n]) => esc(k) + ' ' + n).join(' · ')}</div>${kills.map(row).join('')}` : '')
+    + `<div class="lbl">Viltobservationer</div>` + (seen.length ? seen.map(row).join('')
+    : '<div class="small muted">Inga ännu. Tryck på kikaren på kartan för att lägga in en observation eller fällt vilt.</div>');
 }
-function openObsForm(ll){
+/* Viltobservation (kind 'obs') eller fällt vilt (kind 'kill', med kön, ålder och skytt). */
+const SEX = {u:'Okänt kön', m:'Hane', f:'Hona'}, AGE = {u:'Okänd ålder', ad:'Vuxen', juv:'Ungdjur (årsunge, kalv, kid)'};
+function openObsForm(ll, kind){
+  const kill = kind === 'kill';
   const hunts = [];
   for(const g of Object.values(cloud.groups)) for(const hid of liveHunts(g)) hunts.push({g, hid, hunt:g.hunts[hid]});
-  if(!hunts.length){ toast('Observationer kan bara läggas in under en pågående jakt.'); return; }
+  if(!hunts.length){ toast(kill ? 'Fällt vilt kan bara läggas in under en pågående jakt.' : 'Observationer kan bara läggas in under en pågående jakt.'); return; }
   const sel = hunts[0], sp = h0 => { const ids = Object.keys((h0.hunt || {}).species || {}).filter(k => h0.hunt.species[k]); return ids.map(viltById).filter(Boolean); };
   const opts = h0 => { const first = sp(h0), rest = VILT.filter(v => !first.includes(v)); return (first.length ? `<optgroup label="Jaktbart i jakten">${first.map(v => `<option>${esc(v.name)}</option>`).join('')}</optgroup>` : '') + `<optgroup label="Övrigt vilt">${rest.map(v => `<option>${esc(v.name)}</option>`).join('')}</optgroup><option value="__other">Annat …</option>`; };
-  openModal(`<h2>Viltobservation</h2><form id="obForm">
+  openModal(`<h2>${kill ? 'Fällt vilt' : 'Viltobservation'}</h2><form id="obForm">
     ${hunts.length > 1 ? `<label class="field"><span>Jakt</span><select class="input" id="obHunt">${hunts.map((x, i) => `<option value="${esc(i)}">${esc(x.hunt.name)} · ${esc(gname(x.g))}</option>`).join('')}</select></label>` : `<p class="note" style="margin-top:0">Sparas i jakten <b>${esc(sel.hunt.name)}</b> och syns för alla deltagare så länge jakten pågår.</p>`}
     <div class="row2"><label class="field"><span>Vilt</span><select class="input" id="obSp">${opts(sel)}</select></label>
     <label class="field"><span>Antal</span><input class="input" id="obN" type="number" inputmode="numeric" min="1" max="999" value="1"></label></div>
     <input class="input" id="obOther" maxlength="40" placeholder="Vilket vilt?" hidden>
+    ${kill ? `<div class="row2"><label class="field"><span>Kön</span><select class="input" id="obSex">${Object.entries(SEX).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
+    <label class="field"><span>Ålder</span><select class="input" id="obAge">${Object.entries(AGE).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label></div>
+    <label class="field"><span>Skytt</span><input class="input" id="obShooter" maxlength="60" value="${esc(myName())}"></label>` : ''}
     <label class="field"><span>Anteckning (valfritt)</span><input class="input" id="obNote" maxlength="200" placeholder="Till exempel: hind och kalv, gick mot norr"></label>
     <div class="actions"><button class="btn primary grow" type="submit">Spara</button><button class="btn ghost" type="button" id="obCancel">Avbryt</button></div></form>`, m => {
     const hs = m.querySelector('#obHunt'), spSel = m.querySelector('#obSp'), other = m.querySelector('#obOther');
@@ -344,10 +358,11 @@ function openObsForm(ll){
       const x = hunts[hs ? +hs.value : 0], name = spSel.value === '__other' ? other.value.trim() : spSel.value;
       if(!name){ toast('Skriv vilket vilt.'); return; }
       const n = Math.max(1, Math.min(999, parseInt(m.querySelector('#obN').value, 10) || 1)), note = m.querySelector('#obNote').value.trim();
-      const o = {sp:name.slice(0, 40), n, lat:+ll.lat.toFixed(6), lng:+ll.lng.toFixed(6), t:Date.now(), by:myUid(), name:myName()}; if(note) o.note = note.slice(0, 200);
+      const o = {sp:name.slice(0, 40), n, lat:+ll.lat.toFixed(6), lng:+ll.lng.toFixed(6), t:Date.now(), by:myUid(), name:myName(), kind:kill ? 'kill' : 'obs'}; if(note) o.note = note.slice(0, 200);
+      if(kill){ o.sex = m.querySelector('#obSex').value; o.age = m.querySelector('#obAge').value; const sh = m.querySelector('#obShooter').value.trim(); if(sh) o.shooter = sh.slice(0, 60); }
       closeModal();
       if(!navigator.onLine) toast(`Ingen täckning: ${o.sp} skickas när täckningen kommer tillbaka. Håll appen öppen.`, 6000);
-      fb.db.ref(`groups/${x.g.id}/huntObs/${x.hid}`).push(o).then(() => toast(`${o.sp} är sparad i jakten.`)).catch(fail('Observationen kunde inte sparas. Pågår jakten fortfarande?'));
+      fb.db.ref(`groups/${x.g.id}/huntObs/${x.hid}`).push(o).then(() => toast(kill ? `Fällt vilt: ${o.sp} är sparat i jakten.` : `${o.sp} är sparad i jakten.`)).catch(fail('Observationen kunde inte sparas. Pågår jakten fortfarande?'));
     });
   });
 }
@@ -605,6 +620,7 @@ function renderJakt(){
     html += `<div class="userrow"><span class="pos-dot">${esc(initials(myName()))}</span><span class="grow"><strong>${esc(myName())}</strong><br><span class="small muted">${u.isAnonymous ? 'Gäst' : esc(u.email || 'Inloggad')}</span></span><button class="btn sm" type="button" data-j="name">Byt namn</button><button class="btn sm ghost" type="button" data-j="logout">Logga ut</button></div>
       <label class="bigtoggle" for="shareToggle" style="margin-top:10px"><span><strong>Dela min position</strong><br><span class="small muted">Syns bara för deltagarna i pågående jakter</span></span><input class="sw-toggle" type="checkbox" id="shareToggle" ${cloud.sharing ? 'checked' : ''} ${anyLiveHunt() ? '' : 'disabled'}></label>
       <p class="note" id="posCount">${posCountText()}</p>
+      ${window.Notification && Notification.permission === 'default' ? '<div class="btnrow"><button class="btn sm" type="button" data-j="notif">Tillåt aviseringar om nödlarm</button></div><p class="note" style="margin-top:2px">Då kan ett nödlarm synas även när appen ligger i bakgrunden.</p>' : ''}
       ${cloud.sharing ? '<p class="note">Positionen skickas bara medan appen är öppen och skärmen är på.</p>' : ''}`;
     for(const g of gs){
       if(!g.meta) continue;
@@ -725,7 +741,7 @@ async function endHunt(g, hid, auto){
   let obs = {}; try { obs = (await fb.db.ref(`groups/${g.id}/huntObs/${hid}`).get()).val() || {}; } catch(e){}
   let na = 0;
   for(const [oid, o] of Object.entries(obs)) if(o && typeof o.lat === 'number' && typeof o.lng === 'number' && typeof o.sp === 'string' && o.n >= 1){
-    up[`groups/${g.id}/obsArchive/${oid}`] = {sp:o.sp.slice(0, 40), n:Math.min(999, Math.round(o.n)), lat:o.lat, lng:o.lng, t:Math.min(o.t || Date.now(), Date.now()), hid:String(hid).slice(0, 40)}; na++;
+    up[`groups/${g.id}/obsArchive/${oid}`] = {sp:o.sp.slice(0, 40), n:Math.min(999, Math.round(o.n)), lat:o.lat, lng:o.lng, t:Math.min(o.t || Date.now(), Date.now()), hid:String(hid).slice(0, 40), kind:o.kind === 'kill' ? 'kill' : 'obs'}; na++;
   }
   up[`groups/${g.id}/hunts/${hid}`] = null; up[`groups/${g.id}/huntPos/${hid}`] = null; up[`groups/${g.id}/huntTrail/${hid}`] = null; up[`groups/${g.id}/huntObs/${hid}`] = null; up[`groups/${g.id}/huntPlan/${hid}`] = null; up[`groups/${g.id}/huntRsvp/${hid}`] = null; up[`groups/${g.id}/huntMsg/${hid}`] = null; up[`groups/${g.id}/huntCheck/${hid}`] = null;
   for(const [gu, v] of Object.entries(g.guests || {})) if(v && v.hid === hid){ up[`groups/${g.id}/guests/${gu}`] = null; up[`groups/${g.id}/msgKeys/${gu}`] = null; }
@@ -746,6 +762,7 @@ $('#paneJakt').addEventListener('click', e => {
   else if(act === 'login-guest'){ const n = $('#gName').value.trim(), c = $('#gCode').value.trim(); if(!n || !c){ toast('Fyll i namn och jaktkod.'); return; } lsSet(NAMEKEY, n); cloud.pending = c.toUpperCase(); fb.auth.signInAnonymously().catch(() => toast('Gästinloggning är inte påslagen i Firebase (Anonym).', 6000)); }
   else if(act === 'logout'){ stopSharing(); fb.auth.signOut(); }
   else if(act === 'name') askText('Byt namn', 'Namn som syns för andra', myName(), 'Spara', v => { lsSet(NAMEKEY, v); for(const gr of Object.values(cloud.groups)){ if(gr.kind === 'member'){ fb.db.ref(`groups/${gr.id}/members/${myUid()}/name`).set(v).catch(() => {}); for(const [h, r] of Object.entries(gr.huntRsvp || {})) if(r && r[myUid()]) fb.db.ref(`groups/${gr.id}/huntRsvp/${h}/${myUid()}/name`).set(v).catch(() => {}); } else fb.db.ref(`groups/${gr.id}/guests/${myUid()}/name`).set(v).catch(() => {}); msgPublish(gr); } renderJakt(); }, 40);
+  else if(act === 'notif'){ try { Notification.requestPermission().then(p => { toast(p === 'granted' ? 'Aviseringar om nödlarm är tillåtna.' : 'Aviseringar är inte tillåtna. Det går att ändra i webbläsarens inställningar.', 5000); renderJakt(); }); } catch(e){} }
   else if(act === 'group-new') askText('Skapa jaktlag', 'Namn på jaktlaget', '', 'Skapa', v => createGroup(v), 60);
   else if(act === 'join') askText('Gå med med kod', 'Inbjudningskod eller jaktkod', '', 'Gå med', v => joinByCode(v), 14);
   else if(!g) return;

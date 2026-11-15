@@ -353,7 +353,17 @@ map.whenReady(renderCompass);
 if(compassOn()) startCompass();
 $('#popTrailRec').addEventListener('change', startCompass);
 $('#paneJakt').addEventListener('change', e => { if(e.target.id === 'shareToggle') startCompass(); });
-$('#btnObs').addEventListener('click', () => { if(!blocked() && !measure) startPlacing({mode:'obs'}); });
+/* Kikaren: välj viltobservation eller fällt vilt. Menyn visas till vänster om knappen. */
+function obsMenu(show){
+  const m = $('#obsMenu'), b = $('#btnObs'); if(!m) return;
+  if(show === undefined) show = m.hidden;
+  m.hidden = !show; b.setAttribute('aria-expanded', show ? 'true' : 'false');
+  if(show){ const r = b.getBoundingClientRect(); m.style.top = r.top + 'px'; m.style.right = (window.innerWidth - r.left + 8) + 'px'; }
+}
+$('#btnObs').addEventListener('click', e => { e.stopPropagation(); if(!blocked() && !measure) obsMenu(); });
+$('#obsMenu').addEventListener('click', e => { const k = e.target.closest('[data-obs-kind]'); if(!k) return; obsMenu(false); startPlacing({mode:k.dataset.obsKind}); });
+document.addEventListener('click', e => { if(!e.target.closest('#obsMenu') && !e.target.closest('#btnObs')) obsMenu(false); });
+document.addEventListener('keydown', e => { if(e.key === 'Escape') obsMenu(false); });
 
 /* ---------- Värmekarta över tidigare viltobservationer ----------
    Observationerna arkiveras utan namn när en jakt avslutas (groups/<lag>/obsArchive). Bara jaktledare och admin
