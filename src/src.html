@@ -162,6 +162,11 @@ a{color:var(--accent)}
 .netbar{position:fixed;z-index:1300;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top,0px));max-width:min(420px,calc(100vw - 200px));padding:6px 12px;border-radius:12px;background:#7c2d12;color:#fff;font:600 12px/1.35 var(--font-body);box-shadow:var(--shadow);text-align:center}
 .netbar[hidden]{display:none}
 @media (max-width:520px){.netbar{top:auto;bottom:calc(var(--sheet-h) + 70px);max-width:calc(100vw - 32px)}}
+.check-row{margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.check-ok{color:#15803d;font-weight:600}
+.check-out{color:var(--muted)}
+.plan-lbl.who.in span{background:#15803d;color:#fff}
+.plan-lbl.who.in span::before{content:'✓ '}
 .rn-preview{display:grid;gap:4px;max-height:40dvh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--surface-2)}
 .rn-row{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;font-size:14px}
 .rn-row .rn-old{color:var(--muted);overflow-wrap:anywhere}
@@ -1465,6 +1470,7 @@ function showMe(lat, lng, acc){
   if(windOn() && wind.data) windRender();
   if(typeof panUpdate === 'function') panUpdate();
   if(typeof meRingsRender === 'function') meRingsRender();
+  if(typeof checkPass === 'function') checkPass();
 }
 /* Glöm positionen (används av testerna). */
 function forgetMe(){ myPos = null; if(meMarker){ map.removeLayer(meMarker); map.removeLayer(meCircle); meMarker = meCircle = null; } panLine(null); meRingsRender(); }
@@ -1728,7 +1734,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

@@ -206,6 +206,23 @@ const rules = { rules: {
         }
       }
     },
+    // Incheckning på passet: huntCheck/<jakt>/<uid> = {pid, in, t, name}. Som positionerna: bara jaktens deltagare,
+    // bara medan jakten pågår. Man checkar bara in sig själv, och bara på det pass man är tilldelad i jaktplanen.
+    huntCheck: {
+      '$hid': {
+        '.read': `(${isMember} || (${isGuest} && ${guest}.child('hid').val() === $hid)) && ${huntLive}`,
+        '.write': `${canLead} && !newData.exists()`,
+        '$uid': {
+          '.write': `${signed} && $uid === auth.uid && ${huntLive} && (${me}.exists() || (${isGuest} && ${guest}.child('hid').val() === $hid))`,
+          '.validate': `newData.hasChildren(['pid','in','t','name'])`,
+          pid: {'.validate': `newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]+$/) && newData.val().length <= 64 && root.child(${G}+'/huntPlan/'+$hid+'/stands/'+newData.val()+'/uid').val() === auth.uid`},
+          in: {'.validate': 'newData.isBoolean()'},
+          t: {'.validate': 'newData.isNumber() && newData.val() <= now + 60000'},
+          name: {'.validate': 'newData.isString() && newData.val().length <= 60'},
+          '$other': {'.validate': false}
+        }
+      }
+    },
     // Spår (tidigare positioner) per jakt, med samma åtkomst som positionerna.
     huntTrail: {
       '$hid': {

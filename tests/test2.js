@@ -268,6 +268,37 @@ const gids = () => Object.keys(data.groups || {});
   await C.evaluate(([la, ln]) => __fk.showMe(la - 0.01, ln, 5), [pa.lat, pa.lng]); await head(5);
   check(await C.locator('#cmpNo path').count() === 0 && !(await C.evaluate(() => document.getElementById('compassBtn').classList.contains('nofire'))), 'mer än 300 m från passet: inga röda fält och ingen varning');
   await C.evaluate(() => __fk.showMe(58.72, 14.61, 12));
+  // ---- Incheckning på passet ----
+  const chk = () => (((data.groups[gid].huntCheck || {})[hid] || {})['anon-carl']) || null;
+  await B.evaluate(() => { window.__toasts = []; const t = document.getElementById('toast'); new MutationObserver(() => window.__toasts.push(t.textContent)).observe(t, {childList:true, characterData:true, subtree:true}); });
+  const at = (dLat) => C.evaluate(([la, ln]) => __fk.showMe(la, ln, 5), [pa.lat + dLat, pa.lng]).then(() => W(C, 900));
+  await at(0.01);   // drygt en kilometer bort
+  check(!chk() || chk().in === false, 'långt från passet är Carl inte incheckad');
+  check(await C.locator(`[data-j="check-in"][data-h="${hid}"]`).count() === 1 && (await C.innerText('#paneJakt')).includes('Du checkas in automatiskt inom 40 m'), 'Carl har knappen Jag är på passet');
+  await at(0.0002); await W(B, 500);   // cirka 22 m
+  check(chk() && chk().in === true && chk().pid === pA && chk().name === 'Carl Gäst', 'inom 40 m checkas Carl in automatiskt på sitt pass');
+  const bt = await B.evaluate(() => window.__toasts);
+  check(bt.some(t => t.includes('Carl Gäst är på plats på Pass 1 – bäcken')) && bt.some(t => t.includes('Alla 1 pass är bemannade')), `jaktledaren får besked: ${JSON.stringify(bt)}`);
+  const bj = await B.innerText('#paneJakt');
+  check(bj.includes('✓ på plats') && bj.includes('1 av 1 på plats') && await B.locator('.plan-lbl.who.in').count() === 1, 'jaktkortet och kartan visar att passet är bemannat');
+  await B.evaluate(() => { const c = document.querySelector('.plan-list'); if(c) c.scrollIntoView(); __fk.map.setView([58.7225, 14.606], 16, {animate:false}); }); await W(B, 400); await B.screenshot({path:shot('b_checkin.png')});
+  await C.evaluate(() => { const c = document.querySelector('.check-row'); if(c) c.scrollIntoView(); }); await C.screenshot({path:shot('c_checkin.png'), clip:{x:0, y:0, width:380, height:900}});
+  check((await C.innerText('#paneJakt')).includes('✓ Incheckad') && await C.locator(`[data-j="check-out"][data-h="${hid}"]`).count() === 1, 'Carl ser att han är incheckad, och kan säga att han lämnar passet');
+  await at(0.0006);   // cirka 67 m: inom glappet
+  check(chk().in === true, 'mellan 40 och 100 m är man fortfarande incheckad (GPS:en får hoppa)');
+  await at(0.0015); await W(B, 400);   // cirka 167 m
+  check(chk().in === false && (await B.innerText('#paneJakt')).includes('lämnade'), 'längre bort än 100 m checkas Carl ut, och jaktledaren ser när han lämnade');
+  await C.click(`[data-j="check-in"][data-h="${hid}"]`); await W(C, 700);
+  check(chk().in === true, 'Carl kan checka in för hand');
+  await C.click(`[data-j="check-out"][data-h="${hid}"]`); await W(C, 700);
+  await at(0.0002);
+  check(chk().in === false, 'har Carl själv sagt att han lämnar passet checkas han inte in automatiskt igen direkt');
+  await at(0.01); await at(0.0002);
+  check(chk().in === true, 'efter att ha varit borta från passet gäller den automatiska incheckningen igen');
+  const cw3 = await C.evaluate(([g, h, p]) => firebase.database().ref(`groups/${g}/huntCheck/${h}/anon-carl`).set({pid:p, in:true, t:Date.now(), name:'Carl'}).then(() => 'ok', () => 'denied'), [gid, hid, pB]);
+  const aw3 = await A.evaluate(([g, h, p]) => firebase.database().ref(`groups/${g}/huntCheck/${h}/anon-carl`).set({pid:p, in:false, t:Date.now(), name:'Carl'}).then(() => 'ok', () => 'denied'), [gid, hid, pA]);
+  check(cw3 === 'denied' && aw3 === 'denied', `man kan bara checka in på sitt eget pass, och bara sig själv (${cw3}, ${aw3})`);
+  await C.evaluate(() => __fk.showMe(58.72, 14.61, 12)); await W(C, 600);
   // ---- Jag deltar: positionen delas automatiskt ----
   const hp = () => ((data.groups[gid].huntPos || {})[hid] || {});
   await W(C, 900);
@@ -420,7 +451,7 @@ const gids = () => Object.keys(data.groups || {});
   // ---- Avsluta jakten ----
   await B.click('[data-j="hunt-end"]'); await B.click('[data-j="hunt-end"]'); await W(B, 900);
   check(!data.groups[gid].hunts && !data.huntCodes && !(data.groups[gid].guests || {})['anon-carl'], 'jakten, koden och gästposten är borta');
-  check(!data.groups[gid].huntPos && !data.groups[gid].huntTrail && !data.groups[gid].huntObs && !data.groups[gid].huntPlan && !data.groups[gid].huntRsvp && !data.groups[gid].huntMsg && !(data.groups[gid].msgKeys || {})['anon-carl'], 'jaktens positioner, spår, observationer, plan, svar, meddelanden och gästens nyckel raderades när jakten avslutades');
+  check(!data.groups[gid].huntPos && !data.groups[gid].huntTrail && !data.groups[gid].huntObs && !data.groups[gid].huntPlan && !data.groups[gid].huntRsvp && !data.groups[gid].huntMsg && !data.groups[gid].huntCheck && !(data.groups[gid].msgKeys || {})['anon-carl'], 'jaktens positioner, spår, observationer, plan, svar, meddelanden och gästens nyckel raderades när jakten avslutades');
   const arch = Object.values(data.groups[gid].obsArchive || {});
   check(arch.length === 2 && arch.every(o => !o.by && !o.name && !o.note && o.hid === hid) && arch.map(o => o.sp + o.n).sort().join() === 'Rådjur2,Vildsvin1', 'observationerna arkiverades utan namn när jakten avslutades');
   // ---- Värmekarta ----
@@ -468,7 +499,7 @@ const gids = () => Object.keys(data.groups || {});
   const t0 = Date.now();
   const base = {owner:'o', creators:{c1:true}, groups:{g:{meta:{name:'L', owner:'o'}, members:{o:{role:'admin', name:'O'}, a2:{role:'admin', name:'A2'}, e:{role:'editor', name:'E'}, v:{role:'viewer', name:'V'}},
     areas:{ar:{name:'A'}}, pins:{ar:{p:{lat:1, lng:2, typeId:'t'}}}, hunts:{h:{name:'J', expires:t0 + 1000, code:'HUNTCODE', areas:{ar:true}}, h2:{name:'J2', starts:t0 + 500, expires:t0 + 1000, code:'HUNTCOD2'}}, guests:{gu:{hid:'h', code:'HUNTCODE', name:'G', expires:t0 + 1000}},
-      huntPos:{h:{e:{lat:1, lng:1, t:1}}, h2:{}}, huntTrail:{h:{e:{k1:{lat:1, lng:1, t:1}}}}, huntObs:{h:{o1:{sp:'Rådjur', n:1, lat:1, lng:1, t:1, by:'e'}}}, obsArchive:{a1:{sp:'Älg', n:2, lat:1, lng:1, t:1, hid:'h'}}, huntMsg:{h:{m0:{from:'e', name:'E', t:1, iv:'x', ct:'y', spk:'z', keys:{a:'b'}, all:true}}}}},
+      huntPos:{h:{e:{lat:1, lng:1, t:1}}, h2:{}}, huntTrail:{h:{e:{k1:{lat:1, lng:1, t:1}}}}, huntObs:{h:{o1:{sp:'Rådjur', n:1, lat:1, lng:1, t:1, by:'e'}}}, obsArchive:{a1:{sp:'Älg', n:2, lat:1, lng:1, t:1, hid:'h'}}, huntMsg:{h:{m0:{from:'e', name:'E', t:1, iv:'x', ct:'y', spk:'z', keys:{a:'b'}, all:true}}}, huntPlan:{h:{stands:{p:{uid:'e', who:'E'}, p2:{uid:'gu', who:'G'}}}}}},
     invites:{INVITECODE1:{gid:'g', role:'editor', expires:t0 + 1000}, OLDINVITE01:{gid:'g', role:'editor', expires:t0 - 1}}, huntCodes:{HUNTCODE:{gid:'g', hid:'h', expires:t0 + 1000}}};
   const D = (uid, now) => { const d = targaryen.database(rules, base, now || t0).as(uid ? tok(uid) : null);
     return {read: p => d.read(p, now || t0), write: (p, v) => d.write(p, v, undefined, now || t0)}; };
@@ -530,6 +561,10 @@ const gids = () => Object.keys(data.groups || {});
   { const bad = 'x" onmouseover="alert(1)';
     check(!D('e').write('/groups/g/pins/ar/' + bad, {lat:1, lng:2, typeId:'t'}).allowed && !D('e').write('/groups/g/areas/' + bad, {name:'X'}).allowed && !D('e').write('/groups/g/types/' + bad, {name:'X', color:'#000'}).allowed && !D('gu').write('/groups/g/huntObs/h/' + bad, O('gu')).allowed && !D('e').write('/groups/g/huntMsg/h/' + bad, MS('e')).allowed && !D('a2').write('/groups/g/huntPlan/h2/drives/' + bad, {name:'S', ring:'1,1;1,2;2,2'}).allowed && !D('e').write('/groups/g/huntTrail/h/e/' + bad, T).allowed && !D('e').write('/groups/g/msgKeys/e/' + bad, K()).allowed, 'regel: nycklar med andra tecken än bokstäver, siffror, - och _ nekas');
     check(D('e').write('/groups/g/pins/ar/-Nab_c1', {lat:1, lng:2, typeId:'t'}).allowed && D('gu').write('/groups/g/huntObs/h/-Nab_c1', O('gu')).allowed && !D('e').write('/groups/g/pins/ar/' + 'a'.repeat(65), {lat:1, lng:2, typeId:'t'}).allowed, 'regel: vanliga nycklar (även Firebase push-nycklar) godtas, för långa nekas'); }
+  const CK = (pid, extra) => Object.assign({pid, in:true, t:t0, name:'N'}, extra || {});
+  check(D('e').write('/groups/g/huntCheck/h/e', CK('p')).allowed && D('gu').write('/groups/g/huntCheck/h/gu', CK('p2')).allowed && !D('v').write('/groups/g/huntCheck/h/v', CK('p')).allowed && !D('e').write('/groups/g/huntCheck/h/e', CK('p2')).allowed, 'regel: man checkar bara in på det pass man är tilldelad');
+  check(!D('e').write('/groups/g/huntCheck/h/v', CK('p')).allowed && !D('x').write('/groups/g/huntCheck/h/x', CK('p')).allowed && !D('e').write('/groups/g/huntCheck/h/e', CK('p', {extra:1})).allowed && !D('e', t0 + 2000).write('/groups/g/huntCheck/h/e', CK('p')).allowed, 'regel: bara sig själv, inga extra fält, och bara medan jakten pågår');
+  check(D('v').read('/groups/g/huntCheck/h').allowed && D('gu').read('/groups/g/huntCheck/h').allowed && !D('gu').read('/groups/g/huntCheck/h2').allowed && !D('x').read('/groups/g/huntCheck/h').allowed && !D('v', t0 + 2000).read('/groups/g/huntCheck/h').allowed && D('a2').write('/groups/g/huntCheck/h', null).allowed && !D('e').write('/groups/g/huntCheck/h', null).allowed, 'regel: jaktens deltagare ser incheckningarna medan jakten pågår, jaktledaren raderar dem');
   check(!D('x').write('/groups/n2/meta', {name:'N', owner:'x'}).allowed && !D('e').write('/groups/n2/meta', {name:'N', owner:'e'}).allowed && D('o').write('/groups/n2/meta', {name:'N', owner:'o'}).allowed && D('c1').write('/groups/n2/meta', {name:'N', owner:'c1'}).allowed, 'regel: bara ägaren och godkända kan skapa jaktlag');
   check(!D('x').write('/owner', 'x').allowed && !D('o').write('/owner', 'x').allowed && !D('x').write('/creators/x', true).allowed && D('o').write('/creators/x', true).allowed, 'regel: ägarskapet kan inte tas över, bara ägaren godkänner fler');
   { const e0 = targaryen.database(rules, {}, t0); check(e0.as(tok('first')).write('/owner', 'first', undefined, t0).allowed && !e0.as(tok('anon-z')).write('/owner', 'anon-z', undefined, t0).allowed && !e0.as(tok('first')).write('/owner', 'other', undefined, t0).allowed, 'regel: första Google-inloggade blir ägare, inte en gäst och inte åt någon annan'); }

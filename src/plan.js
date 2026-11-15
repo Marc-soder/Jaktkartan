@@ -93,6 +93,69 @@ function myNoFireMask(){
   return m.mask;
 }
 
+/* ---------- Incheckning på passet ----------
+   Under en pågående jakt checkas man in automatiskt när man är inom CHECK_IN meter från sitt pass, och ut när man är
+   längre bort än CHECK_OUT (glappet gör att det inte slår av och på när GPS:en hoppar). Det går också för hand.
+   Har man själv sagt att man lämnar passet checkas man inte in automatiskt igen förrän man har varit borta från det. */
+const CHECK_IN = 40, CHECK_OUT = 100;
+const checkState = {busy:{}, manualOut:{}};
+const checkOf = (g, hid, u) => ((g.huntCheck || {})[hid] || {})[u || myUid()] || null;
+/* Mina pass i pågående jakter: [{g, hid, p}] */
+function myStands(){
+  const out = [];
+  for(const {g, hid, hunt} of planHunts()){
+    if(!huntLive(hunt)) continue;
+    for(const [pid, s] of Object.entries(planOf(g, hid).stands || {})){ const p = s && s.uid === myUid() ? pinById(pid) : null; if(p) out.push({g, hid, p}); }
+  }
+  return out;
+}
+function checkSet(g, hid, pid, inside, manual){
+  const p = pinById(pid), key = g.id + '/' + hid;
+  if(manual) checkState.manualOut[key] = !inside;
+  checkState.busy[key] = Date.now();
+  return fb.db.ref(`groups/${g.id}/huntCheck/${hid}/${myUid()}`).set({pid, in:!!inside, t:Date.now(), name:myName()})
+    .then(() => toast(inside ? `Du är incheckad på ${p ? p.name || 'passet' : 'passet'}.` : `Du har checkat ut från ${p ? p.name || 'passet' : 'passet'}.`, 4000))
+    .catch(() => { if(manual) toast('Kunde inte checka in. Pågår jakten, och är du tilldelad passet?', 5000); })
+    .finally(() => { checkState.busy[key] = 0; });
+}
+/* Körs vid varje ny position, och när jakter och planer ändras. */
+function checkPass(){
+  if(!fb || !cloud.user || !myPos) return;
+  for(const {g, hid, p} of myStands()){
+    const key = g.id + '/' + hid, cur = checkOf(g, hid), d = distM(myPos, p);
+    if(checkState.busy[key] && Date.now() - checkState.busy[key] < 10000) continue;
+    if(d > CHECK_OUT) checkState.manualOut[key] = false;   // borta från passet: automatiken gäller igen
+    const isIn = !!(cur && cur.in && cur.pid === p.id);
+    if(!isIn && d <= CHECK_IN && !checkState.manualOut[key]) checkSet(g, hid, p.id, true, false);
+    else if(isIn && d > CHECK_OUT) checkSet(g, hid, p.id, false, false);
+  }
+}
+/* Jaktledaren och admin får besked när någon kommer på plats, och när alla tilldelade pass är bemannade. */
+function checkNotify(g, hid, prev){
+  if(!prev || g.kind !== 'member' || !canLeadGroup(g)) return;   // inte vid första hämtningen
+  const now = g.huntCheck[hid] || {}, msgs = [];   // en enda avisering, så att ingen skriver över en annan
+  for(const [u, c] of Object.entries(now)){
+    if(!c || u === myUid() || !c.in || (prev[u] && prev[u].in && prev[u].pid === c.pid)) continue;
+    const p = pinById(c.pid);
+    msgs.push(`${c.name || 'En deltagare'} är på plats på ${p ? p.name || 'passet' : 'passet'}.`);
+  }
+  const hunt = (g.hunts || {})[hid], stands = planOf(g, hid).stands || {};
+  const assigned = hunt ? planPasses(g, hunt).filter(p => stands[p.id] && stands[p.id].uid) : [];
+  const manned = list => assigned.every(p => Object.values(list).some(c => c && c.in && c.pid === p.id));
+  if(assigned.length && manned(now) && !manned(prev)) msgs.push(`Alla ${assigned.length} pass är bemannade.`);
+  if(msgs.length) toast(msgs.join(' '), 6000);
+}
+/* Status för ett pass i jaktkortet: på plats, lämnat, och när personen senast hördes av (positionen). */
+function checkText(g, hid, p, s){
+  if(!s || !s.uid) return '';
+  const c = checkOf(g, hid, s.uid), pos = ((g.huntPos || {})[hid] || {})[s.uid];
+  let t = '';
+  if(c && c.pid === p.id) t = c.in ? ` <span class="check-ok">✓ på plats ${esc(fmtClock(c.t))}</span>` : ` <span class="check-out">lämnade ${esc(fmtClock(c.t))}</span>`;
+  else t = ' <span class="muted">ej incheckad</span>';
+  if(pos && pos.t) t += ` <span class="muted">· hörd ${esc(ago(pos.t))}</span>`;
+  return t;
+}
+
 /* ---------- Planen på kartan ---------- */
 function renderPlan(){
   if(!planLayer) planLayer = L.layerGroup().addTo(map);
@@ -119,7 +182,8 @@ function renderPlan(){
         const from = i * 22.5 - 11.25;
         L.polygon(sectorPts(p, from, from + n * 22.5, PLAN_R), {color:'#dc2626', weight:1, opacity:.8, fillColor:'#dc2626', fillOpacity:.28, interactive:false, className:'plan-nofire'}).addTo(planLayer);
       }
-      if(s.who) planLabel([p.lat, p.lng], 'who' + (s.uid && s.uid === myUid() ? ' me' : ''), s.who).addTo(planLayer);
+      const cin = s.uid && checkOf(g, hid, s.uid), isIn = !!(cin && cin.in && cin.pid === pid);
+      if(s.who) planLabel([p.lat, p.lng], 'who' + (s.uid && s.uid === myUid() ? ' me' : '') + (isIn ? ' in' : ''), s.who).addTo(planLayer);
     }
   }
 }
@@ -133,13 +197,19 @@ function planCardHtml(g, hid, hunt, lead){
   if(!lead && !shown.length && !routes.length && !nd) return '';
   const me = myUid(), mine = passes.filter(p => stands[p.id] && stands[p.id].uid === me), myRoutes = routes.filter(r => r.uid === me);
   let h = `<div class="lbl">Jaktplan</div>`;
-  if(mine.length) h += `<div class="plan-mine">Ditt pass: <b>${mine.map(p => esc(p.name || 'Pass')).join(', ')}</b>${maskDirs(stands[mine[0].id].no).length ? `. Skjut inte mot ${maskDirs(stands[mine[0].id].no).join(', ')}.` : ''} <button class="linkbtn" type="button" data-j="plan-go" data-g="${esc(g.id)}" data-p="${esc(mine[0].id)}">Visa</button></div>`;
+  if(mine.length){
+    const live = huntLive(hunt), c = checkOf(g, hid), isIn = !!(c && c.in && mine.some(p => p.id === c.pid));
+    h += `<div class="plan-mine">Ditt pass: <b>${mine.map(p => esc(p.name || 'Pass')).join(', ')}</b>${maskDirs(stands[mine[0].id].no).length ? `. Skjut inte mot ${maskDirs(stands[mine[0].id].no).join(', ')}.` : ''} <button class="linkbtn" type="button" data-j="plan-go" data-g="${esc(g.id)}" data-p="${esc(mine[0].id)}">Visa</button>
+      ${live ? `<div class="check-row">${isIn ? `<span class="check-ok">✓ Incheckad ${esc(fmtClock(c.t))}</span> <button class="btn sm ghost" type="button" data-j="check-out" data-g="${esc(g.id)}" data-h="${esc(hid)}" data-p="${esc(c.pid)}">Lämnar passet</button>`
+        : `<button class="btn sm primary" type="button" data-j="check-in" data-g="${esc(g.id)}" data-h="${esc(hid)}" data-p="${esc(mine[0].id)}">Jag är på passet</button> <span class="small muted">Du checkas in automatiskt inom ${CHECK_IN} m.</span>`}</div>` : ''}</div>`;
+  }
   for(const r of myRoutes) h += `<div class="plan-mine">Du går som <b>${ROUTE_KIND[r.kind].name.toLowerCase()}</b>.</div>`;
   if(shown.length) h += `<div class="small plan-list">${shown.map(p => { const s = stands[p.id], no = maskDirs(s.no);
-    return `<div><span>${esc(p.name || 'Pass')}</span>: ${s.who ? `<b>${esc(s.who)}</b>` : '<span class="muted">ingen</span>'}${no.length ? ` <span class="muted">· ej mot ${no.join(', ')}</span>` : ''}</div>`; }).join('')}</div>`;
+    return `<div><span>${esc(p.name || 'Pass')}</span>: ${s.who ? `<b>${esc(s.who)}</b>` : '<span class="muted">ingen</span>'}${no.length ? ` <span class="muted">· ej mot ${no.join(', ')}</span>` : ''}${huntLive(hunt) ? checkText(g, hid, p, s) : ''}</div>`; }).join('')}</div>`;
   if(routes.length) h += `<div class="small plan-list">${routes.map(r => `<div>${ROUTE_KIND[r.kind].name}: ${r.who ? `<b>${esc(r.who)}</b>` : '<span class="muted">ingen</span>'} <span class="muted">· ${fmtDist(lineLen(parseBorder(r.pts)))}</span></div>`).join('')}</div>`;
   const set = passes.filter(p => stands[p.id] && stands[p.id].who).length;
-  h += `<div class="small muted">${set} av ${passes.length} pass tillsatta · ${nd} ${nd === 1 ? 'såt' : 'såtar'} · ${routes.length} ${routes.length === 1 ? 'väg' : 'vägar'}</div>`;
+  const withUid = passes.filter(p => stands[p.id] && stands[p.id].uid), manned = withUid.filter(p => { const c = checkOf(g, hid, stands[p.id].uid); return c && c.in && c.pid === p.id; }).length;
+  h += `<div class="small muted">${set} av ${passes.length} pass tillsatta${huntLive(hunt) && withUid.length ? ` · ${manned} av ${withUid.length} på plats` : ''} · ${nd} ${nd === 1 ? 'såt' : 'såtar'} · ${routes.length} ${routes.length === 1 ? 'väg' : 'vägar'}</div>`;
   if(lead) h += `<div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" data-j="plan" data-g="${esc(g.id)}" data-h="${esc(hid)}">Planera</button></div>`;
   return h;
 }
