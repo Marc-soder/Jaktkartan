@@ -177,8 +177,11 @@ const gids = () => Object.keys(data.groups || {});
   const C = await mkPage(browser, 'carl', '#j-' + hunt.code);
   await C.fill('#gName', 'Carl Gäst'); await C.click('[data-j="login-guest"]'); await W(C, 900);
   check(data.groups[gid].guests && data.groups[gid].guests['anon-carl'] && data.groups[gid].guests['anon-carl'].expires === hunt.expires, 'Carl gick med som gäst, åtkomsten slutar när jakten slutar');
+  // Gästens områden och nålar hämtas efter att gästposten finns: vänta på dem (högst 5 s) i stället för en fast tid
+  for(let i = 0; i < 25 && (await st(C)).pins.filter(p => p.areaId === aid).length < 6; i++) await W(C, 200);
   let sc = await st(C);
   const cShared = sc.pins.filter(p => p.areaId === aid).length, cOther = sc.pins.filter(p => p.areaId === aid2).length;
+  if(cShared !== 6) console.log('DBG carl', JSON.stringify({denied:C.denied || 0, errs:C.errs, areas:sc.areas.map(a => a.id), subs:subs.filter(x => x.page === C).map(x => x.path)}));
   check(cShared === 6 && cOther === 0, `gästen ser jaktens område (${cShared} nålar) men inte det andra delade området (${cOther})`);
   check((sc.areas.find(a => a.id === aid) || {}).border === data.groups[gid].areas[aid].border, 'gästen ser gränsen för jaktens område');
   const txtC = await C.innerText('#paneJakt');

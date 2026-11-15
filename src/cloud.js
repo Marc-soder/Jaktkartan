@@ -113,15 +113,23 @@ function subGroup(gid, kind){
       msgPublish(g);
       if(g.huntRef) return;
       on('huntPlan/' + v.hid, pv => { g.huntPlan = pv ? {[v.hid]: pv} : {}; scheduleRender(); });
-      g.huntRef = on('hunts/' + v.hid, hv => {
-        g.hunts = hv ? {[v.hid]: hv} : {}; syncHuntPos();
+      // Nekas en läsning (t.ex. om den hinner före gästposten i databasen) försöker vi igen efter en stund,
+      // annars skulle gästen sakna jaktens områden och nålar tills sidan laddas om.
+      const alive = () => cloud.groups[gid] === g && g.guest && g.guest.hid === v.hid;
+      const areasFor = hv => {
         const want = hv && hv.areas ? Object.keys(hv.areas).filter(k => hv.areas[k] === true) : [];
         for(const aid of want){ if(g.areaRefs[aid]) continue; g.areaRefs[aid] = true;
-          on('areas/' + aid, av => { if(av) g.areas[aid] = av; else delete g.areas[aid]; applyRemote(gid); });
-          on('pins/' + aid, pv => { if(pv) g.pins[aid] = pv; else delete g.pins[aid]; applyRemote(gid); }); }
+          const retry = () => { delete g.areaRefs[aid]; setTimeout(() => { if(alive()) areasFor((g.hunts || {})[v.hid]); }, 3000); };
+          on('areas/' + aid, (av, err) => { if(err){ retry(); return; } if(av) g.areas[aid] = av; else delete g.areas[aid]; applyRemote(gid); });
+          on('pins/' + aid, (pv, err) => { if(err){ retry(); return; } if(pv) g.pins[aid] = pv; else delete g.pins[aid]; applyRemote(gid); }); }
         for(const aid of Object.keys(g.areas)) if(!want.includes(aid)){ delete g.areas[aid]; delete g.pins[aid]; }
         applyRemote(gid);
-      });
+      };
+      const subHunt = () => { g.huntRef = on('hunts/' + v.hid, (hv, err) => {
+        if(err){ g.huntRef = null; setTimeout(() => { if(alive() && !g.huntRef) subHunt(); }, 3000); return; }
+        g.hunts = hv ? {[v.hid]: hv} : {}; syncHuntPos(); areasFor(hv);
+      }); };
+      subHunt();
     });
   }
 }
