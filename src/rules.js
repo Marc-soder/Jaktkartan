@@ -103,7 +103,12 @@ const rules = { rules: {
         '.write': `${canLead} && !newData.exists()`,
         '$oid': {
           '.write': `${signed} && ${huntLive} && (${me}.exists() || (${isGuest} && ${guest}.child('hid').val() === $hid)) && (newData.exists() ? (newData.child('by').val() === auth.uid && (!data.exists() || data.child('by').val() === auth.uid)) : (data.child('by').val() === auth.uid || ${canLead}))`,
-          '.validate': `${KEY('$oid')} && newData.hasChildren(['sp','n','lat','lng','t','by']) && newData.child('sp').isString() && newData.child('sp').val().length >= 1 && newData.child('sp').val().length <= 40 && newData.child('n').isNumber() && newData.child('n').val() >= 1 && newData.child('n').val() <= 999 && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000 && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 200)) && (!newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val().length <= 60))`
+          '.validate': `${KEY('$oid')} && newData.hasChildren(['sp','n','lat','lng','t','by']) && newData.child('sp').isString() && newData.child('sp').val().length >= 1 && newData.child('sp').val().length <= 40 && newData.child('n').isNumber() && newData.child('n').val() >= 1 && newData.child('n').val() <= 999 && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000 && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 200)) && (!newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val().length <= 60))`,
+          // Fällt vilt: kind 'kill' med kön, ålder och skytt. En vanlig observation har kind 'obs' eller inget kind.
+          kind: {'.validate': "newData.val() === 'obs' || newData.val() === 'kill'"},
+          sex: {'.validate': "newData.val() === 'm' || newData.val() === 'f' || newData.val() === 'u'"},
+          age: {'.validate': "newData.val() === 'ad' || newData.val() === 'juv' || newData.val() === 'u'"},
+          shooter: {'.validate': 'newData.isString() && newData.val().length <= 60'}
         }
       }
     },
@@ -116,6 +121,7 @@ const rules = { rules: {
         '.validate': `${KEY('$oid')} && newData.hasChildren(['sp','n','lat','lng','t']) && newData.child('sp').isString() && newData.child('sp').val().length >= 1 && newData.child('sp').val().length <= 40 && newData.child('n').isNumber() && newData.child('n').val() >= 1 && newData.child('n').val() <= 999 && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000`,
         sp: {'.validate': true}, n: {'.validate': true}, lat: {'.validate': true}, lng: {'.validate': true}, t: {'.validate': true},
         hid: {'.validate': 'newData.isString() && newData.val().length <= 40'},
+        kind: {'.validate': "newData.val() === 'obs' || newData.val() === 'kill'"},
         '$other': {'.validate': false}
       }
     },
@@ -221,6 +227,21 @@ const rules = { rules: {
           name: {'.validate': 'newData.isString() && newData.val().length <= 60'},
           '$other': {'.validate': false}
         }
+      }
+    },
+    // Nödlarm: sos/<uid> = {t, name, lat, lng, acc}. Hela laget (medlemmar och giltiga gäster) läser, så att alla får larmet.
+    // Man larmar bara för sig själv. Jaktledare och admin kan ta bort gamla larm.
+    sos: {
+      '.read': `${isMember} || ${isGuest}`,
+      '$uid': {
+        '.write': `${signed} && (($uid === auth.uid && (${me}.exists() || ${isGuest})) || (${canLead} && !newData.exists()))`,
+        '.validate': `newData.hasChildren(['t','name'])`,
+        t: {'.validate': 'newData.isNumber() && newData.val() <= now + 60000'},
+        name: {'.validate': 'newData.isString() && newData.val().length <= 60'},
+        lat: {'.validate': 'newData.isNumber() && newData.val() >= -90 && newData.val() <= 90'},
+        lng: {'.validate': 'newData.isNumber() && newData.val() >= -180 && newData.val() <= 180'},
+        acc: {'.validate': 'newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000'},
+        '$other': {'.validate': false}
       }
     },
     // Spår (tidigare positioner) per jakt, med samma åtkomst som positionerna.

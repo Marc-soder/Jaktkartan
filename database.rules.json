@@ -106,7 +106,19 @@
             ".write": "(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()",
             "$oid": {
               ".write": "auth != null && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now)) && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid)) && (newData.exists() ? (newData.child('by').val() === auth.uid && (!data.exists() || data.child('by').val() === auth.uid)) : (data.child('by').val() === auth.uid || (auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))))",
-              ".validate": "($oid.matches(/^[A-Za-z0-9_-]+$/) && $oid.length <= 64) && newData.hasChildren(['sp','n','lat','lng','t','by']) && newData.child('sp').isString() && newData.child('sp').val().length >= 1 && newData.child('sp').val().length <= 40 && newData.child('n').isNumber() && newData.child('n').val() >= 1 && newData.child('n').val() <= 999 && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000 && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 200)) && (!newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val().length <= 60))"
+              ".validate": "($oid.matches(/^[A-Za-z0-9_-]+$/) && $oid.length <= 64) && newData.hasChildren(['sp','n','lat','lng','t','by']) && newData.child('sp').isString() && newData.child('sp').val().length >= 1 && newData.child('sp').val().length <= 40 && newData.child('n').isNumber() && newData.child('n').val() >= 1 && newData.child('n').val() <= 999 && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000 && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 200)) && (!newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val().length <= 60))",
+              "kind": {
+                ".validate": "newData.val() === 'obs' || newData.val() === 'kill'"
+              },
+              "sex": {
+                ".validate": "newData.val() === 'm' || newData.val() === 'f' || newData.val() === 'u'"
+              },
+              "age": {
+                ".validate": "newData.val() === 'ad' || newData.val() === 'juv' || newData.val() === 'u'"
+              },
+              "shooter": {
+                ".validate": "newData.isString() && newData.val().length <= 60"
+              }
             }
           }
         },
@@ -132,6 +144,9 @@
             },
             "hid": {
               ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "kind": {
+              ".validate": "newData.val() === 'obs' || newData.val() === 'kill'"
             },
             "$other": {
               ".validate": false
@@ -308,6 +323,31 @@
               "$other": {
                 ".validate": false
               }
+            }
+          }
+        },
+        "sos": {
+          ".read": "(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now)",
+          "$uid": {
+            ".write": "auth != null && (($uid === auth.uid && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now))) || ((auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()))",
+            ".validate": "newData.hasChildren(['t','name'])",
+            "t": {
+              ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+            },
+            "name": {
+              ".validate": "newData.isString() && newData.val().length <= 60"
+            },
+            "lat": {
+              ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
+            },
+            "lng": {
+              ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
+            },
+            "acc": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000"
+            },
+            "$other": {
+              ".validate": false
             }
           }
         },

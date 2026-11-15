@@ -300,7 +300,9 @@ const gids = () => Object.keys(data.groups || {});
   await C.evaluate(() => { __fk.power.touch = 0; __fk.powerUpdate(); });
   await at(0.0006);   // cirka 67 m: inom glappet
   check(chk().in === true, 'mellan 40 och 100 m är man fortfarande incheckad (GPS:en får hoppa)');
-  await at(0.0015); await W(B, 400);   // cirka 167 m
+  await at(0.0015);   // cirka 167 m
+  for(let i = 0; i < 4 && chk().in !== false; i++) await at(0.0015);   // nästa GPS-position, om den förra skrivningen fortfarande pågick
+  for(let i = 0; i < 15 && !(await B.innerText('#paneJakt')).includes('lämnade'); i++) await W(B, 200);
   check(chk().in === false && (await B.innerText('#paneJakt')).includes('lämnade'), 'längre bort än 100 m checkas Carl ut, och jaktledaren ser när han lämnade');
   await W(C, 1700);
   const pw3 = await C.evaluate(() => ({on:__fk.power.on, gps:__fk.gpsMode()}));
@@ -431,7 +433,7 @@ const gids = () => Object.keys(data.groups || {});
   check(forged === 'denied', 'man kan inte skriva i någon annans spår');
   // ---- Viltobservationer ----
   check(await B.isVisible('#btnObs') && await C.isVisible('#btnObs'), 'kikaren syns under pågående jakt, även för gästen');
-  await B.click('#btnObs'); await W(B, 400); await B.click('#placeOk'); await W(B, 300);
+  await B.click('#btnObs'); await W(B, 200); await B.click('[data-obs-kind="obs"]'); await W(B, 400); await B.click('#placeOk'); await W(B, 300);
   check(await B.isVisible('#obForm') && (await B.innerText('#obSp')).includes('Rådjur'), 'observationsformuläret öppnas med jaktens vilt');
   await B.selectOption('#obSp', 'Rådjur'); await B.fill('#obN', '2'); await B.fill('#obNote', 'Get och kid'); await B.click('#obForm button[type=submit]'); await W(B, 700);
   const obs = () => Object.values(((data.groups[gid].huntObs || {})[hid]) || {});
@@ -447,6 +449,49 @@ const gids = () => Object.keys(data.groups || {});
   check(cw.join() === 'ok,denied,denied', `gästen kan lägga in egna observationer men inte ta bort andras eller skriva i någon annans namn (${cw})`);
   await W(A, 400);
   check(await A.locator('.obs-icon').count() === 2, 'Alice ser båda observationerna');
+  // ---- Fällt vilt: under samma knapp som viltobservation ----
+  await B.click('#btnObs'); await W(B, 200);
+  const menu = await B.locator('#obsMenu [data-obs-kind]').allInnerTexts();
+  check(await B.isVisible('#obsMenu') && menu.length === 2 && menu[0].includes('Viltobservation') && menu[1].includes('Fällt vilt'), `kikaren ger ett val: ${menu.join(' | ')}`);
+  await B.click('[data-obs-kind="kill"]'); await W(B, 400);
+  check((await B.innerText('#placeOk')) === 'Viltet fälldes här', 'placeringen säger var viltet fälldes');
+  await B.click('#placeOk'); await W(B, 300);
+  check((await B.innerText('#obForm')).includes('Kön') && await B.inputValue('#obShooter') === 'Bob Test', 'formuläret för fällt vilt har kön, ålder och skytt (Bob som standard)');
+  await B.selectOption('#obSp', 'Rådjur'); await B.selectOption('#obSex', 'f'); await B.selectOption('#obAge', 'ad');
+  await B.click('#obForm button[type=submit]'); await W(B, 700);
+  const killE = Object.entries(data.groups[gid].huntObs[hid]).find(([, o]) => o.kind === 'kill');
+  check(killE && killE[1].sp === 'Rådjur' && killE[1].sex === 'f' && killE[1].age === 'ad' && killE[1].shooter === 'Bob Test' && killE[1].by === 'bob', 'fällt vilt sparas med art, kön, ålder och skytt');
+  await W(A, 500);
+  const at2 = await A.innerText('#paneJakt');
+  check(at2.includes('Rådjur 1') && at2.toUpperCase().includes('FÄLLT VILT (1)') && at2.includes('hona, vuxen, skytt Bob Test') && await A.locator('.obs-icon .obs-dot.kill').count() === 1, 'jaktkortet och kartan visar fällt vilt för sig');
+  const kw = await C.evaluate(([g, h]) => firebase.database().ref(`groups/${g}/huntObs/${h}`).push({sp:'Älg', n:1, lat:58.72, lng:14.61, t:Date.now(), by:'anon-carl', kind:'kill', sex:'x'}).then(() => 'ok', () => 'denied'), [gid, hid]);
+  check(kw === 'denied', 'fällt vilt tar bara emot giltiga värden för kön och ålder');
+  await B.evaluate(([g, h, o]) => firebase.database().ref(`groups/${g}/huntObs/${h}/${o}`).remove(), [gid, hid, killE[0]]); await W(A, 500);
+  check(!data.groups[gid].huntObs[hid][killE[0]] && await A.locator('.obs-icon .obs-dot.kill').count() === 0, 'den som registrerat fällt vilt kan ta bort det');
+  // ---- Nödläge ----
+  check(await A.isVisible('#btnSos') && await B.isVisible('#btnSos') && await C.isVisible('#btnSos'), 'alla i jaktlaget, även gästen, har knappen SOS');
+  await C.click('#btnSos'); await W(C, 200);
+  check(await C.isVisible('#sosSend') && (await C.innerText('.modal')).includes('Ring 112'), 'SOS frågar först, och visar Ring 112');
+  const sos = () => (data.groups[gid].sos || {})['anon-carl'];
+  await C.click('#sosSend');
+  for(let i = 0; i < 50 && !sos(); i++) await W(C, 200);   // appen försöker först få en färsk position (högst 8 s)
+  await W(A, 800);
+  check(sos() && sos().name === 'Carl Gäst' && Math.abs(sos().lat - 58.72) < 1e-6 && Math.abs(sos().lng - 14.61) < 1e-6, 'nödlarmet sparas med namn och position');
+  for(const [n, P] of [['Alice', A], ['Bob', B]]){
+    const t = await P.isVisible('#sosAlert') ? await P.innerText('#sosAlert') : '';
+    const href = await P.isVisible('#sosNav') ? await P.getAttribute('#sosNav', 'href') : '';
+    check(t.includes('Carl Gäst') && t.includes('Vill du navigera') && href.includes('destination=58.72') && await P.locator('.sos-icon').count() === 1, `${n} får larmet, med frågan om att navigera till Carl och en markering på kartan`);
+  }
+  await A.screenshot({path:shot('a_sos.png')});
+  check(await C.isVisible('#sosBar') && await C.evaluate(() => document.getElementById('btnSos').classList.contains('on')), 'Carl ser att hans larm är aktivt');
+  await A.click('#sosClose'); await B.click('#sosClose'); await W(A, 200);
+  const sw1 = await A.evaluate(g => Promise.all([
+    firebase.database().ref(`groups/${g}/sos/bob`).set({t:Date.now(), name:'Bob'}).then(() => 'ok', () => 'denied'),
+    firebase.database().ref(`groups/${g}/sos/alice`).set({t:Date.now(), name:'Alice', extra:1}).then(() => 'ok', () => 'denied')]), gid);
+  check(sw1.join() === 'denied,denied', `man kan bara larma för sig själv, utan extra fält (${sw1})`);
+  await A.evaluate(() => { window.__toasts = []; });
+  await C.click('#sosBar [data-sos="ok"]'); await W(C, 200); await C.click('#sosOk'); await W(C, 800); await W(A, 500);
+  check(!sos() && (await A.evaluate(() => window.__toasts)).some(t => t.includes('Carl Gäst har avbrutit nödlarmet')) && await A.locator('.sos-icon').count() === 0 && !(await C.isVisible('#sosBar')), 'Carl avbryter: larmet tas bort och laget får besked');
   await A.evaluate(() => { const o = document.querySelector('.obs-icon'); if(o) o.scrollIntoView(); }); await A.screenshot({path:shot('a_obs.png')});
   await A.locator('#shareToggle').uncheck({force:true}); await W(A, 500);
   check(!hp().alice && !Object.keys(tr()).length && await B.locator('.pos-icon').count() === 1, 'Alice slutar dela: hennes position och spår tas bort');
@@ -474,7 +519,7 @@ const gids = () => Object.keys(data.groups || {});
   check(!data.groups[gid].hunts && !data.huntCodes && !(data.groups[gid].guests || {})['anon-carl'], 'jakten, koden och gästposten är borta');
   check(!data.groups[gid].huntPos && !data.groups[gid].huntTrail && !data.groups[gid].huntObs && !data.groups[gid].huntPlan && !data.groups[gid].huntRsvp && !data.groups[gid].huntMsg && !data.groups[gid].huntCheck && !(data.groups[gid].msgKeys || {})['anon-carl'], 'jaktens positioner, spår, observationer, plan, svar, meddelanden och gästens nyckel raderades när jakten avslutades');
   const arch = Object.values(data.groups[gid].obsArchive || {});
-  check(arch.length === 2 && arch.every(o => !o.by && !o.name && !o.note && o.hid === hid) && arch.map(o => o.sp + o.n).sort().join() === 'Rådjur2,Vildsvin1', 'observationerna arkiverades utan namn när jakten avslutades');
+  check(arch.length === 2 && arch.every(o => !o.by && !o.name && !o.note && o.hid === hid && o.kind === 'obs') && arch.map(o => o.sp + o.n).sort().join() === 'Rådjur2,Vildsvin1', 'observationerna arkiverades utan namn när jakten avslutades');
   // ---- Värmekarta ----
   await A.click('#btnLayers'); await W(A, 200);
   check(await A.isVisible('#heatBox') && !(await A.isChecked('#popHeat')), 'admin ser värmekartan i lagermenyn, avstängd från början');
@@ -586,6 +631,10 @@ const gids = () => Object.keys(data.groups || {});
   check(D('e').write('/groups/g/huntCheck/h/e', CK('p')).allowed && D('gu').write('/groups/g/huntCheck/h/gu', CK('p2')).allowed && !D('v').write('/groups/g/huntCheck/h/v', CK('p')).allowed && !D('e').write('/groups/g/huntCheck/h/e', CK('p2')).allowed, 'regel: man checkar bara in på det pass man är tilldelad');
   check(!D('e').write('/groups/g/huntCheck/h/v', CK('p')).allowed && !D('x').write('/groups/g/huntCheck/h/x', CK('p')).allowed && !D('e').write('/groups/g/huntCheck/h/e', CK('p', {extra:1})).allowed && !D('e', t0 + 2000).write('/groups/g/huntCheck/h/e', CK('p')).allowed, 'regel: bara sig själv, inga extra fält, och bara medan jakten pågår');
   check(D('v').read('/groups/g/huntCheck/h').allowed && D('gu').read('/groups/g/huntCheck/h').allowed && !D('gu').read('/groups/g/huntCheck/h2').allowed && !D('x').read('/groups/g/huntCheck/h').allowed && !D('v', t0 + 2000).read('/groups/g/huntCheck/h').allowed && D('a2').write('/groups/g/huntCheck/h', null).allowed && !D('e').write('/groups/g/huntCheck/h', null).allowed, 'regel: jaktens deltagare ser incheckningarna medan jakten pågår, jaktledaren raderar dem');
+  const SO = extra => Object.assign({t:t0, name:'N', lat:1, lng:2}, extra || {});
+  check(D('e').write('/groups/g/sos/e', SO()).allowed && D('gu').write('/groups/g/sos/gu', SO()).allowed && !D('e').write('/groups/g/sos/v', SO()).allowed && !D('x').write('/groups/g/sos/x', SO()).allowed && !D('e').write('/groups/g/sos/e', SO({extra:1})).allowed && !D('e').write('/groups/g/sos/e', SO({lat:200})).allowed, 'regel: nödlarm bara för sig själv, i rätt form');
+  check(D('v').read('/groups/g/sos').allowed && D('gu').read('/groups/g/sos').allowed && !D('x').read('/groups/g/sos').allowed && !D('gu', t0 + 2000).read('/groups/g/sos').allowed && D('a2').write('/groups/g/sos/e', null).allowed && !D('e').write('/groups/g/sos/v', null).allowed, 'regel: hela laget och giltiga gäster läser larmen, jaktledaren tar bort gamla');
+  check(D('e').write('/groups/g/huntObs/h/k1', Object.assign(O('e'), {kind:'kill', sex:'m', age:'juv', shooter:'E'})).allowed && !D('e').write('/groups/g/huntObs/h/k1', Object.assign(O('e'), {kind:'skott'})).allowed && !D('e').write('/groups/g/huntObs/h/k1', Object.assign(O('e'), {age:'gammal'})).allowed, 'regel: fällt vilt med giltigt kön, ålder och skytt');
   check(!D('x').write('/groups/n2/meta', {name:'N', owner:'x'}).allowed && !D('e').write('/groups/n2/meta', {name:'N', owner:'e'}).allowed && D('o').write('/groups/n2/meta', {name:'N', owner:'o'}).allowed && D('c1').write('/groups/n2/meta', {name:'N', owner:'c1'}).allowed, 'regel: bara ägaren och godkända kan skapa jaktlag');
   check(!D('x').write('/owner', 'x').allowed && !D('o').write('/owner', 'x').allowed && !D('x').write('/creators/x', true).allowed && D('o').write('/creators/x', true).allowed, 'regel: ägarskapet kan inte tas över, bara ägaren godkänner fler');
   { const e0 = targaryen.database(rules, {}, t0); check(e0.as(tok('first')).write('/owner', 'first', undefined, t0).allowed && !e0.as(tok('anon-z')).write('/owner', 'anon-z', undefined, t0).allowed && !e0.as(tok('first')).write('/owner', 'other', undefined, t0).allowed, 'regel: första Google-inloggade blir ägare, inte en gäst och inte åt någon annan'); }
