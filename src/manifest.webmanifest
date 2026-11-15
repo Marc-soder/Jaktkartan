@@ -1,0 +1,17 @@
+{
+  "name": "Jaktkartan",
+  "short_name": "Jaktkartan",
+  "description": "Karta för jaktlaget: pass, gränser, jaktplan, positioner och meddelanden.",
+  "lang": "sv",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#16231c",
+  "theme_color": "#16231c",
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}

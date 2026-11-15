@@ -71,10 +71,34 @@ function routeStyle(kind, pts){
   return [L.polyline(pts, Object.assign({color:'#ffffff', weight:6, opacity:.8}, o)), L.polyline(pts, Object.assign({color:k.color, weight:3, dashArray:'2 7', lineCap:'round', className:'plan-route ' + kind}, o))];
 }
 
+/* Mitt pass under en pågående jakt, med förbjudna riktningar (för kompassen). {mask, lat, lng} eller null. */
+var planMine = null;
+function findMyNoFire(){
+  let mine = null;
+  for(const {g, hid, hunt} of planHunts()){
+    if(!huntLive(hunt)) continue;
+    for(const [pid, s] of Object.entries(planOf(g, hid).stands || {})){
+      if(!s || s.uid !== myUid() || !s.no) continue;
+      const p = pinById(pid); if(!p) continue;
+      mine = mine ? Object.assign(mine, {mask:mine.mask | s.no}) : {mask:s.no, lat:p.lat, lng:p.lng, name:p.name || 'Pass'};
+    }
+  }
+  return mine;
+}
+/* Gäller bara nära passet (inom 300 m) eller när positionen inte är känd. */
+const NOFIRE_NEAR = 300;
+function myNoFireMask(){
+  const m = planMine; if(!m) return 0;
+  if(myPos && distM(myPos, m) > NOFIRE_NEAR) return 0;
+  return m.mask;
+}
+
 /* ---------- Planen på kartan ---------- */
 function renderPlan(){
   if(!planLayer) planLayer = L.layerGroup().addTo(map);
   planLayer.clearLayers();
+  planMine = findMyNoFire();
+  if(typeof renderCompass === 'function') renderCompass();
   if(!planOn()) return;
   const pins = new Map(state.pins.map(p => [p.id, p]));
   for(const {g, hid} of planHunts()){
@@ -109,14 +133,14 @@ function planCardHtml(g, hid, hunt, lead){
   if(!lead && !shown.length && !routes.length && !nd) return '';
   const me = myUid(), mine = passes.filter(p => stands[p.id] && stands[p.id].uid === me), myRoutes = routes.filter(r => r.uid === me);
   let h = `<div class="lbl">Jaktplan</div>`;
-  if(mine.length) h += `<div class="plan-mine">Ditt pass: <b>${mine.map(p => esc(p.name || 'Pass')).join(', ')}</b>${maskDirs(stands[mine[0].id].no).length ? `. Skjut inte mot ${maskDirs(stands[mine[0].id].no).join(', ')}.` : ''} <button class="linkbtn" type="button" data-j="plan-go" data-g="${g.id}" data-p="${mine[0].id}">Visa</button></div>`;
+  if(mine.length) h += `<div class="plan-mine">Ditt pass: <b>${mine.map(p => esc(p.name || 'Pass')).join(', ')}</b>${maskDirs(stands[mine[0].id].no).length ? `. Skjut inte mot ${maskDirs(stands[mine[0].id].no).join(', ')}.` : ''} <button class="linkbtn" type="button" data-j="plan-go" data-g="${esc(g.id)}" data-p="${esc(mine[0].id)}">Visa</button></div>`;
   for(const r of myRoutes) h += `<div class="plan-mine">Du går som <b>${ROUTE_KIND[r.kind].name.toLowerCase()}</b>.</div>`;
   if(shown.length) h += `<div class="small plan-list">${shown.map(p => { const s = stands[p.id], no = maskDirs(s.no);
     return `<div><span>${esc(p.name || 'Pass')}</span>: ${s.who ? `<b>${esc(s.who)}</b>` : '<span class="muted">ingen</span>'}${no.length ? ` <span class="muted">· ej mot ${no.join(', ')}</span>` : ''}</div>`; }).join('')}</div>`;
   if(routes.length) h += `<div class="small plan-list">${routes.map(r => `<div>${ROUTE_KIND[r.kind].name}: ${r.who ? `<b>${esc(r.who)}</b>` : '<span class="muted">ingen</span>'} <span class="muted">· ${fmtDist(lineLen(parseBorder(r.pts)))}</span></div>`).join('')}</div>`;
   const set = passes.filter(p => stands[p.id] && stands[p.id].who).length;
   h += `<div class="small muted">${set} av ${passes.length} pass tillsatta · ${nd} ${nd === 1 ? 'såt' : 'såtar'} · ${routes.length} ${routes.length === 1 ? 'väg' : 'vägar'}</div>`;
-  if(lead) h += `<div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" data-j="plan" data-g="${g.id}" data-h="${hid}">Planera</button></div>`;
+  if(lead) h += `<div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" data-j="plan" data-g="${esc(g.id)}" data-h="${esc(hid)}">Planera</button></div>`;
   return h;
 }
 
@@ -152,17 +176,17 @@ function planBodyRender(force){
   for(const p of passes){
     const s = (plan.stands || {})[p.id] || {}, no = maskDirs(s.no);
     h += `<div class="plan-row"><span class="pr-name">${esc(p.name || 'Pass')}</span>
-      <select class="input" data-pl="who" data-p="${p.id}" aria-label="Vem står på ${esc(p.name || 'passet')}">${opts(s.who, s.uid)}</select>
-      <button class="btn sm${no.length ? ' nofire' : ''}" type="button" data-pl="dirs" data-p="${p.id}">${no.length ? 'Ej mot ' + no.join(', ') : 'Skjutriktningar'}</button></div>`;
+      <select class="input" data-pl="who" data-p="${esc(p.id)}" aria-label="Vem står på ${esc(p.name || 'passet')}">${opts(s.who, s.uid)}</select>
+      <button class="btn sm${no.length ? ' nofire' : ''}" type="button" data-pl="dirs" data-p="${esc(p.id)}">${no.length ? 'Ej mot ' + no.join(', ') : 'Skjutriktningar'}</button></div>`;
   }
   h += `<h3 class="sec">Såtar</h3>`;
   const drives = Object.entries(plan.drives || {}).filter(([, d]) => d);
   if(!drives.length) h += `<p class="note" style="margin-top:0">Ingen såt är ritad.</p>`;
   for(const [did, d] of drives){
-    h += `<div class="plan-row"><input class="input" data-pl="dname" data-d="${did}" maxlength="60" value="${esc(d.name || '')}" aria-label="Namn på såten">
+    h += `<div class="plan-row"><input class="input" data-pl="dname" data-d="${esc(did)}" maxlength="60" value="${esc(d.name || '')}" aria-label="Namn på såten">
       <span class="small muted">${fmtHa(areaHa(parseBorder(d.ring)))}</span>
-      <button class="btn sm" type="button" data-pl="drive-draw" data-d="${did}">Ändra</button>
-      <button class="iconbtn" type="button" data-pl="drive-del" data-d="${did}" aria-label="Ta bort ${esc(d.name || 'såten')}">${ICON_TRASH}</button></div>`;
+      <button class="btn sm" type="button" data-pl="drive-draw" data-d="${esc(did)}">Ändra</button>
+      <button class="iconbtn" type="button" data-pl="drive-del" data-d="${esc(did)}" aria-label="Ta bort ${esc(d.name || 'såten')}">${ICON_TRASH}</button></div>`;
   }
   h += `<div class="btnrow"><button class="btn sm" type="button" data-pl="drive-draw">Rita såt</button></div>`;
   h += `<h3 class="sec">Hundförare och drevkarlar</h3>`;
@@ -170,9 +194,9 @@ function planBodyRender(force){
   if(!routes.length) h += `<p class="note" style="margin-top:0">Rita hur hundförare och drevkarlar ska gå.</p>`;
   for(const [rid, r] of routes){
     h += `<div class="plan-row"><span class="pr-name"><span class="route-dot ${r.kind}"></span>${ROUTE_KIND[r.kind].name}<br><span class="small muted">${fmtDist(lineLen(parseBorder(r.pts)))}</span></span>
-      <select class="input" data-pl="rwho" data-r="${rid}" aria-label="Vem går som ${ROUTE_KIND[r.kind].name.toLowerCase()}">${opts(r.who, r.uid)}</select>
-      <button class="btn sm" type="button" data-pl="route-draw" data-r="${rid}" data-k="${r.kind}">Ändra</button>
-      <button class="iconbtn" type="button" data-pl="route-del" data-r="${rid}" aria-label="Ta bort vägen">${ICON_TRASH}</button></div>`;
+      <select class="input" data-pl="rwho" data-r="${esc(rid)}" aria-label="Vem går som ${ROUTE_KIND[r.kind].name.toLowerCase()}">${opts(r.who, r.uid)}</select>
+      <button class="btn sm" type="button" data-pl="route-draw" data-r="${esc(rid)}" data-k="${esc(r.kind)}">Ändra</button>
+      <button class="iconbtn" type="button" data-pl="route-del" data-r="${esc(rid)}" aria-label="Ta bort vägen">${ICON_TRASH}</button></div>`;
   }
   h += `<div class="btnrow"><button class="btn sm" type="button" data-pl="route-draw" data-k="hund">Rita väg för hundförare</button><button class="btn sm" type="button" data-pl="route-draw" data-k="drev">Rita väg för drevkarl</button></div>`;
   body.innerHTML = h;
@@ -244,7 +268,7 @@ function roseSvg(no){
   const R = 100, r0 = 26, pt = (r, a) => `${(r * Math.sin(a * Math.PI / 180)).toFixed(2)},${(-r * Math.cos(a * Math.PI / 180)).toFixed(2)}`;
   return `<svg class="rose" viewBox="-110 -110 220 220" role="group" aria-label="Skjutriktningar">${DIR16.map((d, i) => {
     const a0 = i * 22.5 - 11.25, a1 = a0 + 22.5, on = !!(no & (1 << i)), lp = pt(i % 2 ? 80 : 74, i * 22.5).split(',');
-    return `<g class="rose-w${on ? ' on' : ''}" data-i="${i}" role="button" tabindex="0" aria-pressed="${on}" aria-label="${d}"><path d="M${pt(r0, a0)}L${pt(R, a0)}A${R} ${R} 0 0 1 ${pt(R, a1)}L${pt(r0, a1)}A${r0} ${r0} 0 0 0 ${pt(r0, a0)}Z"/><text x="${lp[0]}" y="${lp[1]}">${d}</text></g>`;
+    return `<g class="rose-w${on ? ' on' : ''}" data-i="${esc(i)}" role="button" tabindex="0" aria-pressed="${on}" aria-label="${d}"><path d="M${pt(r0, a0)}L${pt(R, a0)}A${R} ${R} 0 0 1 ${pt(R, a1)}L${pt(r0, a1)}A${r0} ${r0} 0 0 0 ${pt(r0, a0)}Z"/><text x="${lp[0]}" y="${lp[1]}">${d}</text></g>`;
   }).join('')}<circle r="${r0 - 4}" class="rose-c"/></svg>`;
 }
 function openDirs(g, hid, pid){
@@ -260,7 +284,7 @@ function openDirs(g, hid, pid){
     };
     const toggle = w => { if(!w) return; no ^= 1 << +w.dataset.i; draw(); };
     m.querySelector('#roseBox').addEventListener('click', e => toggle(e.target.closest('.rose-w')));
-    m.querySelector('#roseBox').addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); const i = e.target.closest('.rose-w'); toggle(i); const n = m.querySelector(`.rose-w[data-i="${i && i.dataset.i}"]`); if(n) n.focus(); } });
+    m.querySelector('#roseBox').addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); const i = e.target.closest('.rose-w'); toggle(i); const n = m.querySelector(`.rose-w[data-i="${esc(i && i.dataset.i)}"]`); if(n) n.focus(); } });
     m.querySelector('#roseClear').addEventListener('click', () => { no = 0; draw(); });
     m.querySelector('#roseCancel').addEventListener('click', () => openPlan(g, hid));
     m.querySelector('#roseOk').addEventListener('click', () => {

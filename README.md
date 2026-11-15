@@ -33,6 +33,7 @@ Efter merge klistrar du in den nya filen i Firebase-konsolen under Realtime Data
 | `src/overlay.js` | Skärmdumpar ovanpå kartan, som hjälp att rita gränser och lägga ut pass. Sparas bara i webbläsaren. |
 | `src/plan.js` | Jaktplan: vem som står på vilket pass, förbjudna skjutriktningar, såtar och vägar för hundförare och drevkarlar. |
 | `src/msg.js` | Krypterade meddelanden mellan jaktens deltagare. |
+| `src/sw.js`, `src/manifest.webmanifest`, `src/icons/` | Offline och installation på hemskärmen. Byggs till roten (`sw.js` får en version från `index.html`). Ändra inte i roten. |
 | `src/rules.js` | Säkerhetsreglerna för Firebase. |
 | `src/build.py` | Bygger `index.html` och `database.rules.json`. |
 | `TODO.md` | Saker som väntar, med beskrivning av hur de kan byggas. |
@@ -48,12 +49,13 @@ pip install -r tests/requirements.txt    # Playwright för Python
 npx playwright install chromium
 python3 -m playwright install chromium
 
-npm run build    # bygger index.html och database.rules.json från src/
+npm run build    # bygger index.html, database.rules.json, sw.js, manifest.webmanifest och icons/ från src/
 npm run check    # kontrollerar att de byggda filerna är aktuella
 npm test         # kör alla tester
 ```
 
 Testerna går utan nätverk. Kartrutor, GBIF, OpenStreetMap och Firebase ersätts med låtsassvar.
+`tests/test5.py` startar en lokal webbserver och prövar offlineläget (service workern registreras bara på https, eller lokalt med `?sw=1`).
 `tests/test2.js` prövar varje läsning och skrivning mot de riktiga säkerhetsreglerna.
 Skärmbilder hamnar i `tests/shots/`.
 Om du vill använda en befintlig Chrome i stället för Playwrights, sätt `CHROME_PATH` till sökvägen.

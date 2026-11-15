@@ -309,6 +309,31 @@ with sync_playwright() as p:
     check('Håll fingret' not in txt and 'högerklicka' not in txt, 'inget tips om långt tryck, som inte längre lägger ut nålar')
     plan = pg.evaluate("__fk.renumberPlan('a-rn', 'wo').map(x => x.pin.id)")
     check(plan == ['rn4', 'rn1', 'rn2', 'rn3'], f'väster till öster {plan}')
+    # Soluppgång och solnedgång, jämfört med kända värden (minuter, svensk tid)
+    sv = lambda d, la, ln: pg.evaluate("""([d, la, ln]) => { const s = __fk.sunTimes(d, la, ln); if(s.polar) return s.polar;
+        const f = t => new Date(t).toLocaleTimeString('sv-SE', {timeZone:'Europe/Stockholm', hour:'2-digit', minute:'2-digit'}); return [f(s.rise), f(s.set)]; }""", [d, la, ln])
+    mins = lambda t: int(t[:2]) * 60 + int(t[3:5])
+    st1, st2 = sv('2026-06-21', 59.3293, 18.0686), sv('2026-12-21', 59.3293, 18.0686)
+    check(abs(mins(st1[0]) - mins('03:30')) <= 2 and abs(mins(st1[1]) - mins('22:08')) <= 2 and abs(mins(st2[0]) - mins('08:43')) <= 2 and abs(mins(st2[1]) - mins('14:48')) <= 2, f'soluppgång och solnedgång i Stockholm stämmer (midsommar {st1}, vintersolstånd {st2})')
+    check(sv('2026-06-21', 67.8558, 20.2253) == 'day' and sv('2026-12-21', 67.8558, 20.2253) == 'night', 'midnattssol och mörkertid i Kiruna')
+    pg.click('#tab-vilt'); pg.wait_for_timeout(200)
+    vt = pg.inner_text('#paneVilt')
+    check('Sol upp' in vt and 'Skjutljus' in vt and 'en timme före och efter' in vt, 'Vilt-fliken visar sol och skjutljus')
+    # En öppen nålruta ska inte stängas när annat ritas om (t.ex. vid ändringar i molnet)
+    pg.evaluate("__fk.map.closePopup()"); pg.locator('.pin-icon').first.click(); pg.wait_for_timeout(300)
+    n0 = pg.locator('.leaflet-popup').count(); pg.evaluate('__fk.renderAll()'); pg.wait_for_timeout(200)
+    check(n0 == 1 and pg.locator('.leaflet-popup').count() == 1, 'en öppen nålruta ligger kvar när sidan ritas om')
+    pg.evaluate("__fk.map.closePopup()")
+    # Ett id med citattecken (som en elak deltagare skulle kunna skapa) får inte bli kod i sidan
+    pg.evaluate("""(() => { const s = __fk.state(), bad = 'x" onmouseover="window.__pwn=1" y="';
+      s.areas.push({id:bad, name:'Elak mark', visible:true});
+      s.pins.push({id:bad, name:'Elak nål', typeId:'t-pass', areaId:bad, lat:58.72, lng:14.6, note:'', created:1, updated:1});
+      s.types.push({id:bad, name:'Elak typ', color:'#123456', icon:'dot', text:'', visible:true});
+      __fk.renderAll(); })()""")
+    pg.click('#tab-list'); pg.wait_for_timeout(150); pg.click('#tab-filter'); pg.wait_for_timeout(150)
+    pg.evaluate("document.querySelectorAll('*').forEach(e => e.dispatchEvent(new MouseEvent('mouseover', {bubbles:true})))")
+    check(pg.evaluate("document.querySelectorAll('[onmouseover]').length") == 0 and not pg.evaluate("window.__pwn"), 'id:n med citattecken escapas och blir inte kod i sidan')
+    pg.evaluate("(() => { const s = __fk.state(), bad = s.pins.find(p => p.name === 'Elak nål').id; s.pins = s.pins.filter(p => p.id !== bad); s.areas = s.areas.filter(a => a.id !== bad); s.types = s.types.filter(t => t.id !== bad); __fk.renderAll(); })()")
     check(not errors, f'inga JS-fel på dator: {errors[:3]}')
     ctx.close()
 

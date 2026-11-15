@@ -29,7 +29,8 @@ with sync_playwright() as p:
         check(pg.is_visible('#compassBtn') == (name == 'mobil') and (name == 'desktop' or pg.inner_text('#compassTxt') in ('Kompass', 'Väntar …')), f'{name}: kompassen syns på telefon redan innan den fått en riktning, inte på dator')
 
         # ---- Vind ----
-        check(pg.is_visible('#windChip') and len(meteo) >= 1 and pg.locator('path.wind-sector').count() == 1, f'{name}: vinden är påslagen från början')
+        check(pg.is_visible('#windChip') and len(meteo) >= 1, f'{name}: vinden är påslagen från början')
+        check(pg.locator('path.wind-sector').count() == 0 and pg.evaluate('__fk.wind.sector') is None, f'{name}: utan känd position visas inget gult område (det följer inte kartans mitt)')
         pg.click('#btnLayers'); pg.wait_for_timeout(200)
         check(pg.is_checked('#popWind'), f'{name}: Vindriktning är ibockad från början')
         pg.uncheck('#popWind'); pg.wait_for_timeout(300)
@@ -43,13 +44,8 @@ with sync_playwright() as p:
         lp = pg.evaluate("(() => { const p = document.getElementById('layerPop'), r = p.getBoundingClientRect(); p.scrollTop = 9999; return {bottom:r.bottom, vh:innerHeight, scroll:p.scrollTop, over:p.scrollHeight > p.clientHeight}; })()")
         check(lp['bottom'] <= lp['vh'] and (not lp['over'] or lp['scroll'] > 0), f'{name}: lagermenyn får plats på skärmen och går att scrolla ({lp})')
         pg.keyboard.press('Escape')
-        sec = pg.evaluate("(() => { const s = __fk.wind.sector; return {axis:s.axis, half:s.half, o:s.o, far:s.pts[Math.floor(s.pts.length / 2)]}; })()")
-        b = pg.evaluate("([a, f]) => __fk.bearingDeg(L.latLng(a.lat, a.lng), L.latLng(f.lat, f.lng))", [sec['o'], sec['far']])
-        d = pg.evaluate("([a, f]) => __fk.distM(a, f)", [sec['o'], sec['far']])
-        check(abs(sec['axis'] - 45) < 1e-9 and abs(b - 45) < 1 and abs(d - 600) < 10 and sec['half'] == 20, f'{name}: vind från SV ger ett område mot NO, 600 m långt (riktning {b:.1f}°, {d:.0f} m)')
-        cross = pg.evaluate('__fk.map.getCenter()')
-        check(abs(sec['o']['lat'] - cross['lat']) < 1e-6 and abs(sec['o']['lng'] - cross['lng']) < 1e-6, f'{name}: utan känd position utgår området från kartans mitt')
-        check(pg.locator('path.wind-sector').count() == 1, f'{name}: det gula området ritas')
+        pg.evaluate('__fk.map.panBy([150, 90], {animate:false})'); pg.wait_for_timeout(200)
+        check(pg.locator('path.wind-sector').count() == 0, f'{name}: när kartan flyttas utan position dyker inget gult område upp')
         # pilarna rör sig
         f0 = pg.evaluate('__fk.wind.frames || 0'); h0 = pg.evaluate("(() => { const c = document.querySelector('canvas.wind-arrows'); return c.toDataURL().length + ':' + c.toDataURL().slice(-200); })()")
         pg.wait_for_timeout(400)
@@ -59,10 +55,20 @@ with sync_playwright() as p:
             let n = 0, a = 0; for(let i = 3; i < d.length; i += 4){ if(d[i]){ n++; a = Math.max(a, d[i]); } } return {n, a, blue: d.findIndex((v, i) => i % 4 === 2 && v > 150 && d[i + 1] > 0)}; })()""")
         op = pg.evaluate("getComputedStyle(document.querySelector('canvas.wind-arrows')).opacity")
         check(px['n'] > 200 and 0.4 <= float(op) <= 0.7, f'{name}: blå pilar ritas, lite genomskinliga (genomskinlighet {op})')
+        quads = pg.evaluate("""(() => { const c = document.querySelector('canvas.wind-arrows'), g = c.getContext('2d'), w = c.width, h = c.height;
+            return [[0, 0], [w / 2, 0], [0, h / 2], [w / 2, h / 2]].map(([x, y]) => { const d = g.getImageData(x, y, w / 2, h / 2).data; let n = 0; for(let i = 3; i < d.length; i += 4) if(d[i]) n++; return n; }); })()""")
+        check(min(quads) > 50, f'{name}: pilarna täcker hela kartan, inte bara det gula området (pixlar per fjärdedel {quads})')
         # med känd position utgår området från den
         pg.evaluate('__fk.showMe(58.7200, 14.6000, 8)'); pg.wait_for_timeout(300)
         o = pg.evaluate('__fk.wind.sector.o')
-        check(abs(o['lat'] - 58.72) < 1e-9 and abs(o['lng'] - 14.60) < 1e-9, f'{name}: med känd position utgår området från den')
+        check(abs(o['lat'] - 58.72) < 1e-9 and abs(o['lng'] - 14.60) < 1e-9 and pg.locator('path.wind-sector').count() == 1, f'{name}: med känd position ritas det gula området från den')
+        sec = pg.evaluate("(() => { const s = __fk.wind.sector; return {axis:s.axis, half:s.half, o:s.o, far:s.pts[Math.floor(s.pts.length / 2)]}; })()")
+        b = pg.evaluate("([a, f]) => __fk.bearingDeg(L.latLng(a.lat, a.lng), L.latLng(f.lat, f.lng))", [sec['o'], sec['far']])
+        d = pg.evaluate("([a, f]) => __fk.distM(a, f)", [sec['o'], sec['far']])
+        check(abs(sec['axis'] - 45) < 1e-9 and abs(b - 45) < 1 and abs(d - 600) < 10 and sec['half'] == 20, f'{name}: vind från SV ger ett område mot NO, 600 m långt (riktning {b:.1f}°, {d:.0f} m)')
+        pg.evaluate('__fk.map.panBy([-200, 120], {animate:false})'); pg.wait_for_timeout(200)
+        o2 = pg.evaluate('__fk.wind.sector.o')
+        check(abs(o2['lat'] - 58.72) < 1e-9 and abs(o2['lng'] - 14.60) < 1e-9, f'{name}: det gula området ligger kvar på positionen när kartan flyttas')
         pg.click('#btnLayers'); pg.wait_for_timeout(200); pg.uncheck('#popWind'); pg.keyboard.press('Escape'); pg.wait_for_timeout(300)
         check(not pg.is_visible('#windChip') and pg.locator('path.wind-sector').count() == 0 and pg.evaluate("document.querySelector('canvas.wind-arrows').hidden"), f'{name}: vinden går att stänga av')
 

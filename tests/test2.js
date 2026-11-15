@@ -51,7 +51,7 @@ window.firebase = (function(){
   return {apps, initializeApp(){ apps.push(1); }, auth: authFn, database: dbFn};
 })();`;
 async function mkPage(browser, who, hash, opts){
-  const ctx = await browser.newContext(Object.assign({viewport:{width:1280, height:900}, geolocation:{latitude:58.72, longitude:14.61, accuracy:12}, permissions:['geolocation']}, opts || {}));
+  const ctx = await browser.newContext(Object.assign({viewport:{width:1280, height:900}, geolocation:{latitude:58.72, longitude:14.61, accuracy:12}, permissions:['geolocation', 'accelerometer', 'gyroscope', 'magnetometer']}, opts || {}));
   await ctx.route('**/*', r => { const u = r.request().url();
     if(u.includes('firebase-app-compat')) return r.fulfill({status:200, contentType:'text/javascript', body:FAKE});
     if(u.includes('gstatic.com/firebasejs')) return r.fulfill({status:200, contentType:'text/javascript', body:''});
@@ -251,15 +251,34 @@ const gids = () => Object.keys(data.groups || {});
     firebase.database().ref('groups/' + g + '/huntPlan/' + h).get().then(() => 'ok', () => 'denied'),
     firebase.database().ref('groups/' + g + '/huntPlan').get().then(() => 'ok', () => 'denied')]), [gid, hid]);
   check(cw2.join() === 'denied,ok,denied', `gästen kan läsa sin jakts plan men inte ändra den eller läsa andra jakters (${cw2})`);
+  // Kompassen på Carls pass: röda fält för förbjudna riktningar, varning när telefonen pekar dit
+  const pa = data.groups[gid].pins[aid][pA];
+  await C.click('#btnLocate'); await W(C, 500);
+  await C.evaluate(([la, ln]) => __fk.showMe(la, ln, 5), [pa.lat, pa.lng]); await W(C, 300);
+  const head = h => C.evaluate(v => { const e = new Event('deviceorientation'); Object.defineProperty(e, 'webkitCompassHeading', {value: v}); window.dispatchEvent(e); }, h).then(() => W(C, 250));
+  await head(90);
+  check(await C.locator('#cmpNo path').count() === 1 && !(await C.evaluate(() => document.getElementById('compassBtn').classList.contains('nofire'))), 'kompassen visar ett rött fält för de förbjudna riktningarna, ingen varning mot öster');
+  await head(5);
+  check(await C.evaluate(() => document.getElementById('compassBtn').classList.contains('nofire')) && (await C.innerText('#compassTxt')).startsWith('Förbjuden riktning'), `varning när telefonen pekar mot norr: ${await C.innerText('#compassTxt')}`);
+  await head(340);
+  check(await C.evaluate(() => document.getElementById('compassBtn').classList.contains('nofire')), 'varning också mot NNV');
+  await head(320);
+  check(!(await C.evaluate(() => document.getElementById('compassBtn').classList.contains('nofire'))), 'ingen varning mot NV, som är tillåtet');
+  await C.screenshot({path:shot('c_compass.png'), clip:{x:380, y:0, width:200, height:150}});
+  await C.evaluate(([la, ln]) => __fk.showMe(la - 0.01, ln, 5), [pa.lat, pa.lng]); await head(5);
+  check(await C.locator('#cmpNo path').count() === 0 && !(await C.evaluate(() => document.getElementById('compassBtn').classList.contains('nofire'))), 'mer än 300 m från passet: inga röda fält och ingen varning');
+  await C.evaluate(() => __fk.showMe(58.72, 14.61, 12));
   // ---- Jag deltar: positionen delas automatiskt ----
   const hp = () => ((data.groups[gid].huntPos || {})[hid] || {});
   await W(C, 900);
   check(hp()['anon-carl'] && await C.isChecked('#shareToggle') && (await C.innerText('#paneJakt')).includes('delas automatiskt'), 'gästen som gått med via jaktkoden delar sin position automatiskt under jakten');
   await A.click('#tab-jakt'); await W(A, 200);
   check(!(await A.isChecked('#shareToggle')) && !hp().alice && (await A.innerText('#paneJakt')).includes('Carl Gäst (gäst)'), 'Alice har inte svarat och delar inte, men ser att gästen deltar');
+  await A.evaluate(() => { window.__toasts = []; const t = document.getElementById('toast'); new MutationObserver(() => window.__toasts.push(t.textContent)).observe(t, {childList:true, characterData:true, subtree:true}); });
   await A.click(`[data-j="rsvp"][data-h="${hid}"]`); await W(A, 900);
   const rs = () => ((data.groups[gid].huntRsvp || {})[hid] || {});
   check(rs().alice && rs().alice.name === 'Alice Test' && await A.isChecked('#shareToggle') && hp().alice, 'Alice trycker Jag deltar: svaret sparas och positionen delas direkt eftersom jakten pågår');
+  { const ts = await A.evaluate(() => window.__toasts); check(ts.length === 1 && ts[0].startsWith('Du deltar'), `bara en avisering när man trycker Jag deltar under jakten: ${JSON.stringify(ts)}`); }
   check((await B.innerText('#paneJakt')).toUpperCase().includes('DELTAR (2)') && (await B.innerText('#paneJakt')).includes('Alice Test, Carl Gäst (gäst)'), 'jaktledaren ser vilka som deltar');
   const rw = await C.evaluate(([g, h]) => firebase.database().ref('groups/' + g + '/huntRsvp/' + h + '/bob').set({name:'Bob', t:Date.now()}).then(() => 'ok', () => 'denied'), [gid, hid]);
   const rw2 = await B.evaluate(([g, h]) => firebase.database().ref('groups/' + g + '/huntRsvp/' + h + '/alice').set({name:'Fejk', t:Date.now()}).then(() => 'ok', () => 'denied'), [gid, hid]);
@@ -309,6 +328,19 @@ const gids = () => Object.keys(data.groups || {});
   await C.fill('#msgText', 'Uppfattat, jag går dit nu'); await C.click('#msgSend'); await W(C, 900); await W(B, 500);
   check((await B.innerText('#paneJakt')).includes('Uppfattat, jag går dit nu') && !(await A.innerText('#paneJakt')).includes('Uppfattat'), 'gästens svar når Bob men inte Alice');
   await A.screenshot({path:shot('a_msg.png')}); await C.screenshot({path:shot('c_msg.png')});
+  // Gamla enheters nycklar: Bobs egen gamla nyckel tas bort, och ingen krypterar till Alices gamla
+  const old = Date.now() - 100 * 864e5, okKey = Object.values(keys().bob)[0].k;
+  await B.evaluate(([g, k, t]) => firebase.database().ref(`groups/${g}/msgKeys/bob/dgammal`).set({k, name:'Bob Test', t}), [gid, okKey, old]);
+  await A.evaluate(([g, k, t]) => firebase.database().ref(`groups/${g}/msgKeys/alice/dgammal`).set({k, name:'Alice Test', t}), [gid, okKey, old]); await W(B, 900);
+  const aliceDevs = await B.evaluate(([g, h]) => __fk.msgPeopleFor(g, h).find(p => p.uid === 'alice').devices.length, [gid, hid]);
+  check(!(keys().bob || {}).dgammal && aliceDevs === 1, `Bobs app tar bort hans gamla enhets nyckel och krypterar inte till Alices gamla (${aliceDevs} enhet)`);
+  // En öppen nålruta hos Bob stängs inte när Carl skickar ett meddelande
+  await B.evaluate(() => __fk.map.setView([58.72, 14.6], 15, {animate:false})); await W(B, 300);
+  await B.evaluate(() => { let m = null; __fk.map.eachLayer(l => { if(l.pinId && !m) m = l; }); m.openPopup(); }); await W(B, 300);
+  const popBefore = await B.locator('.leaflet-popup').count();
+  await C.click(`[data-j="msg-new"][data-h="${hid}"]`); await W(C, 200); await C.fill('#msgText', 'Jag ser en räv'); await C.click('#msgSend'); await W(C, 900); await W(B, 600);
+  check(popBefore === 1 && await B.locator('.leaflet-popup').count() === 1 && (await B.innerText('#paneJakt')).includes('Jag ser en räv'), 'Bobs öppna nålruta ligger kvar när ett nytt meddelande kommer');
+  await B.evaluate(() => __fk.map.closePopup());
   // Försök att lura systemet
   const fake = await A.evaluate(([g, h, m]) => Promise.all([
     firebase.database().ref(`groups/${g}/huntMsg/${h}/mfake1`).set(Object.assign({}, m, {from:'bob', t:Date.now()})).then(() => 'ok', () => 'denied'),
@@ -370,6 +402,7 @@ const gids = () => Object.keys(data.groups || {});
   check(!(await A.isChecked('#shareToggle')) && !hp().alice, 'stänger man av själv startas delningen inte igen automatiskt under samma jakt');
   // Kommande jakt: delningen startar själv när jakten startar och slutar när den är slut
   const h2 = 'h2kvall', t2 = Date.now();
+  await B.evaluate(() => { __fk.cloud.cleanAfter = 3000; });   // i appen: en timme efter sluttiden
   await B.evaluate(([g, h, t]) => firebase.database().ref().update({[`groups/${g}/hunts/${h}`]: {name:'Kvällsjakt', day:'2026-11-14', starts:t + 5000, expires:t + 16000, code:'KVALL234', by:'bob', created:t, areas:{}, species:{}}, 'huntCodes/KVALL234': {gid:g, hid:h, expires:t + 16000}}), [gid, h2, t2]); await W(A, 500);
   check((await A.innerText('#paneJakt')).includes('Kvällsjakt') && (await A.innerText('#paneJakt')).includes('KOMMANDE'), 'Alice ser den kommande jakten');
   await A.click(`[data-j="rsvp"][data-h="${h2}"]`); await W(A, 600);
@@ -380,8 +413,10 @@ const gids = () => Object.keys(data.groups || {});
   await A.waitForTimeout(Math.max(0, t2 + 16000 - Date.now()) + 1800);
   check(!(await A.isChecked('#shareToggle')) && (await A.evaluate(() => __fk.cloud.sharing)) === false, 'när kvällsjakten är slut slutar delningen av sig själv');
   await B.click('#tab-jakt'); await W(B, 200);
-  await B.click(`[data-j="hunt-end"][data-h="${h2}"]`); await B.click(`[data-j="hunt-end"][data-h="${h2}"]`); await W(B, 700);
-  check(!data.groups[gid].hunts[h2] && !(data.groups[gid].huntRsvp || {})[h2] && !(data.groups[gid].huntPos || {})[h2], 'den avslutade kvällsjakten tas bort med svar och positioner');
+  check(!!data.groups[gid].hunts[h2] && (await B.innerText('#paneJakt')).includes('Tas bort automatiskt'), 'en jakt som passerat sluttiden finns kvar en stund, med besked om när den tas bort');
+  await B.waitForTimeout(Math.max(0, t2 + 16000 + 3000 - Date.now()) + 2500);
+  check(!data.groups[gid].hunts[h2] && !(data.groups[gid].huntRsvp || {})[h2] && !(data.groups[gid].huntPos || {})[h2] && !(data.huntCodes || {})['KVALL234'], 'kvällsjakten städas bort av sig själv efter sluttiden, med kod, svar och positioner');
+  await B.evaluate(() => { __fk.cloud.cleanAfter = 3600000; });
   // ---- Avsluta jakten ----
   await B.click('[data-j="hunt-end"]'); await B.click('[data-j="hunt-end"]'); await W(B, 900);
   check(!data.groups[gid].hunts && !data.huntCodes && !(data.groups[gid].guests || {})['anon-carl'], 'jakten, koden och gästposten är borta');
@@ -492,6 +527,9 @@ const gids = () => Object.keys(data.groups || {});
   check(!D('e').write('/groups/g/huntMsg/h2/m1', MS('e')).allowed && !D('e', t0 + 2000).write('/groups/g/huntMsg/h/m1', MS('e')).allowed && !D('v', t0 + 2000).read('/groups/g/huntMsg/h').allowed && D('v').read('/groups/g/huntMsg/h').allowed && D('gu').read('/groups/g/huntMsg/h').allowed && !D('gu').read('/groups/g/huntMsg/h2').allowed && !D('x').read('/groups/g/huntMsg/h').allowed, 'regel: meddelanden finns bara medan jakten pågår, och bara för jaktens deltagare');
   check(!D('e').write('/groups/g/huntMsg/h/m1', MS('e', {text:'klartext'})).allowed && !D('e').write('/groups/g/huntMsg/h/m1', MS('e', {all:null})).allowed && D('e').write('/groups/g/huntMsg/h/m1', MS('e', {all:null, to:{v:true}})).allowed, 'regel: inga extra fält (ingen klartext), och mottagare måste anges');
   check(!D('e').write('/groups/g/huntMsg/h/m0', MS('e')).allowed && D('e').write('/groups/g/huntMsg/h/m0', null).allowed && !D('v').write('/groups/g/huntMsg/h/m0', null).allowed && D('a2').write('/groups/g/huntMsg/h/m0', null).allowed && D('a2').write('/groups/g/huntMsg/h', null).allowed, 'regel: ett meddelande kan inte ändras, avsändaren och jaktledaren kan ta bort det');
+  { const bad = 'x" onmouseover="alert(1)';
+    check(!D('e').write('/groups/g/pins/ar/' + bad, {lat:1, lng:2, typeId:'t'}).allowed && !D('e').write('/groups/g/areas/' + bad, {name:'X'}).allowed && !D('e').write('/groups/g/types/' + bad, {name:'X', color:'#000'}).allowed && !D('gu').write('/groups/g/huntObs/h/' + bad, O('gu')).allowed && !D('e').write('/groups/g/huntMsg/h/' + bad, MS('e')).allowed && !D('a2').write('/groups/g/huntPlan/h2/drives/' + bad, {name:'S', ring:'1,1;1,2;2,2'}).allowed && !D('e').write('/groups/g/huntTrail/h/e/' + bad, T).allowed && !D('e').write('/groups/g/msgKeys/e/' + bad, K()).allowed, 'regel: nycklar med andra tecken än bokstäver, siffror, - och _ nekas');
+    check(D('e').write('/groups/g/pins/ar/-Nab_c1', {lat:1, lng:2, typeId:'t'}).allowed && D('gu').write('/groups/g/huntObs/h/-Nab_c1', O('gu')).allowed && !D('e').write('/groups/g/pins/ar/' + 'a'.repeat(65), {lat:1, lng:2, typeId:'t'}).allowed, 'regel: vanliga nycklar (även Firebase push-nycklar) godtas, för långa nekas'); }
   check(!D('x').write('/groups/n2/meta', {name:'N', owner:'x'}).allowed && !D('e').write('/groups/n2/meta', {name:'N', owner:'e'}).allowed && D('o').write('/groups/n2/meta', {name:'N', owner:'o'}).allowed && D('c1').write('/groups/n2/meta', {name:'N', owner:'c1'}).allowed, 'regel: bara ägaren och godkända kan skapa jaktlag');
   check(!D('x').write('/owner', 'x').allowed && !D('o').write('/owner', 'x').allowed && !D('x').write('/creators/x', true).allowed && D('o').write('/creators/x', true).allowed, 'regel: ägarskapet kan inte tas över, bara ägaren godkänner fler');
   { const e0 = targaryen.database(rules, {}, t0); check(e0.as(tok('first')).write('/owner', 'first', undefined, t0).allowed && !e0.as(tok('anon-z')).write('/owner', 'anon-z', undefined, t0).allowed && !e0.as(tok('first')).write('/owner', 'other', undefined, t0).allowed, 'regel: första Google-inloggade blir ägare, inte en gäst och inte åt någon annan'); }

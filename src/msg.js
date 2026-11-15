@@ -5,6 +5,8 @@
    (och avsändarens egna) med en nyckel som härleds med ECDH + HKDF. Databasen ser alltså bara vem som skrivit till vem,
    aldrig texten. Meddelandena ligger i groups/<lag>/huntMsg/<jakt> och finns bara medan jakten pågår. */
 const MSG_MAX = 1000;
+const KEY_TTL = 90 * 864e5;   // nycklar från enheter som inte använts på 90 dagar används inte och tas bort
+const keyFresh = d => !!d && !!d.k && (d.t || 0) >= Date.now() - KEY_TTL;
 var msgKeyP = null;                 // Promise med {did, priv, pubB64}
 const msgPlain = {};                // mid -> {text} | {err}
 const msgPair = {};                 // publik nyckel (base64) -> härledd AES-nyckel
@@ -83,7 +85,10 @@ async function msgPublish(g){
   if(g.kind === 'member' ? !(g.members || {})[myUid()] : !(g.guest && g.guest.hid)) return;
   let me; try { me = await myMsgKey(); } catch(e){ return; }
   const cur = ((g.msgKeys || {})[myUid()] || {})[me.did], hid = g.kind === 'guest' ? g.guest.hid : null;
-  if(cur && cur.k === me.pubB64 && cur.name === myName() && (cur.hid || null) === hid) return;
+  // Mina gamla enheters nycklar tas bort, så att meddelanden inte krypteras till enheter som inte används
+  for(const [did, d] of Object.entries((g.msgKeys || {})[myUid()] || {})) if(did !== me.did && !keyFresh(d)) fb.db.ref(`groups/${g.id}/msgKeys/${myUid()}/${did}`).remove().catch(() => {});
+  // Tiden uppdateras högst en gång per dygn: den visar att enheten används
+  if(cur && cur.k === me.pubB64 && cur.name === myName() && (cur.hid || null) === hid && Date.now() - (cur.t || 0) < 864e5) return;
   const v = {k:me.pubB64, name:myName(), t:Date.now()}; if(hid) v.hid = hid;
   fb.db.ref(`groups/${g.id}/msgKeys/${myUid()}/${me.did}`).set(v).catch(() => {});
 }
@@ -92,7 +97,7 @@ function msgPeople(g, hid){
   const out = [];
   for(const [u, devs] of Object.entries(g.msgKeys || {})){
     if(!devs || u === myUid()) continue;
-    const list = Object.entries(devs).filter(([, d]) => d && d.k && (!d.hid || d.hid === hid));
+    const list = Object.entries(devs).filter(([, d]) => keyFresh(d) && (!d.hid || d.hid === hid));
     if(!list.length) continue;
     if(g.kind === 'member' && !(g.members || {})[u] && !Object.entries(g.guests || {}).some(([gu, v]) => gu === u && v && v.hid === hid)) continue;
     const guest = list.every(([, d]) => d.hid);
@@ -101,7 +106,7 @@ function msgPeople(g, hid){
   }
   return out.sort((a, b) => a.name.localeCompare(b.name, 'sv'));
 }
-const myDevices = g => Object.entries((g.msgKeys || {})[myUid()] || {}).filter(([, d]) => d && d.k).map(([did, d]) => ({id:myUid() + '~' + did, k:d.k}));
+const myDevices = g => Object.entries((g.msgKeys || {})[myUid()] || {}).filter(([, d]) => keyFresh(d)).map(([did, d]) => ({id:myUid() + '~' + did, k:d.k}));
 
 /* Meddelanden som rör mig: jag skrev dem eller de är skickade till mig. */
 function msgMine(g, hid){
@@ -119,8 +124,8 @@ function msgHtml(g, hid){
     if(!p) msgLoad(g, mid, m);
     return `<div class="msg${mine ? ' me' : ''}"><div class="msg-h"><b>${esc(mine ? 'Du' : m.name || 'Deltagare')}</b> till ${esc(msgToText(g, hid, m))} <span class="muted">· ${esc(fmtClock(m.t))}</span></div>
       <div class="msg-t">${p ? (p.text != null ? esc(p.text) : `<span class="muted">${esc(p.err)}</span>`) : '<span class="muted">Låser upp …</span>'}</div>
-      ${!mine ? `<button class="linkbtn" type="button" data-j="msg-reply" data-g="${g.id}" data-h="${hid}" data-u="${esc(m.from)}">Svara</button>` : ''}</div>`; }).join('')}</div>`;
-  h += `<div class="btnrow" style="margin-top:6px"><button class="btn sm primary" type="button" data-j="msg-new" data-g="${g.id}" data-h="${hid}">Nytt meddelande</button></div>`;
+      ${!mine ? `<button class="linkbtn" type="button" data-j="msg-reply" data-g="${esc(g.id)}" data-h="${esc(hid)}" data-u="${esc(m.from)}">Svara</button>` : ''}</div>`; }).join('')}</div>`;
+  h += `<div class="btnrow" style="margin-top:6px"><button class="btn sm primary" type="button" data-j="msg-new" data-g="${esc(g.id)}" data-h="${esc(hid)}">Nytt meddelande</button></div>`;
   return h;
 }
 function msgLoad(g, mid, m){
@@ -157,8 +162,10 @@ function openMsgForm(g, hid, to){
       if(!chosen.length){ toast('Välj minst en mottagare.'); return; }
       const btn = m.querySelector('#msgSend'); btn.disabled = true;
       try {
-        await msgSend(g, hid, text, chosen, toAll);
-        closeModal(); toast(toAll ? 'Meddelandet är skickat till alla i jakten.' : `Meddelandet är skickat till ${chosen.map(p => p.name).join(', ')}.`);
+        const r = await msgSend(g, hid, text, chosen, toAll);
+        closeModal();
+        if(r === 'queued') toast('Ingen täckning: meddelandet skickas när täckningen kommer tillbaka. Håll appen öppen.', 6000);
+        else toast(toAll ? 'Meddelandet är skickat till alla i jakten.' : `Meddelandet är skickat till ${chosen.map(p => p.name).join(', ')}.`);
       } catch(err){ btn.disabled = false; toast('Kunde inte skicka meddelandet. Kontrollera nätverket.', 5000); }
     });
   });
@@ -172,6 +179,9 @@ async function msgSend(g, hid, text, people, toAll){
   if(toAll) msg.all = true; else { msg.to = {}; for(const p of people) msg.to[p.uid] = true; }
   const mid = 'm' + uid().replace(/[^a-z0-9]/gi, '');
   msgPlain[mid] = {text};
-  await fb.db.ref(`groups/${g.id}/huntMsg/${hid}/${mid}`).set(msg);
+  const sent = fb.db.ref(`groups/${g.id}/huntMsg/${hid}/${mid}`).set(msg);
+  // Utan täckning lägger Firebase meddelandet i kö och skickar det när täckningen kommer tillbaka (så länge appen är öppen)
+  if(!navigator.onLine){ sent.catch(() => toast('Ett meddelande kunde inte skickas.', 5000)); return 'queued'; }
+  await sent;
 }
 $('#tab-jakt').addEventListener('click', () => $('#tab-jakt').classList.remove('has-news'));

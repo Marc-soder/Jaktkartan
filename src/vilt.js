@@ -81,11 +81,45 @@ const rowLabel = r => [r.cls, r.sub].filter(Boolean).join(', ');
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const nowHM = () => { const d = new Date(); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
 
+
+/* ---------- Sol och skjutljus ----------
+   Soluppgång och solnedgång beräknas i telefonen (solekvationen, med 0,833° för ljusbrytning och solens radie),
+   så det fungerar utan nät. Felet är någon minut. */
+const RAD = Math.PI / 180;
+/* Soluppgång och solnedgång (ms) för det lokala datumet day ('ÅÅÅÅ-MM-DD') på platsen.
+   {polar:'day'} vid midnattssol och {polar:'night'} vid mörkertid. */
+function sunTimes(day, lat, lng){
+  const [y, m, d] = day.split('-').map(Number);
+  const jd = Date.UTC(y, m - 1, d, 12) / 864e5 + 2440587.5;
+  const n = Math.round(jd - 2451545.0 + 0.0008);
+  const J = n - lng / 360;
+  const M = (357.5291 + 0.98560028 * J) % 360;
+  const C = 1.9148 * Math.sin(M * RAD) + 0.02 * Math.sin(2 * M * RAD) + 0.0003 * Math.sin(3 * M * RAD);
+  const lam = (M + C + 180 + 102.9372) % 360;
+  const transit = 2451545.0 + J + 0.0053 * Math.sin(M * RAD) - 0.0069 * Math.sin(2 * lam * RAD);
+  const sinD = Math.sin(lam * RAD) * Math.sin(23.4397 * RAD), cosD = Math.cos(Math.asin(sinD));
+  const cosW = (Math.sin(-0.833 * RAD) - Math.sin(lat * RAD) * sinD) / (Math.cos(lat * RAD) * cosD);
+  if(cosW > 1) return {polar:'night'};
+  if(cosW < -1) return {polar:'day'};
+  const w = Math.acos(cosW) / RAD, ms = j => (j - 2440587.5) * 864e5;
+  return {rise:ms(transit - w / 360), set:ms(transit + w / 360)};
+}
+const hm = t => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}.${String(d.getMinutes()).padStart(2, '0')}`; };
+/* Var tiderna gäller: min position, annars kartans mitt. */
+function sunPlace(){ return myPos ? {lat:myPos.lat, lng:myPos.lng, mine:true} : Object.assign({mine:false}, map.getCenter()); }
+function sunHtml(day, place){
+  const p = place || sunPlace(), s = sunTimes(day, p.lat, p.lng);
+  if(s.polar) return `<div class="sunbox"><div><span class="sun-i" aria-hidden="true">☀</span> ${s.polar === 'day' ? 'Midnattssol: solen går inte ned i dag på platsen.' : 'Mörkertid: solen går inte upp i dag på platsen.'}</div></div>`;
+  return `<div class="sunbox"><div><span class="sun-i" aria-hidden="true">☀</span> Sol upp <b>${hm(s.rise)}</b> · ned <b>${hm(s.set)}</b></div>
+    <div><span class="sun-i" aria-hidden="true">🎯</span> Skjutljus <b>${hm(s.rise - 3600000)}–${hm(s.set + 3600000)}</b> <span class="muted">(en timme före och efter)</span></div>
+    <div class="small muted">Gäller enligt jaktförordningen för bl.a. älg, hjort, rådjur, rovdjur och vissa gäss och änder. För flera arter får timmen efter solnedgången bara användas till smyg- eller vaktjakt. Kontrollera alltid gällande lydelse. Beräknat för ${p.mine ? 'din position' : 'kartans mitt'}.</div></div>`;
+}
 function renderVilt(){
   const pane = $('#paneVilt'); if(!pane) return;
   const lan = state.settings.lan || '', day = viltDay || todayISO(), md = day.slice(5);
   let html = `<div class="row2"><label class="field"><span>Län</span><select class="input" id="viltLan"><option value="">Välj län</option>${LAN.map(l => `<option${l === lan ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
-    <label class="field"><span>Datum</span><input class="input" type="date" id="viltDay" value="${day}"></label></div>`;
+    <label class="field"><span>Datum</span><input class="input" type="date" id="viltDay" value="${esc(day)}"></label></div>`;
+  html += sunHtml(day);
   if(!lan){ html += `<div class="empty">Välj län för att se vad som är lovligt.</div>`; }
   else {
     const row = r => `<div class="vrow"><span class="vper">${fmtPer(r.per)}</span>${rowLabel(r) ? `<span class="vcls">${esc(rowLabel(r))}</span>` : ''}${r.note ? `<span class="vnote">${esc(r.note)}</span>` : ''}</div>`;

@@ -88,7 +88,7 @@ function openShotForm(s){
   if(!s) return;
   openModal(`<h2>Skärmdump</h2><form id="seForm">
     <label class="field"><span>Namn</span><input class="input" id="seName" maxlength="60" value="${esc(s.name)}"></label>
-    <label class="trail-range" style="padding:0"><span style="display:flex;justify-content:space-between"><strong>Genomskinlighet</strong><span id="seOpTxt">${Math.round(s.opacity * 100)} %</span></span><input type="range" id="seOpacity" min="10" max="100" step="5" value="${Math.round(s.opacity * 100)}"></label>
+    <label class="trail-range" style="padding:0"><span style="display:flex;justify-content:space-between"><strong>Genomskinlighet</strong><span id="seOpTxt">${Math.round(s.opacity * 100)} %</span></span><input type="range" id="seOpacity" min="10" max="100" step="5" value="${esc(Math.round(s.opacity * 100))}"></label>
     <label class="checkline"><input type="checkbox" id="seVis" ${s.visible ? 'checked' : ''}><span>Visa på kartan</span></label>
     <div class="btnrow" style="margin-top:10px"><button class="btn" type="button" id="seAdjust">Flytta, skala och vrid</button><button class="btn" type="button" id="seRedo">Gör om punkterna</button><button class="btn" type="button" id="seDraw">Rita gräns</button></div>
     <div class="actions"><button class="btn primary grow" type="submit">Klar</button><button class="btn danger" type="button" id="seDel">Ta bort</button></div></form>`, m => {
@@ -114,7 +114,7 @@ function openBorderPick(areaId){
   const editable = state.areas.filter(a => canEditArea(a));
   if(!editable.length){ toast('Skapa ett område under Filter först.'); return; }
   const sel = areaId || (cal && cal.areaId) || (editable.find(a => !a.example) || editable[0]).id;
-  openModal(`<h2>Rita gräns</h2><label class="field"><span>Område</span><select class="input" id="obArea">${editable.map(a => `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.border ? ' (en ny gränsdel läggs till)' : ''}</option>`).join('')}</select></label>
+  openModal(`<h2>Rita gräns</h2><label class="field"><span>Område</span><select class="input" id="obArea">${editable.map(a => `<option value="${esc(a.id)}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.border ? ' (en ny gränsdel läggs till)' : ''}</option>`).join('')}</select></label>
     <div class="actions"><button class="btn primary grow" type="button" id="obGo">Börja rita</button><button class="btn ghost" type="button" id="obCancel">Avbryt</button></div>`, m => {
     m.querySelector('#obCancel').addEventListener('click', closeModal);
     m.querySelector('#obGo').addEventListener('click', () => { const id = m.querySelector('#obArea').value; endAdjust(); cal = null; endCalBar(); startDrawing(id); });
@@ -267,7 +267,7 @@ function startAdjust(s){
   draw();
   $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
   $('#ovbar').innerHTML = `<p>Dra en <b>punkt</b> för att passa in bilden: det skalar och vrider den. Dra <b>mitten</b> för att flytta hela bilden. Förstoringsglaset visas medan du drar.</p>
-    <label class="trail-range" style="padding:0"><span style="display:flex;justify-content:space-between"><strong>Genomskinlighet</strong><span id="ovOpTxt">${Math.round(s.opacity * 100)} %</span></span><input type="range" id="ovOpacity" min="10" max="100" step="5" value="${Math.round(s.opacity * 100)}"></label>
+    <label class="trail-range" style="padding:0"><span style="display:flex;justify-content:space-between"><strong>Genomskinlighet</strong><span id="ovOpTxt">${Math.round(s.opacity * 100)} %</span></span><input type="range" id="ovOpacity" min="10" max="100" step="5" value="${esc(Math.round(s.opacity * 100))}"></label>
     <div class="btnrow"><button class="btn primary" id="ovAdjDone" type="button">Klar</button><button class="btn" id="ovAdjRedo" type="button">Gör om punkterna</button></div>`;
   $('#ovbar').hidden = false;
   $('#ovOpacity').addEventListener('input', e => { s.opacity = e.target.value / 100; $('#ovOpTxt').textContent = e.target.value + ' %'; if(s.layer) s.layer.setOpacity(s.opacity); });

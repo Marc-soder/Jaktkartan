@@ -7,6 +7,13 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Jaktkartan</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#16231c">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Jaktkartan">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -793,6 +800,10 @@ a{color:var(--accent)}
 .cmp-dial{width:70px;height:70px;border-radius:50%;background:var(--surface);box-shadow:0 2px 10px rgba(0,0,0,.25);transition:transform .15s linear}
 .compass.off .cmp-dial{opacity:.7}
 .cmp-ring{fill:none;stroke:var(--line);stroke-width:2}
+.cmp-no path{fill:#dc2626;opacity:.55}
+.compass.nofire .cmp-dial{box-shadow:0 0 0 4px #dc2626,0 2px 10px rgba(0,0,0,.35)}
+.compass.nofire .cmp-txt{background:#dc2626;color:#fff}
+.compass.nofire .cmp-idx{border-top-color:#dc2626}
 .cmp-ticks line{stroke:var(--muted);stroke-width:1.5}
 .cmp-n{fill:#dc2626}.cmp-s{fill:var(--muted)}
 .cmp-l{font:700 12px/1 var(--font-body);fill:var(--fg);text-anchor:middle;dominant-baseline:central}
@@ -807,6 +818,11 @@ a{color:var(--accent)}
 .msg-h{font-size:13px}
 .msg-t{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:2px}
 .tab.has-news::after{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-left:4px;vertical-align:top}
+.sunbox{display:grid;gap:3px;margin:8px 0;padding:8px 10px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line)}
+.sun-i{display:inline-block;width:1.3em}
+.netbar{position:fixed;z-index:1300;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top,0px));max-width:min(420px,calc(100vw - 200px));padding:6px 12px;border-radius:12px;background:#7c2d12;color:#fff;font:600 12px/1.35 var(--font-body);box-shadow:var(--shadow);text-align:center}
+.netbar[hidden]{display:none}
+@media (max-width:520px){.netbar{top:auto;bottom:calc(var(--sheet-h) + 70px);max-width:calc(100vw - 32px)}}
 .rn-preview{display:grid;gap:4px;max-height:40dvh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--surface-2)}
 .rn-row{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;font-size:14px}
 .rn-row .rn-old{color:var(--muted);overflow-wrap:anywhere}
@@ -1085,7 +1101,8 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
 </button>
 
 <button class="wind-chip" id="windChip" type="button" hidden></button>
-<button class="compass" id="compassBtn" type="button" hidden aria-label="Kompass: tryck för att starta"><svg class="cmp-dial" id="compassDial" viewBox="-50 -50 100 100" aria-hidden="true"><circle r="47" class="cmp-ring"/><g class="cmp-ticks"><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(0.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(22.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(45.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(67.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(90.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(112.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(135.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(157.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(180.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(202.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(225.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(247.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(270.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(292.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(315.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(337.5)"/></g><path d="M0 -21 L5 0 L0 -3 L-5 0 Z" class="cmp-n"/><path d="M0 21 L5 0 L0 3 L-5 0 Z" class="cmp-s"/><text x="0" y="-32" class="cmp-l n">N</text><text x="32" y="0" class="cmp-l">O</text><text x="0" y="32" class="cmp-l">S</text><text x="-32" y="0" class="cmp-l">V</text></svg><span class="cmp-idx" aria-hidden="true"></span><span class="cmp-txt" id="compassTxt">Kompass</span></button>
+<div class="netbar" id="netBar" role="status" hidden>Ingen täckning. Kartan visas från det som sparats. Ändringar skickas när täckningen kommer tillbaka.</div>
+<button class="compass" id="compassBtn" type="button" hidden aria-label="Kompass: tryck för att starta"><svg class="cmp-dial" id="compassDial" viewBox="-50 -50 100 100" aria-hidden="true"><circle r="47" class="cmp-ring"/><g id="cmpNo" class="cmp-no"></g><g class="cmp-ticks"><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(0.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(22.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(45.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(67.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(90.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(112.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(135.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(157.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(180.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(202.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(225.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(247.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(270.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(292.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(315.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(337.5)"/></g><path d="M0 -21 L5 0 L0 -3 L-5 0 Z" class="cmp-n"/><path d="M0 21 L5 0 L0 3 L-5 0 Z" class="cmp-s"/><text x="0" y="-32" class="cmp-l n">N</text><text x="32" y="0" class="cmp-l">O</text><text x="0" y="32" class="cmp-l">S</text><text x="-32" y="0" class="cmp-l">V</text></svg><span class="cmp-idx" aria-hidden="true"></span><span class="cmp-txt" id="compassTxt">Kompass</span></button>
 <div class="placebar" id="measurebar" hidden>
   <p id="measureText"></p>
   <div class="btnrow">
@@ -1392,11 +1409,19 @@ const gbifLayer = L.layerGroup().addTo(map);
 const densityLayer = L.layerGroup().addTo(map);
 let meMarker = null, meCircle = null, myPos = null;
 
+/* Nålarna ritas om bara när något som syns har ändrats. Annars skulle en öppen nålruta stängas
+   varje gång något annat ändras i molnet (en observation, ett meddelande, ett svar). */
+const pinMarkers = new Map();   // id -> {m, sig}
 function renderMarkers(){
-  pinLayer.clearLayers(); syncPinLabels();
+  syncPinLabels();
+  const seen = new Set();
   for(const p of state.pins){
     if(!pinVisible(p)) continue;
     const t = typeById(p.typeId);
+    const sig = [p.lat, p.lng, p.name, t.id, t.name, t.color, t.icon, t.text].join('\u0001'), cur = pinMarkers.get(p.id);
+    seen.add(p.id);
+    if(cur && cur.sig === sig) continue;
+    if(cur) pinLayer.removeLayer(cur.m);
     const m = L.marker([p.lat,p.lng], {
       icon: L.divIcon({className:'pin-icon', html:pinSvg(t) + (p.name ? `<span class="pin-label">${esc(p.name)}</span>` : ''), iconSize:[30,40], iconAnchor:[15,39], popupAnchor:[0,-34]}),
       title: p.name || t.name, riseOnHover:true
@@ -1404,14 +1429,16 @@ function renderMarkers(){
     m.pinId = p.id;
     m.bindPopup(() => pinPopup(p.id), {maxWidth:290, autoPanPaddingTopLeft:[20,70], autoPanPaddingBottomRight:[20, bottomPad()+20]});
     m.addTo(pinLayer);
+    pinMarkers.set(p.id, {m, sig});
   }
+  for(const [id, cur] of pinMarkers) if(!seen.has(id)){ pinLayer.removeLayer(cur.m); pinMarkers.delete(id); }
 }
 /* Namn under nålarna: påslaget från början, och syns bara när man zoomat in så att kartan inte blir rörig. */
 const PIN_LABEL_ZOOM = 14;
 const pinLabelsOn = () => state.settings.pinLabels !== false;
 function syncPinLabels(){ map.getContainer().classList.toggle('pin-labels', pinLabelsOn() && map.getZoom() >= PIN_LABEL_ZOOM); }
 map.on('zoomend', syncPinLabels);
-function findMarker(id){ let f = null; pinLayer.eachLayer(l => { if(l.pinId === id) f = l; }); return f; }
+function findMarker(id){ const c = pinMarkers.get(id); return c ? c.m : null; }
 
 function pinPopup(id){
   const p = pinById(id); const t = typeById(p.typeId); const a = p.areaId ? areaById(p.areaId) : null;
@@ -1659,7 +1686,7 @@ function renderList(){
     const row = p => {
       const t = typeById(p.typeId), a = p.areaId ? areaById(p.areaId) : null;
       const meta = [sort !== 'type' ? t.name : null, sort !== 'area' && a ? a.name : null, myPos ? fmtDist(distM(myPos,p)) : null].filter(Boolean).join(' · ');
-      return `<div class="pin-row"><button class="main" type="button" data-act="goto" data-id="${p.id}">${swatch(t)}<span class="txt"><div class="nm">${esc(p.name || t.name)}</div>${meta ? `<div class="meta">${esc(meta)}</div>` : ''}</span></button>
+      return `<div class="pin-row"><button class="main" type="button" data-act="goto" data-id="${esc(p.id)}">${swatch(t)}<span class="txt"><div class="nm">${esc(p.name || t.name)}</div>${meta ? `<div class="meta">${esc(meta)}</div>` : ''}</span></button>
         <a class="navbtn" href="${navUrl(p.lat,p.lng)}" target="_blank" rel="noopener" aria-label="Navigera till ${esc(p.name || t.name)} med Google Maps">${ICON_NAV}Navigera</a></div>`;
     };
     const group = (key, headInner, list) => {
@@ -1700,11 +1727,11 @@ function renderFilter(){
   const sm = state.settings.svampMode;
   let html = `<h3 class="sec">Områden <span><button class="linkbtn" type="button" data-act="areas-all">Visa alla</button> · <button class="linkbtn" type="button" data-act="areas-none">Dölj alla</button></span></h3><div>`;
   for(const a of state.areas){
-    html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ar-${a.id}" data-act="area-toggle" data-id="${a.id}" ${a.visible !== false ? 'checked' : ''} aria-label="Visa ${esc(a.name)}">
-      <label class="fname" for="ar-${a.id}">${esc(a.name)}</label>${a.gid ? `<span class="tag" title="Delas med ${esc(gname(cloud.groups[a.gid]))}">Delat</span>` : ''}<span class="fcount">${cnt(p => p.areaId === a.id)}</span>
-      <button class="iconbtn" type="button" data-act="area-zoom" data-id="${a.id}" aria-label="Zooma till ${esc(a.name)}" title="Zooma till området">${ICON_ZOOM}</button>
-      ${canEditArea(a) ? `<button class="iconbtn" type="button" data-act="area-edit" data-id="${a.id}" aria-label="Ändra ${esc(a.name)}">${ICON_EDIT}</button>` : '<span style="width:36px"></span>'}
-      ${!a.gid || (cloud.groups[a.gid] && isAdminGroup(cloud.groups[a.gid])) ? `<button class="iconbtn" type="button" data-act="area-del" data-id="${a.id}" aria-label="Ta bort ${esc(a.name)}">${ICON_TRASH}</button>` : '<span style="width:36px"></span>'}</div>`;
+    html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ar-${esc(a.id)}" data-act="area-toggle" data-id="${esc(a.id)}" ${a.visible !== false ? 'checked' : ''} aria-label="Visa ${esc(a.name)}">
+      <label class="fname" for="ar-${esc(a.id)}">${esc(a.name)}</label>${a.gid ? `<span class="tag" title="Delas med ${esc(gname(cloud.groups[a.gid]))}">Delat</span>` : ''}<span class="fcount">${cnt(p => p.areaId === a.id)}</span>
+      <button class="iconbtn" type="button" data-act="area-zoom" data-id="${esc(a.id)}" aria-label="Zooma till ${esc(a.name)}" title="Zooma till området">${ICON_ZOOM}</button>
+      ${canEditArea(a) ? `<button class="iconbtn" type="button" data-act="area-edit" data-id="${esc(a.id)}" aria-label="Ändra ${esc(a.name)}">${ICON_EDIT}</button>` : '<span style="width:36px"></span>'}
+      ${!a.gid || (cloud.groups[a.gid] && isAdminGroup(cloud.groups[a.gid])) ? `<button class="iconbtn" type="button" data-act="area-del" data-id="${esc(a.id)}" aria-label="Ta bort ${esc(a.name)}">${ICON_TRASH}</button>` : '<span style="width:36px"></span>'}</div>`;
   }
   html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ar-none" data-act="noarea-toggle" ${state.settings.noAreaVisible !== false ? 'checked' : ''} aria-label="Visa nålar utan område">
     <label class="fname muted" for="ar-none">Utan område</label><span class="fcount">${cnt(p => !p.areaId || !areaById(p.areaId))}</span><span style="width:76px"></span></div></div>
@@ -1714,9 +1741,9 @@ function renderFilter(){
   html += '<div>';
   for(const t of state.types){
     const on = sm ? t.svamp : t.visible !== false;
-    html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ty-${t.id}" data-act="type-toggle" data-id="${t.id}" ${on ? 'checked' : ''} ${sm ? 'disabled' : ''} aria-label="Visa ${esc(t.name)}">
-      ${swatch(t)}<label class="fname" for="ty-${t.id}">${esc(t.name)}</label>${t.svamp ? '<span class="tag">Svamp</span>' : ''}<span class="fcount">${cnt(p => p.typeId === t.id)}</span>
-      <button class="iconbtn" type="button" data-act="type-edit" data-id="${t.id}" aria-label="Ändra ${esc(t.name)}">${ICON_EDIT}</button></div>`;
+    html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ty-${esc(t.id)}" data-act="type-toggle" data-id="${esc(t.id)}" ${on ? 'checked' : ''} ${sm ? 'disabled' : ''} aria-label="Visa ${esc(t.name)}">
+      ${swatch(t)}<label class="fname" for="ty-${esc(t.id)}">${esc(t.name)}</label>${t.svamp ? '<span class="tag">Svamp</span>' : ''}<span class="fcount">${cnt(p => p.typeId === t.id)}</span>
+      <button class="iconbtn" type="button" data-act="type-edit" data-id="${esc(t.id)}" aria-label="Ändra ${esc(t.name)}">${ICON_EDIT}</button></div>`;
   }
   html += '</div>';
   pane.innerHTML = html;
@@ -1734,10 +1761,10 @@ function renderSvampPane(){
   for(const sp of SPECIES){
     const r = gbif.results[sp.id];
     const c = r ? (r.error ? 'fel' : (r.count > r.points.length ? `${fmtInt(r.points.length)} av ${fmtInt(r.count)}` : fmtInt(r.points.length))) : '';
-    html += `<label class="sp-row"><input type="checkbox" data-act="sp" data-id="${sp.id}" ${g.species.includes(sp.id) ? 'checked' : ''}><span class="dot" style="background:${sp.color}"></span><span class="spn">${esc(sp.name)}<i>${esc(sp.sci)}</i></span><span class="spc">${c}</span></label>`;
+    html += `<label class="sp-row"><input type="checkbox" data-act="sp" data-id="${esc(sp.id)}" ${g.species.includes(sp.id) ? 'checked' : ''}><span class="dot" style="background:${sp.color}"></span><span class="spn">${esc(sp.name)}<i>${esc(sp.sci)}</i></span><span class="spc">${c}</span></label>`;
   }
   html += `</div>
-  <div class="row2" style="margin-top:10px"><label class="field"><span>Tidsperiod</span><select class="input" id="gbifYear">${years.map(([v,l]) => `<option value="${v}"${+g.fromYear === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+  <div class="row2" style="margin-top:10px"><label class="field"><span>Tidsperiod</span><select class="input" id="gbifYear">${years.map(([v,l]) => `<option value="${esc(v)}"${+g.fromYear === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
   <label class="field"><span>Översikt, alla år</span><span style="display:flex;align-items:center;gap:10px;min-height:44px"><input class="sw-toggle" type="checkbox" id="gbifDensity" ${g.density ? 'checked' : ''}><span class="small muted">Prickar per ruta</span></span></label></div>
   <div class="btnrow"><button class="btn primary" type="button" id="gbifLoad" ${gbif.busy ? 'disabled' : ''}>${gbif.busy ? 'Hämtar …' : 'Hämta fynd i kartvyn'}</button>${Object.keys(gbif.results).length ? '<button class="btn" type="button" id="gbifClear">Rensa fynd</button>' : ''}</div>
   <div class="status${gbif.err ? ' err' : ''}" id="gbifStatus">${esc(gbif.status)}</div>
@@ -1745,9 +1772,9 @@ function renderSvampPane(){
   <h3 class="sec">Importerade svampkällor <button class="linkbtn" type="button" data-act="import-ext">+ Importera fil</button></h3>`;
   if(!state.external.length) html += `<p class="note" style="margin-top:0">Inga importerade källor. Importera GeoJSON, KML, GPX eller CSV, till exempel en export från Artportalen eller en kompis svampställen.</p>`;
   for(const src of state.external){
-    html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ex-${src.id}" data-act="ext-toggle" data-id="${src.id}" ${src.visible !== false ? 'checked' : ''} aria-label="Visa ${esc(src.name)}">
-      <span class="dot" style="background:#fff;border-color:${esc(src.color)};box-shadow:0 0 0 1px ${esc(src.color)}"></span><label class="fname" for="ex-${src.id}">${esc(src.name)}</label><span class="fcount">${src.points.length}</span>
-      <button class="iconbtn" type="button" data-act="ext-del" data-id="${src.id}" aria-label="Ta bort ${esc(src.name)}">${ICON_TRASH}</button></div>`;
+    html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ex-${esc(src.id)}" data-act="ext-toggle" data-id="${esc(src.id)}" ${src.visible !== false ? 'checked' : ''} aria-label="Visa ${esc(src.name)}">
+      <span class="dot" style="background:#fff;border-color:${esc(src.color)};box-shadow:0 0 0 1px ${esc(src.color)}"></span><label class="fname" for="ex-${esc(src.id)}">${esc(src.name)}</label><span class="fcount">${src.points.length}</span>
+      <button class="iconbtn" type="button" data-act="ext-del" data-id="${esc(src.id)}" aria-label="Ta bort ${esc(src.name)}">${ICON_TRASH}</button></div>`;
   }
   html += `<h3 class="sec">Jämför med</h3><div class="btnrow">
     <a class="btn sm" href="https://svampkartan.se/" target="_blank" rel="noopener">svampkartan.se</a>
@@ -1784,7 +1811,7 @@ function renderStatus(){
   $('#modeChip').hidden = !state.settings.svampMode;
 }
 function renderLayerPop(){
-  $('#baseOpts').innerHTML = Object.entries(BASES).map(([k,b]) => `<label class="base-opt"><input type="radio" name="base" value="${k}" ${state.settings.base === k ? 'checked' : ''}><span>${b.label}<small>${b.sub}</small></span></label>`).join('');
+  $('#baseOpts').innerHTML = Object.entries(BASES).map(([k,b]) => `<label class="base-opt"><input type="radio" name="base" value="${esc(k)}" ${state.settings.base === k ? 'checked' : ''}><span>${b.label}<small>${b.sub}</small></span></label>`).join('');
   $('#satLabels').checked = !!state.settings.satLabels;
   $('#satLabelsRow').hidden = state.settings.base !== 'sat';
   $('#popSvamp').checked = !!state.settings.svampMode;
@@ -1866,9 +1893,9 @@ function closeModal(){ if(modalEl){ modalEl.remove(); modalEl = null; if(lastFoc
 document.addEventListener('keydown', e => { if(e.key === 'Escape'){ if(modalEl) closeModal(); else if(!$('#layerPop').hidden) toggleLayerPop(false); else if(placing) endPlacing(); } });
 
 function areaOptions(sel){
-  return `<option value="">Utan område (privat)</option>${state.areas.filter(canEditArea).map(a => `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.gid ? ' · delat' : ''}</option>`).join('')}<option value="__new">+ Nytt område …</option>`;
+  return `<option value="">Utan område (privat)</option>${state.areas.filter(canEditArea).map(a => `<option value="${esc(a.id)}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.gid ? ' · delat' : ''}</option>`).join('')}<option value="__new">+ Nytt område …</option>`;
 }
-function typeOptions(sel){ return state.types.map(t => `<option value="${t.id}"${t.id === sel ? ' selected' : ''}>${esc(t.name)}${t.svamp ? ' (svamp)' : ''}</option>`).join(''); }
+function typeOptions(sel){ return state.types.map(t => `<option value="${esc(t.id)}"${t.id === sel ? ' selected' : ''}>${esc(t.name)}${t.svamp ? ' (svamp)' : ''}</option>`).join(''); }
 function wireNewArea(m, selId, inputId){
   const sel = m.querySelector('#' + selId), inp = m.querySelector('#' + inputId);
   sel.addEventListener('change', () => { inp.hidden = sel.value !== '__new'; if(!inp.hidden) inp.focus(); });
@@ -1950,7 +1977,7 @@ function openAreaForm(id){
   const canMove = !a.gid || (cloud.groups[a.gid] && isAdminGroup(cloud.groups[a.gid]));
   const n = state.pins.filter(p => p.areaId === id).length, rings = areaRings(a);
   openModal(`<h2>Ändra område</h2><form id="afForm"><label class="field"><span>Namn</span><input class="input" id="afName" maxlength="60" value="${esc(a.name)}"></label>
-    ${mine.length || a.gid ? `<label class="field"><span>Delas med</span><select class="input" id="afShare" ${canMove ? '' : 'disabled'}><option value="">Bara jag (privat)</option>${mine.map(g => `<option value="${g.id}"${a.gid === g.id ? ' selected' : ''}>${esc(gname(g))}</option>`).join('')}</select></label>
+    ${mine.length || a.gid ? `<label class="field"><span>Delas med</span><select class="input" id="afShare" ${canMove ? '' : 'disabled'}><option value="">Bara jag (privat)</option>${mine.map(g => `<option value="${esc(g.id)}"${a.gid === g.id ? ' selected' : ''}>${esc(gname(g))}</option>`).join('')}</select></label>
     <p class="note" style="margin:-4px 0 0">${canMove ? `Delar du området ser alla i jaktlaget dess ${n} ${n === 1 ? 'nål' : 'nålar'}, och medlemmar kan ändra dem.` : 'Bara en admin kan sluta dela området.'}</p>` : '<p class="note" style="margin:-4px 0 0">Logga in under Jakt och skapa ett jaktlag för att kunna dela området.</p>'}
     <div class="field" style="margin-top:14px"><span>Gräns</span>${rings.length ? rings.map((r, k) => `<div class="frow"><span class="fname">${rings.length > 1 ? `Del ${k + 1}` : 'Gränsen'}<br><span class="small muted">${r.length} punkter · ${fmtHa(areaHa(r))}</span></span><button class="btn sm" type="button" data-ring-edit="${k}">Ändra</button><button class="btn sm danger" type="button" data-ring-del="${k}">Ta bort</button></div>`).join('') + (rings.length > 1 ? `<div class="small" style="margin-top:4px">Totalt ${fmtHa(ringsHa(rings))} i ${rings.length} delar.</div>` : '') : '<div class="small">Ingen gräns är ritad.</div>'}
       <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afDraw">${rings.length ? 'Rita en till del' : 'Rita gräns'}</button><button class="btn sm" type="button" id="afImport">Importera från fil</button><button class="btn sm" type="button" id="afShot">Från skärmdump</button></div>
@@ -1958,7 +1985,7 @@ function openAreaForm(id){
     <div class="field" style="margin-top:14px"><span>Egna vägar och stigar</span>${areaLines(a).length ? areaLines(a).map(([lid, l]) => `<div class="frow"><span class="fname">${esc(l.n || LINE_KIND[l.k])}<br><span class="small muted">${LINE_KIND[l.k]} · ${fmtDist(lineLen(parseBorder(l.p)))}</span></span><button class="btn sm" type="button" data-line-edit="${lid}">Ändra</button></div>`).join('') : '<div class="small">Inga egna vägar eller stigar.</div>'}
       <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afLine">Rita väg eller stig</button></div></div>
     ${moveTargets(a).length && (a.border || areaLines(a).length || n) ? `<details class="field" style="margin-top:14px" id="afMoveBox"><summary><span>Flytta till ett annat område</span></summary>
-      <label class="field" style="margin-top:8px"><span>Till</span><select class="input" id="afMoveTo">${moveTargets(a).map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></label>
+      <label class="field" style="margin-top:8px"><span>Till</span><select class="input" id="afMoveTo">${moveTargets(a).map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('')}</select></label>
       ${rings.length ? `<label class="checkline"><input type="checkbox" id="afMvBorder" checked><span>${rings.length > 1 ? `Gränsen (${rings.length} delar)` : 'Gränsen'}</span></label>` : ''}
       ${areaLines(a).length ? `<label class="checkline"><input type="checkbox" id="afMvLines" checked><span>Vägar och stigar (${areaLines(a).length})</span></label>` : ''}
       ${n ? `<label class="checkline"><input type="checkbox" id="afMvPins" checked><span>Nålar och pass (${n})</span></label>` : ''}
@@ -1997,8 +2024,8 @@ function openTypeForm(id, after){
     <form id="tfForm">
       <div class="preview" id="tfPrev"></div>
       <label class="field"><span>Namn</span><input class="input" id="tfName" maxlength="40" value="${esc(t.name)}" placeholder="t.ex. Saltsten" required></label>
-      <div class="field"><span>Färg</span><div class="colors" id="tfColors">${COLOR_PRESETS.map(c => `<button type="button" class="color-opt" data-c="${c}" style="background:${c}" aria-label="Färg ${c}" aria-pressed="${c.toLowerCase() === (t.color||'').toLowerCase()}"></button>`).join('')}<input type="color" class="color-opt" id="tfColor" value="${esc(t.color)}" aria-label="Egen färg"></div></div>
-      <div class="field"><span>Symbol</span><div class="icon-grid" id="tfIcons">${Object.entries(ICONS).map(([k,ic]) => `<button type="button" class="icon-opt" data-i="${k}" aria-pressed="${t.icon === k}" title="${esc(ic.label)}" aria-label="${esc(ic.label)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ic.svg}</svg></button>`).join('')}<button type="button" class="icon-opt" data-i="text" aria-pressed="${t.icon === 'text'}" title="Egen text" aria-label="Egen text"><span class="aa">Aa</span></button></div>
+      <div class="field"><span>Färg</span><div class="colors" id="tfColors">${COLOR_PRESETS.map(c => `<button type="button" class="color-opt" data-c="${esc(c)}" style="background:${c}" aria-label="Färg ${c}" aria-pressed="${c.toLowerCase() === (t.color||'').toLowerCase()}"></button>`).join('')}<input type="color" class="color-opt" id="tfColor" value="${esc(t.color)}" aria-label="Egen färg"></div></div>
+      <div class="field"><span>Symbol</span><div class="icon-grid" id="tfIcons">${Object.entries(ICONS).map(([k,ic]) => `<button type="button" class="icon-opt" data-i="${esc(k)}" aria-pressed="${t.icon === k}" title="${esc(ic.label)}" aria-label="${esc(ic.label)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ic.svg}</svg></button>`).join('')}<button type="button" class="icon-opt" data-i="text" aria-pressed="${t.icon === 'text'}" title="Egen text" aria-label="Egen text"><span class="aa">Aa</span></button></div>
         <input class="input" id="tfText" maxlength="2" placeholder="1–2 tecken, t.ex. S eller 7" value="${esc(t.text || '')}" ${t.icon === 'text' ? '' : 'hidden'} style="margin-top:8px"></div>
       <label class="checkline"><input type="checkbox" id="tfSvamp" ${t.svamp ? 'checked' : ''}><span><b>Svamptyp</b><br><span class="small muted">Visas i svampkartan</span></span></label>
       <div class="actions"><button class="btn primary grow" type="submit">Spara</button>
@@ -2032,7 +2059,7 @@ function openTypeForm(id, after){
         if(!used){ confirmClick(del, 'Bekräfta', () => { state.types = state.types.filter(x => x.id !== id); save(); closeModal(); renderAll(); }); return; }
         const others = state.types.filter(x => x.id !== id);
         openModal(`<h2>Ta bort ”${esc(t.name)}”</h2><p>${used} ${used === 1 ? 'nål' : 'nålar'} får en ny typ:</p>
-          <label class="field"><span>Ny typ för nålarna</span><select class="input" id="tdTo">${others.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select></label>
+          <label class="field"><span>Ny typ för nålarna</span><select class="input" id="tdTo">${others.map(o => `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('')}</select></label>
           <div class="actions"><button class="btn danger grow" type="button" id="tdOk">Ta bort typen</button><button class="btn ghost" type="button" id="tdCancel">Avbryt</button></div>`, m2 => {
           m2.querySelector('#tdCancel').addEventListener('click', closeModal);
           m2.querySelector('#tdOk').addEventListener('click', () => { const to = m2.querySelector('#tdTo').value; state.pins.forEach(p => { if(p.typeId === id) p.typeId = to; }); state.types = state.types.filter(x => x.id !== id); save(); closeModal(); renderAll(); toast('Typen togs bort'); });
@@ -2416,11 +2443,45 @@ const rowLabel = r => [r.cls, r.sub].filter(Boolean).join(', ');
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const nowHM = () => { const d = new Date(); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
 
+
+/* ---------- Sol och skjutljus ----------
+   Soluppgång och solnedgång beräknas i telefonen (solekvationen, med 0,833° för ljusbrytning och solens radie),
+   så det fungerar utan nät. Felet är någon minut. */
+const RAD = Math.PI / 180;
+/* Soluppgång och solnedgång (ms) för det lokala datumet day ('ÅÅÅÅ-MM-DD') på platsen.
+   {polar:'day'} vid midnattssol och {polar:'night'} vid mörkertid. */
+function sunTimes(day, lat, lng){
+  const [y, m, d] = day.split('-').map(Number);
+  const jd = Date.UTC(y, m - 1, d, 12) / 864e5 + 2440587.5;
+  const n = Math.round(jd - 2451545.0 + 0.0008);
+  const J = n - lng / 360;
+  const M = (357.5291 + 0.98560028 * J) % 360;
+  const C = 1.9148 * Math.sin(M * RAD) + 0.02 * Math.sin(2 * M * RAD) + 0.0003 * Math.sin(3 * M * RAD);
+  const lam = (M + C + 180 + 102.9372) % 360;
+  const transit = 2451545.0 + J + 0.0053 * Math.sin(M * RAD) - 0.0069 * Math.sin(2 * lam * RAD);
+  const sinD = Math.sin(lam * RAD) * Math.sin(23.4397 * RAD), cosD = Math.cos(Math.asin(sinD));
+  const cosW = (Math.sin(-0.833 * RAD) - Math.sin(lat * RAD) * sinD) / (Math.cos(lat * RAD) * cosD);
+  if(cosW > 1) return {polar:'night'};
+  if(cosW < -1) return {polar:'day'};
+  const w = Math.acos(cosW) / RAD, ms = j => (j - 2440587.5) * 864e5;
+  return {rise:ms(transit - w / 360), set:ms(transit + w / 360)};
+}
+const hm = t => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}.${String(d.getMinutes()).padStart(2, '0')}`; };
+/* Var tiderna gäller: min position, annars kartans mitt. */
+function sunPlace(){ return myPos ? {lat:myPos.lat, lng:myPos.lng, mine:true} : Object.assign({mine:false}, map.getCenter()); }
+function sunHtml(day, place){
+  const p = place || sunPlace(), s = sunTimes(day, p.lat, p.lng);
+  if(s.polar) return `<div class="sunbox"><div><span class="sun-i" aria-hidden="true">☀</span> ${s.polar === 'day' ? 'Midnattssol: solen går inte ned i dag på platsen.' : 'Mörkertid: solen går inte upp i dag på platsen.'}</div></div>`;
+  return `<div class="sunbox"><div><span class="sun-i" aria-hidden="true">☀</span> Sol upp <b>${hm(s.rise)}</b> · ned <b>${hm(s.set)}</b></div>
+    <div><span class="sun-i" aria-hidden="true">🎯</span> Skjutljus <b>${hm(s.rise - 3600000)}–${hm(s.set + 3600000)}</b> <span class="muted">(en timme före och efter)</span></div>
+    <div class="small muted">Gäller enligt jaktförordningen för bl.a. älg, hjort, rådjur, rovdjur och vissa gäss och änder. För flera arter får timmen efter solnedgången bara användas till smyg- eller vaktjakt. Kontrollera alltid gällande lydelse. Beräknat för ${p.mine ? 'din position' : 'kartans mitt'}.</div></div>`;
+}
 function renderVilt(){
   const pane = $('#paneVilt'); if(!pane) return;
   const lan = state.settings.lan || '', day = viltDay || todayISO(), md = day.slice(5);
   let html = `<div class="row2"><label class="field"><span>Län</span><select class="input" id="viltLan"><option value="">Välj län</option>${LAN.map(l => `<option${l === lan ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
-    <label class="field"><span>Datum</span><input class="input" type="date" id="viltDay" value="${day}"></label></div>`;
+    <label class="field"><span>Datum</span><input class="input" type="date" id="viltDay" value="${esc(day)}"></label></div>`;
+  html += sunHtml(day);
   if(!lan){ html += `<div class="empty">Välj län för att se vad som är lovligt.</div>`; }
   else {
     const row = r => `<div class="vrow"><span class="vper">${fmtPer(r.per)}</span>${rowLabel(r) ? `<span class="vcls">${esc(rowLabel(r))}</span>` : ''}${r.note ? `<span class="vnote">${esc(r.note)}</span>` : ''}</div>`;
@@ -2447,11 +2508,11 @@ let viltDay = null;
 /* ---------- Moln: jaktlag, rättigheter, jakter och positioner (Firebase Realtime Database) ---------- */
 const FB_VER = '10.12.2', FBKEY = 'faltkartan.fb', NAMEKEY = 'faltkartan.name';
 const BAKED_CFG = {apiKey:"AIzaSyDlhnsDFs3HxuMmGPYBUm-3e0ZBmVsCiq0", authDomain:"jaktkartan-daa0a.firebaseapp.com", databaseURL:"https://jaktkartan-daa0a-default-rtdb.europe-west1.firebasedatabase.app", projectId:"jaktkartan-daa0a", storageBucket:"jaktkartan-daa0a.firebasestorage.app", messagingSenderId:"813258995773", appId:"1:813258995773:web:00660a1eb536eaa85cd254"};
-const RULES_TEXT = "{\n  \"rules\": {\n    \".read\": false,\n    \".write\": false,\n    \"owner\": {\n      \".read\": \"auth != null\",\n      \".write\": \"auth != null && !data.exists() && newData.val() === auth.uid && auth.token.firebase.sign_in_provider !== 'anonymous'\"\n    },\n    \"creators\": {\n      \"$uid\": {\n        \".read\": \"auth != null && (auth.uid === $uid || root.child('owner').val() === auth.uid)\",\n        \".write\": \"auth != null && root.child('owner').val() === auth.uid\",\n        \".validate\": \"newData.isBoolean()\"\n      }\n    },\n    \"userGroups\": {\n      \"$uid\": {\n        \".read\": \"auth != null && auth.uid === $uid\",\n        \".write\": \"auth != null && auth.uid === $uid\"\n      }\n    },\n    \"invites\": {\n      \"$code\": {\n        \".read\": \"auth != null\",\n        \".write\": \"auth != null && ((!data.exists() && root.child('groups/'+newData.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin') || (data.exists() && !newData.exists() && root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin'))\",\n        \".validate\": \"$code.length >= 8 && newData.hasChildren(['gid','role','expires']) && newData.child('expires').isNumber() && (newData.child('role').val() === 'leader' || newData.child('role').val() === 'editor' || newData.child('role').val() === 'viewer')\"\n      }\n    },\n    \"huntCodes\": {\n      \"$code\": {\n        \".read\": \"auth != null\",\n        \".write\": \"auth != null && ((!data.exists() && (root.child('groups/'+newData.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin' || root.child('groups/'+newData.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'leader')) || (data.exists() && !newData.exists() && (root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin' || root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'leader')) || (data.exists() && newData.exists() && (root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin' || root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'leader') && newData.child('gid').val() === data.child('gid').val() && newData.child('hid').val() === data.child('hid').val()))\",\n        \".validate\": \"$code.length >= 6 && newData.hasChildren(['gid','hid','expires']) && newData.child('expires').isNumber()\"\n      }\n    },\n    \"groups\": {\n      \"$gid\": {\n        \".write\": \"auth != null && data.child('meta/owner').val() === auth.uid && !newData.exists()\",\n        \"meta\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now)\",\n          \".write\": \"auth != null && ((!data.exists() && newData.child('owner').val() === auth.uid && (root.child('owner').val() === auth.uid || root.child('creators/'+auth.uid).val() === true)) || ((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin') && newData.child('owner').val() === data.child('owner').val()))\",\n          \".validate\": \"newData.hasChildren(['name','owner']) && newData.child('name').isString() && newData.child('name').val().length <= 80\"\n        },\n        \"members\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$uid\": {\n            \".write\": \"auth != null && (((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin') && ($uid !== data.parent().parent().child('meta/owner').val() || newData.child('role').val() === 'admin')) || ($uid === auth.uid && !data.exists() && !data.parent().parent().child('meta').exists() && newData.parent().parent().child('meta/owner').val() === auth.uid && newData.child('role').val() === 'admin') || ($uid === auth.uid && !data.exists() && newData.exists() && root.child('invites/'+newData.child('code').val()).child('gid').val() === $gid && root.child('invites/'+newData.child('code').val()).child('expires').val() > now && newData.child('role').val() === root.child('invites/'+newData.child('code').val()).child('role').val()) || ($uid === auth.uid && data.exists() && $uid !== data.parent().parent().child('meta/owner').val() && (!newData.exists() || newData.child('role').val() === data.child('role').val())) || ($uid === auth.uid && data.exists() && $uid === data.parent().parent().child('meta/owner').val() && newData.child('role').val() === 'admin'))\",\n            \".validate\": \"newData.hasChildren(['role','name']) && newData.child('name').isString() && newData.child('name').val().length <= 60 && (newData.child('role').val() === 'admin' || newData.child('role').val() === 'leader' || newData.child('role').val() === 'editor' || newData.child('role').val() === 'viewer')\"\n          }\n        },\n        \"areas\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$aid\": {\n            \".read\": \"((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/hunts/'+root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val()+'/areas/'+$aid).val() === true)\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'editor'))\",\n            \".validate\": \"newData.child('name').isString() && newData.child('name').val().length <= 80\"\n          }\n        },\n        \"pins\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$aid\": {\n            \".read\": \"((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/hunts/'+root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val()+'/areas/'+$aid).val() === true)\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'editor'))\",\n            \"$pid\": {\n              \".validate\": \"newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('typeId').isString()\"\n            }\n          }\n        },\n        \"types\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now)\",\n          \"$tid\": {\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'editor'))\",\n            \".validate\": \"newData.child('name').isString() && newData.child('color').isString()\"\n          }\n        },\n        \"hunts\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$hid\": {\n            \".read\": \"(auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))\",\n            \".validate\": \"newData.hasChildren(['name','expires','code']) && newData.child('expires').isNumber() && (!newData.child('starts').exists() || (newData.child('starts').isNumber() && newData.child('starts').val() < newData.child('expires').val()))\"\n          }\n        },\n        \"guests\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$uid\": {\n            \".read\": \"auth != null && auth.uid === $uid\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) || (auth != null && $uid === auth.uid && (!newData.exists() || (root.child('huntCodes/'+newData.child('code').val()).child('gid').val() === $gid && root.child('huntCodes/'+newData.child('code').val()).child('hid').val() === newData.child('hid').val() && root.child('huntCodes/'+newData.child('code').val()).child('expires').val() > now && newData.child('expires').val() === root.child('huntCodes/'+newData.child('code').val()).child('expires').val())))\",\n            \".validate\": \"newData.hasChildren(['hid','code','name','expires']) && newData.child('name').isString() && newData.child('name').val().length <= 60\"\n          }\n        },\n        \"huntPos\": {\n          \"$hid\": {\n            \".read\": \"((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid)) && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now))\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()\",\n            \"$uid\": {\n              \".write\": \"auth != null && $uid === auth.uid && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now)) && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid))\",\n              \".validate\": \"newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber()\"\n            }\n          }\n        },\n        \"huntObs\": {\n          \"$hid\": {\n            \".read\": \"(((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid)) && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now))) || (auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()\",\n            \"$oid\": {\n              \".write\": \"auth != null && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now)) && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid)) && (newData.exists() ? (newData.child('by').val() === auth.uid && (!data.exists() || data.child('by').val() === auth.uid)) : (data.child('by').val() === auth.uid || (auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))))\",\n              \".validate\": \"newData.hasChildren(['sp','n','lat','lng','t','by']) && newData.child('sp').isString() && newData.child('sp').val().length >= 1 && newData.child('sp').val().length <= 40 && newData.child('n').isNumber() && newData.child('n').val() >= 1 && newData.child('n').val() <= 999 && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000 && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 200)) && (!newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val().length <= 60))\"\n            }\n          }\n        },\n        \"obsArchive\": {\n          \".read\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))\",\n          \"$oid\": {\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))\",\n            \".validate\": \"newData.hasChildren(['sp','n','lat','lng','t']) && newData.child('sp').isString() && newData.child('sp').val().length >= 1 && newData.child('sp').val().length <= 40 && newData.child('n').isNumber() && newData.child('n').val() >= 1 && newData.child('n').val() <= 999 && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000\",\n            \"sp\": {\n              \".validate\": true\n            },\n            \"n\": {\n              \".validate\": true\n            },\n            \"lat\": {\n              \".validate\": true\n            },\n            \"lng\": {\n              \".validate\": true\n            },\n            \"t\": {\n              \".validate\": true\n            },\n            \"hid\": {\n              \".validate\": \"newData.isString() && newData.val().length <= 40\"\n            },\n            \"$other\": {\n              \".validate\": false\n            }\n          }\n        },\n        \"huntPlan\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$hid\": {\n            \".read\": \"(auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && (root.child('groups/'+$gid+'/hunts/'+$hid).exists() || !newData.exists())\",\n            \"stands\": {\n              \"$pid\": {\n                \"who\": {\n                  \".validate\": \"newData.isString() && newData.val().length <= 60\"\n                },\n                \"uid\": {\n                  \".validate\": \"newData.isString() && newData.val().length <= 128\"\n                },\n                \"no\": {\n                  \".validate\": \"newData.isNumber() && newData.val() >= 0 && newData.val() <= 65535 && newData.val() % 1 === 0\"\n                },\n                \"$other\": {\n                  \".validate\": false\n                }\n              }\n            },\n            \"drives\": {\n              \"$did\": {\n                \".validate\": \"newData.hasChildren(['name','ring'])\",\n                \"name\": {\n                  \".validate\": \"newData.isString() && newData.val().length <= 60\"\n                },\n                \"ring\": {\n                  \".validate\": \"newData.isString() && newData.val().length <= 20000\"\n                },\n                \"$other\": {\n                  \".validate\": false\n                }\n              }\n            },\n            \"routes\": {\n              \"$rid\": {\n                \".validate\": \"newData.hasChildren(['kind','pts'])\",\n                \"kind\": {\n                  \".validate\": \"newData.val() === 'hund' || newData.val() === 'drev'\"\n                },\n                \"who\": {\n                  \".validate\": \"newData.isString() && newData.val().length <= 60\"\n                },\n                \"uid\": {\n                  \".validate\": \"newData.isString() && newData.val().length <= 128\"\n                },\n                \"pts\": {\n                  \".validate\": \"newData.isString() && newData.val().length <= 20000\"\n                },\n                \"$other\": {\n                  \".validate\": false\n                }\n              }\n            },\n            \"$other\": {\n              \".validate\": false\n            }\n          }\n        },\n        \"huntRsvp\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$hid\": {\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()\",\n            \"$uid\": {\n              \".write\": \"auth != null && $uid === auth.uid && root.child('groups/'+$gid+'/members/'+auth.uid).exists() && (root.child('groups/'+$gid+'/hunts/'+$hid).exists() || !newData.exists())\",\n              \".validate\": \"newData.hasChildren(['name','t'])\",\n              \"name\": {\n                \".validate\": \"newData.isString() && newData.val().length <= 60\"\n              },\n              \"t\": {\n                \".validate\": \"newData.isNumber() && newData.val() <= now + 60000\"\n              },\n              \"$other\": {\n                \".validate\": false\n              }\n            }\n          }\n        },\n        \"msgKeys\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now)\",\n          \"$uid\": {\n            \".write\": \"auth != null && (($uid === auth.uid && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now))) || ((auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()))\",\n            \"$did\": {\n              \".validate\": \"newData.hasChildren(['k','name','t']) && ($uid !== auth.uid || root.child('groups/'+$gid+'/members/'+auth.uid).exists() || newData.child('hid').val() === root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val())\",\n              \"k\": {\n                \".validate\": \"newData.isString() && newData.val().length >= 40 && newData.val().length <= 200\"\n              },\n              \"name\": {\n                \".validate\": \"newData.isString() && newData.val().length <= 60\"\n              },\n              \"t\": {\n                \".validate\": \"newData.isNumber() && newData.val() <= now + 60000\"\n              },\n              \"hid\": {\n                \".validate\": \"newData.isString() && newData.val().length <= 40\"\n              },\n              \"$other\": {\n                \".validate\": false\n              }\n            }\n          }\n        },\n        \"huntMsg\": {\n          \"$hid\": {\n            \".read\": \"((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid)) && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now))\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()\",\n            \"$mid\": {\n              \".write\": \"auth != null && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now)) && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid)) && (newData.exists() ? (!data.exists() && newData.child('from').val() === auth.uid) : (data.child('from').val() === auth.uid || (auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))))\",\n              \".validate\": \"newData.hasChildren(['from','name','t','iv','ct','spk','keys']) && (newData.child('all').val() === true || newData.hasChild('to'))\",\n              \"from\": {\n                \".validate\": \"newData.isString()\"\n              },\n              \"name\": {\n                \".validate\": \"newData.isString() && newData.val().length <= 60\"\n              },\n              \"t\": {\n                \".validate\": \"newData.isNumber() && newData.val() <= now + 60000\"\n              },\n              \"iv\": {\n                \".validate\": \"newData.isString() && newData.val().length <= 40\"\n              },\n              \"ct\": {\n                \".validate\": \"newData.isString() && newData.val().length <= 8000\"\n              },\n              \"spk\": {\n                \".validate\": \"newData.isString() && newData.val().length <= 200\"\n              },\n              \"all\": {\n                \".validate\": \"newData.isBoolean()\"\n              },\n              \"to\": {\n                \"$uid\": {\n                  \".validate\": \"newData.val() === true\"\n                }\n              },\n              \"keys\": {\n                \"$k\": {\n                  \".validate\": \"newData.isString() && newData.val().length <= 200\"\n                }\n              },\n              \"$other\": {\n                \".validate\": false\n              }\n            }\n          }\n        },\n        \"huntTrail\": {\n          \"$hid\": {\n            \".read\": \"((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid)) && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now))\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()\",\n            \"$uid\": {\n              \".write\": \"auth != null && $uid === auth.uid && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now)) && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid))\",\n              \"$pt\": {\n                \".validate\": \"newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000\"\n              }\n            }\n          }\n        }\n      }\n    }\n  }\n}";
+const RULES_TEXT = "{\n  \"rules\": {\n    \".read\": false,\n    \".write\": false,\n    \"owner\": {\n      \".read\": \"auth != null\",\n      \".write\": \"auth != null && !data.exists() && newData.val() === auth.uid && auth.token.firebase.sign_in_provider !== 'anonymous'\"\n    },\n    \"creators\": {\n      \"$uid\": {\n        \".read\": \"auth != null && (auth.uid === $uid || root.child('owner').val() === auth.uid)\",\n        \".write\": \"auth != null && root.child('owner').val() === auth.uid\",\n        \".validate\": \"newData.isBoolean()\"\n      }\n    },\n    \"userGroups\": {\n      \"$uid\": {\n        \".read\": \"auth != null && auth.uid === $uid\",\n        \".write\": \"auth != null && auth.uid === $uid\"\n      }\n    },\n    \"invites\": {\n      \"$code\": {\n        \".read\": \"auth != null\",\n        \".write\": \"auth != null && ((!data.exists() && root.child('groups/'+newData.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin') || (data.exists() && !newData.exists() && root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin'))\",\n        \".validate\": \"$code.length >= 8 && newData.hasChildren(['gid','role','expires']) && newData.child('expires').isNumber() && (newData.child('role').val() === 'leader' || newData.child('role').val() === 'editor' || newData.child('role').val() === 'viewer')\"\n      }\n    },\n    \"huntCodes\": {\n      \"$code\": {\n        \".read\": \"auth != null\",\n        \".write\": \"auth != null && ((!data.exists() && (root.child('groups/'+newData.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin' || root.child('groups/'+newData.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'leader')) || (data.exists() && !newData.exists() && (root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin' || root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'leader')) || (data.exists() && newData.exists() && (root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'admin' || root.child('groups/'+data.child('gid').val()+'/members/'+auth.uid+'/role').val() === 'leader') && newData.child('gid').val() === data.child('gid').val() && newData.child('hid').val() === data.child('hid').val()))\",\n        \".validate\": \"$code.length >= 6 && newData.hasChildren(['gid','hid','expires']) && newData.child('expires').isNumber()\"\n      }\n    },\n    \"groups\": {\n      \"$gid\": {\n        \".write\": \"auth != null && data.child('meta/owner').val() === auth.uid && !newData.exists()\",\n        \"meta\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now)\",\n          \".write\": \"auth != null && ((!data.exists() && newData.child('owner').val() === auth.uid && (root.child('owner').val() === auth.uid || root.child('creators/'+auth.uid).val() === true)) || ((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin') && newData.child('owner').val() === data.child('owner').val()))\",\n          \".validate\": \"newData.hasChildren(['name','owner']) && newData.child('name').isString() && newData.child('name').val().length <= 80\"\n        },\n        \"members\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$uid\": {\n            \".write\": \"auth != null && (((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin') && ($uid !== data.parent().parent().child('meta/owner').val() || newData.child('role').val() === 'admin')) || ($uid === auth.uid && !data.exists() && !data.parent().parent().child('meta').exists() && newData.parent().parent().child('meta/owner').val() === auth.uid && newData.child('role').val() === 'admin') || ($uid === auth.uid && !data.exists() && newData.exists() && root.child('invites/'+newData.child('code').val()).child('gid').val() === $gid && root.child('invites/'+newData.child('code').val()).child('expires').val() > now && newData.child('role').val() === root.child('invites/'+newData.child('code').val()).child('role').val()) || ($uid === auth.uid && data.exists() && $uid !== data.parent().parent().child('meta/owner').val() && (!newData.exists() || newData.child('role').val() === data.child('role').val())) || ($uid === auth.uid && data.exists() && $uid === data.parent().parent().child('meta/owner').val() && newData.child('role').val() === 'admin'))\",\n            \".validate\": \"newData.hasChildren(['role','name']) && newData.child('name').isString() && newData.child('name').val().length <= 60 && (newData.child('role').val() === 'admin' || newData.child('role').val() === 'leader' || newData.child('role').val() === 'editor' || newData.child('role').val() === 'viewer')\"\n          }\n        },\n        \"areas\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$aid\": {\n            \".read\": \"((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/hunts/'+root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val()+'/areas/'+$aid).val() === true)\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'editor'))\",\n            \".validate\": \"($aid.matches(/^[A-Za-z0-9_-]+$/) && $aid.length <= 64) && newData.child('name').isString() && newData.child('name').val().length <= 80\"\n          }\n        },\n        \"pins\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$aid\": {\n            \".read\": \"((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/hunts/'+root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val()+'/areas/'+$aid).val() === true)\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'editor'))\",\n            \".validate\": \"($aid.matches(/^[A-Za-z0-9_-]+$/) && $aid.length <= 64)\",\n            \"$pid\": {\n              \".validate\": \"($pid.matches(/^[A-Za-z0-9_-]+$/) && $pid.length <= 64) && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('typeId').isString()\"\n            }\n          }\n        },\n        \"types\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now)\",\n          \"$tid\": {\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'editor'))\",\n            \".validate\": \"($tid.matches(/^[A-Za-z0-9_-]+$/) && $tid.length <= 64) && newData.child('name').isString() && newData.child('color').isString()\"\n          }\n        },\n        \"hunts\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$hid\": {\n            \".read\": \"(auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))\",\n            \".validate\": \"($hid.matches(/^[A-Za-z0-9_-]+$/) && $hid.length <= 64) && newData.hasChildren(['name','expires','code']) && newData.child('expires').isNumber() && (!newData.child('starts').exists() || (newData.child('starts').isNumber() && newData.child('starts').val() < newData.child('expires').val()))\"\n          }\n        },\n        \"guests\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$uid\": {\n            \".read\": \"auth != null && auth.uid === $uid\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) || (auth != null && $uid === auth.uid && (!newData.exists() || (root.child('huntCodes/'+newData.child('code').val()).child('gid').val() === $gid && root.child('huntCodes/'+newData.child('code').val()).child('hid').val() === newData.child('hid').val() && root.child('huntCodes/'+newData.child('code').val()).child('expires').val() > now && newData.child('expires').val() === root.child('huntCodes/'+newData.child('code').val()).child('expires').val())))\",\n            \".validate\": \"newData.hasChildren(['hid','code','name','expires']) && newData.child('name').isString() && newData.child('name').val().length <= 60\"\n          }\n        },\n        \"huntPos\": {\n          \"$hid\": {\n            \".read\": \"((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid)) && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now))\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()\",\n            \"$uid\": {\n              \".write\": \"auth != null && $uid === auth.uid && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now)) && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid))\",\n              \".validate\": \"newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber()\"\n            }\n          }\n        },\n        \"huntObs\": {\n          \"$hid\": {\n            \".read\": \"(((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid)) && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now))) || (auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()\",\n            \"$oid\": {\n              \".write\": \"auth != null && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now)) && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid)) && (newData.exists() ? (newData.child('by').val() === auth.uid && (!data.exists() || data.child('by').val() === auth.uid)) : (data.child('by').val() === auth.uid || (auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))))\",\n              \".validate\": \"($oid.matches(/^[A-Za-z0-9_-]+$/) && $oid.length <= 64) && newData.hasChildren(['sp','n','lat','lng','t','by']) && newData.child('sp').isString() && newData.child('sp').val().length >= 1 && newData.child('sp').val().length <= 40 && newData.child('n').isNumber() && newData.child('n').val() >= 1 && newData.child('n').val() <= 999 && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000 && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 200)) && (!newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val().length <= 60))\"\n            }\n          }\n        },\n        \"obsArchive\": {\n          \".read\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))\",\n          \"$oid\": {\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))\",\n            \".validate\": \"($oid.matches(/^[A-Za-z0-9_-]+$/) && $oid.length <= 64) && newData.hasChildren(['sp','n','lat','lng','t']) && newData.child('sp').isString() && newData.child('sp').val().length >= 1 && newData.child('sp').val().length <= 40 && newData.child('n').isNumber() && newData.child('n').val() >= 1 && newData.child('n').val() <= 999 && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000\",\n            \"sp\": {\n              \".validate\": true\n            },\n            \"n\": {\n              \".validate\": true\n            },\n            \"lat\": {\n              \".validate\": true\n            },\n            \"lng\": {\n              \".validate\": true\n            },\n            \"t\": {\n              \".validate\": true\n            },\n            \"hid\": {\n              \".validate\": \"newData.isString() && newData.val().length <= 40\"\n            },\n            \"$other\": {\n              \".validate\": false\n            }\n          }\n        },\n        \"huntPlan\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$hid\": {\n            \".read\": \"(auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && (root.child('groups/'+$gid+'/hunts/'+$hid).exists() || !newData.exists())\",\n            \"stands\": {\n              \"$pid\": {\n                \".validate\": \"($pid.matches(/^[A-Za-z0-9_-]+$/) && $pid.length <= 64)\",\n                \"who\": {\n                  \".validate\": \"newData.isString() && newData.val().length <= 60\"\n                },\n                \"uid\": {\n                  \".validate\": \"newData.isString() && newData.val().length <= 128\"\n                },\n                \"no\": {\n                  \".validate\": \"newData.isNumber() && newData.val() >= 0 && newData.val() <= 65535 && newData.val() % 1 === 0\"\n                },\n                \"$other\": {\n                  \".validate\": false\n                }\n              }\n            },\n            \"drives\": {\n              \"$did\": {\n                \".validate\": \"($did.matches(/^[A-Za-z0-9_-]+$/) && $did.length <= 64) && newData.hasChildren(['name','ring'])\",\n                \"name\": {\n                  \".validate\": \"newData.isString() && newData.val().length <= 60\"\n                },\n                \"ring\": {\n                  \".validate\": \"newData.isString() && newData.val().length <= 20000\"\n                },\n                \"$other\": {\n                  \".validate\": false\n                }\n              }\n            },\n            \"routes\": {\n              \"$rid\": {\n                \".validate\": \"($rid.matches(/^[A-Za-z0-9_-]+$/) && $rid.length <= 64) && newData.hasChildren(['kind','pts'])\",\n                \"kind\": {\n                  \".validate\": \"newData.val() === 'hund' || newData.val() === 'drev'\"\n                },\n                \"who\": {\n                  \".validate\": \"newData.isString() && newData.val().length <= 60\"\n                },\n                \"uid\": {\n                  \".validate\": \"newData.isString() && newData.val().length <= 128\"\n                },\n                \"pts\": {\n                  \".validate\": \"newData.isString() && newData.val().length <= 20000\"\n                },\n                \"$other\": {\n                  \".validate\": false\n                }\n              }\n            },\n            \"$other\": {\n              \".validate\": false\n            }\n          }\n        },\n        \"huntRsvp\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists())\",\n          \"$hid\": {\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()\",\n            \"$uid\": {\n              \".write\": \"auth != null && $uid === auth.uid && root.child('groups/'+$gid+'/members/'+auth.uid).exists() && (root.child('groups/'+$gid+'/hunts/'+$hid).exists() || !newData.exists())\",\n              \".validate\": \"newData.hasChildren(['name','t'])\",\n              \"name\": {\n                \".validate\": \"newData.isString() && newData.val().length <= 60\"\n              },\n              \"t\": {\n                \".validate\": \"newData.isNumber() && newData.val() <= now + 60000\"\n              },\n              \"$other\": {\n                \".validate\": false\n              }\n            }\n          }\n        },\n        \"msgKeys\": {\n          \".read\": \"(auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now)\",\n          \"$uid\": {\n            \".write\": \"auth != null && (($uid === auth.uid && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || (auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now))) || ((auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()))\",\n            \"$did\": {\n              \".validate\": \"($did.matches(/^[A-Za-z0-9_-]+$/) && $did.length <= 64) && newData.hasChildren(['k','name','t']) && ($uid !== auth.uid || root.child('groups/'+$gid+'/members/'+auth.uid).exists() || newData.child('hid').val() === root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val())\",\n              \"k\": {\n                \".validate\": \"newData.isString() && newData.val().length >= 40 && newData.val().length <= 200\"\n              },\n              \"name\": {\n                \".validate\": \"newData.isString() && newData.val().length <= 60\"\n              },\n              \"t\": {\n                \".validate\": \"newData.isNumber() && newData.val() <= now + 60000\"\n              },\n              \"hid\": {\n                \".validate\": \"newData.isString() && newData.val().length <= 40\"\n              },\n              \"$other\": {\n                \".validate\": false\n              }\n            }\n          }\n        },\n        \"huntMsg\": {\n          \"$hid\": {\n            \".read\": \"((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid)) && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now))\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()\",\n            \"$mid\": {\n              \".write\": \"auth != null && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now)) && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid)) && (newData.exists() ? (!data.exists() && newData.child('from').val() === auth.uid) : (data.child('from').val() === auth.uid || (auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader'))))\",\n              \".validate\": \"($mid.matches(/^[A-Za-z0-9_-]+$/) && $mid.length <= 64) && newData.hasChildren(['from','name','t','iv','ct','spk','keys']) && (newData.child('all').val() === true || newData.hasChild('to'))\",\n              \"from\": {\n                \".validate\": \"newData.isString()\"\n              },\n              \"name\": {\n                \".validate\": \"newData.isString() && newData.val().length <= 60\"\n              },\n              \"t\": {\n                \".validate\": \"newData.isNumber() && newData.val() <= now + 60000\"\n              },\n              \"iv\": {\n                \".validate\": \"newData.isString() && newData.val().length <= 40\"\n              },\n              \"ct\": {\n                \".validate\": \"newData.isString() && newData.val().length <= 8000\"\n              },\n              \"spk\": {\n                \".validate\": \"newData.isString() && newData.val().length <= 200\"\n              },\n              \"all\": {\n                \".validate\": \"newData.isBoolean()\"\n              },\n              \"to\": {\n                \"$uid\": {\n                  \".validate\": \"newData.val() === true\"\n                }\n              },\n              \"keys\": {\n                \"$k\": {\n                  \".validate\": \"newData.isString() && newData.val().length <= 200\"\n                }\n              },\n              \"$other\": {\n                \".validate\": false\n              }\n            }\n          }\n        },\n        \"huntTrail\": {\n          \"$hid\": {\n            \".read\": \"((auth != null && root.child('groups/'+$gid+'/members/'+auth.uid).exists()) || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid)) && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now))\",\n            \".write\": \"(auth != null && (root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'admin' || root.child('groups/'+$gid+'/members/'+auth.uid).child('role').val() === 'leader')) && !newData.exists()\",\n            \"$uid\": {\n              \".write\": \"auth != null && $uid === auth.uid && (root.child('groups/'+$gid+'/hunts/'+$hid).child('expires').val() > now && (!root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').exists() || root.child('groups/'+$gid+'/hunts/'+$hid).child('starts').val() <= now)) && (root.child('groups/'+$gid+'/members/'+auth.uid).exists() || ((auth != null && root.child('groups/'+$gid+'/guests/'+auth.uid).child('expires').val() > now) && root.child('groups/'+$gid+'/guests/'+auth.uid).child('hid').val() === $hid))\",\n              \"$pt\": {\n                \".validate\": \"($pt.matches(/^[A-Za-z0-9_-]+$/) && $pt.length <= 64) && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000\"\n              }\n            }\n          }\n        }\n      }\n    }\n  }\n}";
 const ROLES = {admin:'Admin', leader:'Jaktledare', editor:'Medlem', viewer:'Läsare'};
 const ROLE_HELP = {admin:'Allt, även medlemmar och rättigheter', leader:'Skapa jakter, ändra nålar', editor:'Lägga till och ändra nålar', viewer:'Bara titta'};
 let fb = null;
-const cloud = {autoOff:{}, autoShared:false, owner:undefined, creator:false, ownRef:null, cfg:null, status:'off', user:null, groups:{}, ugRef:null, sharing:false, watchId:null, lastSent:0, err:'', pending:null};
+const cloud = {autoOff:{}, autoShared:false, cleanAfter:3600000, cleaning:{}, owner:undefined, creator:false, ownRef:null, cfg:null, status:'off', user:null, groups:{}, ugRef:null, sharing:false, watchId:null, lastSent:0, err:'', pending:null};
 const newCode = n => { const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', a = new Uint32Array(n); crypto.getRandomValues(a); return Array.from(a, x => abc[x % 32]).join(''); };
 const canon = o => JSON.stringify(o, (k, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.keys(v).sort().reduce((r, key) => { r[key] = v[key]; return r; }, {}) : v);
 const lsGet = k => { try { return localStorage.getItem(k); } catch(e){ return null; } };
@@ -2647,7 +2708,8 @@ function autoShare(){
   if(cloud.sharing && cloud.autoShared && !live.length){ stopSharing(); toast('Jakten är slut. Din position delas inte längre.', 5000); return; }
   if(cloud.sharing || !live.length) return;
   startSharing();
-  if(cloud.sharing){ cloud.autoShared = true; toast('Jakten har startat. Din position delas med jaktlaget medan appen är öppen.', 5000); }
+  // Har man precis tryckt Jag deltar har man redan fått besked: ingen andra avisering
+  if(cloud.sharing){ cloud.autoShared = true; if(Date.now() - (cloud.rsvpAt || 0) > 5000) toast('Jakten har startat. Din position delas med jaktlaget medan appen är öppen.', 5000); }
 }
 let huntPosTimer = null;
 function syncHuntPos(){
@@ -2680,8 +2742,11 @@ function syncHuntPos(){
       r.on('value', s => { if(g.posRefs[hid] === r){ g.huntPos[hid] = s.val() || {}; renderPositions(); } }, () => { if(g.posRefs[hid] === r){ delete g.posRefs[hid]; delete g.huntPos[hid]; renderPositions(); } });
       g.posRefs[hid] = r;
     }
-    // Nästa gång en jakt startar eller slutar
-    for(const h of Object.values(g.hunts || {})) if(h){ for(const t of [h.starts, h.expires]) if(t > Date.now() && t < next) next = t; }
+    // Jakter som passerat sluttiden städas bort efter en stund av en jaktledare eller admin, så att inget ligger kvar i databasen
+    if(g.kind === 'member' && canLeadGroup(g)) for(const [hid, h] of Object.entries(g.hunts || {}))
+      if(h && h.expires + cloud.cleanAfter <= Date.now() && !cloud.cleaning[g.id + '/' + hid]){ cloud.cleaning[g.id + '/' + hid] = true; endHunt(g, hid, true); }
+    // Nästa gång en jakt startar, slutar eller ska städas
+    for(const h of Object.values(g.hunts || {})) if(h){ for(const t of [h.starts, h.expires, h.expires + cloud.cleanAfter]) if(t > Date.now() && t < next) next = t; }
   }
   if(cloud.sharing && !anyLiveHunt()){ stopSharing(); toast('Jakten är slut. Din position delas inte längre.', 5000); }
   autoShare();
@@ -2721,10 +2786,16 @@ function obsAll(){
   return out.sort((a, b) => b.t - a.t);
 }
 const canDelObs = o => o.by === myUid() || (o.g.kind === 'member' && canLeadGroup(o.g));
+/* Som nålarna: bara observationer som ändrats ritas om, så att en öppen ruta inte stängs när någon annan lägger in en. */
+const obsMarkers = new Map();   // lag/jakt/id -> {m, sig}
 function renderObs(){
-  obsLayer.clearLayers();
   const b = $('#btnObs'); if(b) b.hidden = !anyLiveHunt();
+  const seen = new Set();
   for(const o of obsAll()){
+    const key = o.g.id + '/' + o.hid + '/' + o.oid, sig = [o.lat, o.lng, o.sp, o.n, o.note, o.name, o.t, o.by].join('\u0001'), cur = obsMarkers.get(key);
+    seen.add(key);
+    if(cur && cur.sig === sig) continue;
+    if(cur) obsLayer.removeLayer(cur.m);
     const m = L.marker([o.lat, o.lng], {icon:L.divIcon({className:'obs-icon', html:`<span class="obs-dot">${esc(obsKey(o.sp))}</span>${o.n > 1 ? `<span class="obs-n">${o.n}</span>` : ''}`, iconSize:[30, 30], iconAnchor:[15, 15], popupAnchor:[0, -14]}), zIndexOffset:400});
     m.bindPopup(() => {
       const el = h(`<div class="pp"><h4>${esc(o.sp)}${o.n > 1 ? ' × ' + o.n : ''}</h4><div class="pnote">Sedd ${esc(fmtClock(o.t))} (${ago(o.t)})${o.name ? ' av ' + esc(o.name) : ''}${o.note ? '<br>' + esc(o.note) : ''}${myPos ? `<br>${fmtDist(distM(myPos, o))} bort` : ''}</div>${canDelObs(o) ? '<div class="pbtns"><button class="btn sm danger" type="button" data-obs-del>Ta bort</button></div>' : ''}</div>`);
@@ -2733,12 +2804,14 @@ function renderObs(){
       return el;
     });
     m.addTo(obsLayer);
+    obsMarkers.set(key, {m, sig});
   }
+  for(const [key, cur] of obsMarkers) if(!seen.has(key)){ obsLayer.removeLayer(cur.m); obsMarkers.delete(key); }
 }
 const fmtClock = t => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}.${String(d.getMinutes()).padStart(2, '0')}`; };
 function obsList(g, hid){
   const list = Object.entries(g.huntObs[hid] || {}).filter(([, o]) => o).sort((a, b) => b[1].t - a[1].t);
-  return `<div class="lbl">Viltobservationer</div>` + (list.length ? list.map(([oid, o]) => `<button class="obs-row" type="button" data-j="obs-go" data-g="${g.id}" data-h="${hid}" data-o="${oid}"><span class="obs-dot sm">${esc(obsKey(o.sp))}</span><span><b>${esc(o.sp)}</b>${o.n > 1 ? ' × ' + o.n : ''} <span class="muted">${esc(fmtClock(o.t))}${o.name ? ' · ' + esc(o.name) : ''}</span>${o.note ? `<br><span class="small">${esc(o.note)}</span>` : ''}</span></button>`).join('')
+  return `<div class="lbl">Viltobservationer</div>` + (list.length ? list.map(([oid, o]) => `<button class="obs-row" type="button" data-j="obs-go" data-g="${esc(g.id)}" data-h="${esc(hid)}" data-o="${esc(oid)}"><span class="obs-dot sm">${esc(obsKey(o.sp))}</span><span><b>${esc(o.sp)}</b>${o.n > 1 ? ' × ' + o.n : ''} <span class="muted">${esc(fmtClock(o.t))}${o.name ? ' · ' + esc(o.name) : ''}</span>${o.note ? `<br><span class="small">${esc(o.note)}</span>` : ''}</span></button>`).join('')
     : '<div class="small muted">Inga ännu. Tryck på kikaren på kartan för att lägga in en.</div>');
 }
 function openObsForm(ll){
@@ -2748,7 +2821,7 @@ function openObsForm(ll){
   const sel = hunts[0], sp = h0 => { const ids = Object.keys((h0.hunt || {}).species || {}).filter(k => h0.hunt.species[k]); return ids.map(viltById).filter(Boolean); };
   const opts = h0 => { const first = sp(h0), rest = VILT.filter(v => !first.includes(v)); return (first.length ? `<optgroup label="Jaktbart i jakten">${first.map(v => `<option>${esc(v.name)}</option>`).join('')}</optgroup>` : '') + `<optgroup label="Övrigt vilt">${rest.map(v => `<option>${esc(v.name)}</option>`).join('')}</optgroup><option value="__other">Annat …</option>`; };
   openModal(`<h2>Viltobservation</h2><form id="obForm">
-    ${hunts.length > 1 ? `<label class="field"><span>Jakt</span><select class="input" id="obHunt">${hunts.map((x, i) => `<option value="${i}">${esc(x.hunt.name)} · ${esc(gname(x.g))}</option>`).join('')}</select></label>` : `<p class="note" style="margin-top:0">Sparas i jakten <b>${esc(sel.hunt.name)}</b> och syns för alla deltagare så länge jakten pågår.</p>`}
+    ${hunts.length > 1 ? `<label class="field"><span>Jakt</span><select class="input" id="obHunt">${hunts.map((x, i) => `<option value="${esc(i)}">${esc(x.hunt.name)} · ${esc(gname(x.g))}</option>`).join('')}</select></label>` : `<p class="note" style="margin-top:0">Sparas i jakten <b>${esc(sel.hunt.name)}</b> och syns för alla deltagare så länge jakten pågår.</p>`}
     <div class="row2"><label class="field"><span>Vilt</span><select class="input" id="obSp">${opts(sel)}</select></label>
     <label class="field"><span>Antal</span><input class="input" id="obN" type="number" inputmode="numeric" min="1" max="999" value="1"></label></div>
     <input class="input" id="obOther" maxlength="40" placeholder="Vilket vilt?" hidden>
@@ -2765,6 +2838,7 @@ function openObsForm(ll){
       const n = Math.max(1, Math.min(999, parseInt(m.querySelector('#obN').value, 10) || 1)), note = m.querySelector('#obNote').value.trim();
       const o = {sp:name.slice(0, 40), n, lat:+ll.lat.toFixed(6), lng:+ll.lng.toFixed(6), t:Date.now(), by:myUid(), name:myName()}; if(note) o.note = note.slice(0, 200);
       closeModal();
+      if(!navigator.onLine) toast(`Ingen täckning: ${o.sp} skickas när täckningen kommer tillbaka. Håll appen öppen.`, 6000);
       fb.db.ref(`groups/${x.g.id}/huntObs/${x.hid}`).push(o).then(() => toast(`${o.sp} är sparad i jakten.`)).catch(fail('Observationen kunde inte sparas. Pågår jakten fortfarande?'));
     });
   });
@@ -2936,18 +3010,26 @@ function huntCard(g, hid, hunt, lead){
   const guests = Object.entries(g.guests || {}).filter(([, v]) => v && v.hid === hid);
   const areas = Object.keys(hunt.areas || {}).map(a => (g.areas[a] || {}).name).filter(Boolean);
   return `<div class="card${live ? '' : ' dim'}"><div class="card-h"><strong>${esc(hunt.name)}</strong><span class="tag${live && !upcoming ? ' on' : ''}">${upcoming ? 'Kommande' : live ? 'Pågår' : 'Avslutad'}</span></div>
+    ${!live ? `<div class="small muted">Tas bort automatiskt ${esc(fmtTime(hunt.expires + cloud.cleanAfter))}, och observationerna sparas till värmekartan.</div>` : ''}
     <div class="small muted">${esc(fmtDay(hunt.day))}${hunt.lan ? ' · ' + esc(hunt.lan) : ''}${hunt.starts ? ` · startar ${esc(fmtTime(hunt.starts))}` : ''} · gäller till ${esc(fmtTime(hunt.expires))}</div>
+    ${live ? sunHtml(hunt.day || todayISO(), huntPlace(g, hunt)) : ''}
     <div class="lbl">Jaktbart vilt</div>${huntChips(hunt)}
     ${live ? rsvpHtml(g, hid) : ''}
     ${live ? planCardHtml(g, hid, hunt, lead) : ''}
     ${live && !upcoming ? msgHtml(g, hid) : ''}
     ${live && !upcoming ? obsList(g, hid) : ''}
     ${areas.length ? `<div class="lbl">Områden</div><div class="small">${areas.map(esc).join(', ')}</div>` : ''}
-    ${lead && live ? `<div class="lbl">Tillfällig åtkomst för gäster</div><div class="codebox"><span>Jaktkod <b>${esc(hunt.code)}</b></span><button class="btn sm" type="button" data-j="hunt-link" data-g="${g.id}" data-h="${hid}">Kopiera länk</button></div>
-      ${guests.length ? `<div class="small" style="margin-top:6px">${guests.map(([gu, v]) => `<span class="gst">${esc(v.name)}<button class="x" type="button" data-j="guest-del" data-g="${g.id}" data-u="${gu}" aria-label="Ta bort ${esc(v.name)}">×</button></span>`).join(' ')}</div>` : '<div class="small muted" style="margin-top:6px">Inga gäster har gått med.</div>'}` : ''}
-    ${lead ? `<div class="btnrow" style="margin-top:10px">${live ? `<button class="btn sm" type="button" data-j="hunt-edit" data-g="${g.id}" data-h="${hid}">Ändra jakt</button>` : ''}<button class="btn sm danger" type="button" data-j="hunt-end" data-g="${g.id}" data-h="${hid}">${live ? 'Avsluta jakten' : 'Ta bort'}</button></div>` : ''}</div>`;
+    ${lead && live ? `<div class="lbl">Tillfällig åtkomst för gäster</div><div class="codebox"><span>Jaktkod <b>${esc(hunt.code)}</b></span><button class="btn sm" type="button" data-j="hunt-link" data-g="${esc(g.id)}" data-h="${esc(hid)}">Kopiera länk</button></div>
+      ${guests.length ? `<div class="small" style="margin-top:6px">${guests.map(([gu, v]) => `<span class="gst">${esc(v.name)}<button class="x" type="button" data-j="guest-del" data-g="${esc(g.id)}" data-u="${esc(gu)}" aria-label="Ta bort ${esc(v.name)}">×</button></span>`).join(' ')}</div>` : '<div class="small muted" style="margin-top:6px">Inga gäster har gått med.</div>'}` : ''}
+    ${lead ? `<div class="btnrow" style="margin-top:10px">${live ? `<button class="btn sm" type="button" data-j="hunt-edit" data-g="${esc(g.id)}" data-h="${esc(hid)}">Ändra jakt</button>` : ''}<button class="btn sm danger" type="button" data-j="hunt-end" data-g="${esc(g.id)}" data-h="${esc(hid)}">${live ? 'Avsluta jakten' : 'Ta bort'}</button></div>` : ''}</div>`;
 }
 /* Vilka som deltar, och knappen Jag deltar. Gäster deltar alltid (de har gått med via jaktkoden). */
+/* Skjutljus för jakten: min position, annars mitten av jaktens första område med gräns, annars kartans mitt. */
+function huntPlace(g, hunt){
+  if(myPos) return {lat:myPos.lat, lng:myPos.lng, mine:true};
+  for(const aid of Object.keys(hunt.areas || {})){ const a = areaById(aid), r = a ? areaRings(a)[0] : null; if(r && r.length){ const c = L.latLngBounds(r).getCenter(); return {lat:c.lat, lng:c.lng, mine:false}; } }
+  return sunPlace();
+}
 function rsvpHtml(g, hid){
   const auto = 'Din position delas automatiskt med jaktlaget medan jakten pågår och appen är öppen.';
   if(g.kind !== 'member') return `<p class="note">${auto}</p>`;
@@ -2956,7 +3038,7 @@ function rsvpHtml(g, hid){
     .sort((a, b) => a.localeCompare(b, 'sv'));
   const me = accepted(g, hid);
   return `<div class="lbl">Deltar${names.length ? ' (' + names.length + ')' : ''}</div><div class="small rsvp-list">${names.length ? names.map(esc).join(', ') : '<span class="muted">Ingen har svarat ännu.</span>'}</div>
-    <div class="btnrow" style="margin-top:6px">${me ? `<span class="tag on">Du deltar</span><button class="btn sm ghost" type="button" data-j="rsvp-no" data-g="${g.id}" data-h="${hid}">Avböj</button>` : `<button class="btn sm primary" type="button" data-j="rsvp" data-g="${g.id}" data-h="${hid}">Jag deltar</button>`}</div>
+    <div class="btnrow" style="margin-top:6px">${me ? `<span class="tag on">Du deltar</span><button class="btn sm ghost" type="button" data-j="rsvp-no" data-g="${esc(g.id)}" data-h="${esc(hid)}">Avböj</button>` : `<button class="btn sm primary" type="button" data-j="rsvp" data-g="${esc(g.id)}" data-h="${esc(hid)}">Jag deltar</button>`}</div>
     <p class="note" style="margin-top:4px">${me ? auto : 'Deltar du delas din position automatiskt med jaktlaget medan jakten pågår.'}</p>`;
 }
 function renderJakt(){
@@ -2995,7 +3077,7 @@ function renderJakt(){
       if(g.kind === 'guest'){
         const hid = g.guest && g.guest.hid, hunt = hid && g.hunts[hid];
         html += `<h3 class="sec">${esc(gname(g))} <span class="tag">Gäst</span></h3>${hunt ? huntCard(g, hid, hunt, false) : '<div class="empty">Jakten laddas eller är avslutad.</div>'}
-          <div class="btnrow"><button class="btn sm" type="button" data-j="guest-leave" data-g="${g.id}">Lämna jakten</button></div>`;
+          <div class="btnrow"><button class="btn sm" type="button" data-j="guest-leave" data-g="${esc(g.id)}">Lämna jakten</button></div>`;
         continue;
       }
       const role = myRole(g), lead = canLeadGroup(g), adm = isAdminGroup(g);
@@ -3004,15 +3086,15 @@ function renderJakt(){
       const shared = state.areas.filter(a => a.gid === g.id);
       html += `<h3 class="sec">${esc(gname(g))} <span class="tag">${esc(ROLES[role] || '')}</span></h3>`;
       html += hunts.length ? hunts.map(([hid, hunt]) => huntCard(g, hid, hunt, lead)).join('') : '<p class="note" style="margin-top:0">Ingen jakt är skapad.</p>';
-      if(lead) html += `<div class="btnrow"><button class="btn primary sm" type="button" data-j="hunt-new" data-g="${g.id}">Ny jakt</button></div>`;
+      if(lead) html += `<div class="btnrow"><button class="btn primary sm" type="button" data-j="hunt-new" data-g="${esc(g.id)}">Ny jakt</button></div>`;
       html += `<div class="lbl">Delade områden</div><div class="small">${shared.length ? shared.map(a => esc(a.name)).join(', ') : '<span class="muted">Inga ännu. Öppna Filter, tryck på pennan vid ett område och välj att dela det med laget.</span>'}</div>`;
       html += `<div class="lbl">Medlemmar och rättigheter</div>`;
       for(const [mu, m] of members){
         const isOwner = g.meta.owner === mu;
-        html += `<div class="frow"><span class="fname">${esc(m.name || 'Medlem')}${mu === u.uid ? ' <span class="muted">(du)</span>' : ''}</span>${adm && !isOwner ? `<select class="input rolesel" data-j="role" data-g="${g.id}" data-u="${mu}" aria-label="Rättighet för ${esc(m.name)}">${Object.entries(ROLES).map(([k, l]) => `<option value="${k}"${m.role === k ? ' selected' : ''}>${l}</option>`).join('')}</select><button class="iconbtn" type="button" data-j="member-del" data-g="${g.id}" data-u="${mu}" aria-label="Ta bort ${esc(m.name)}">${ICON_TRASH}</button>` : `<span class="tag">${isOwner ? 'Ägare' : esc(ROLES[m.role] || '')}</span>`}</div>`;
+        html += `<div class="frow"><span class="fname">${esc(m.name || 'Medlem')}${mu === u.uid ? ' <span class="muted">(du)</span>' : ''}</span>${adm && !isOwner ? `<select class="input rolesel" data-j="role" data-g="${esc(g.id)}" data-u="${esc(mu)}" aria-label="Rättighet för ${esc(m.name)}">${Object.entries(ROLES).map(([k, l]) => `<option value="${esc(k)}"${m.role === k ? ' selected' : ''}>${l}</option>`).join('')}</select><button class="iconbtn" type="button" data-j="member-del" data-g="${esc(g.id)}" data-u="${esc(mu)}" aria-label="Ta bort ${esc(m.name)}">${ICON_TRASH}</button>` : `<span class="tag">${isOwner ? 'Ägare' : esc(ROLES[m.role] || '')}</span>`}</div>`;
       }
-      if(adm) html += `<p class="note">${Object.entries(ROLES).map(([k, l]) => `<b>${l}</b>: ${ROLE_HELP[k].toLowerCase()}`).join(' · ')}.</p><div class="btnrow"><button class="btn sm" type="button" data-j="invite" data-g="${g.id}">Bjud in medlem</button></div>`;
-      html += `<div class="btnrow" style="margin-top:8px">${g.meta.owner === u.uid ? `<button class="btn sm danger" type="button" data-j="group-del" data-g="${g.id}">Ta bort jaktlaget</button>` : `<button class="btn sm" type="button" data-j="group-leave" data-g="${g.id}">Lämna jaktlaget</button>`}</div>`;
+      if(adm) html += `<p class="note">${Object.entries(ROLES).map(([k, l]) => `<b>${l}</b>: ${ROLE_HELP[k].toLowerCase()}`).join(' · ')}.</p><div class="btnrow"><button class="btn sm" type="button" data-j="invite" data-g="${esc(g.id)}">Bjud in medlem</button></div>`;
+      html += `<div class="btnrow" style="margin-top:8px">${g.meta.owner === u.uid ? `<button class="btn sm danger" type="button" data-j="group-del" data-g="${esc(g.id)}">Ta bort jaktlaget</button>` : `<button class="btn sm" type="button" data-j="group-leave" data-g="${esc(g.id)}">Lämna jaktlaget</button>`}</div>`;
     }
     html += `<h3 class="sec">Fler jaktlag</h3><div class="btnrow">${canCreate() ? '<button class="btn sm" type="button" data-j="group-new">Skapa jaktlag</button>' : ''}<button class="btn sm" type="button" data-j="join">Gå med med kod</button></div>
       ${u.isAnonymous ? '<p class="note">Som gäst kan du gå med i jakter. Logga in med Google för att bli medlem i ett jaktlag.</p>' : canCreate() ? '' : '<p class="note">Bara ägaren av den här Jaktkartan kan skapa jaktlag. Du går med i ett lag eller en jakt med en kod.</p>'}`;
@@ -3042,12 +3124,12 @@ function openHuntForm(g, hid){
   openModal(`<h2>${old ? 'Ändra jakt' : 'Ny jakt'}</h2><form id="hfForm">
     ${live ? '<p class="note" style="margin-top:0">Jakten pågår och fortsätter medan du ändrar. Datum och start ligger fast. Positioner, observationer, plan och gäster finns kvar.</p>' : ''}
     <label class="field"><span>Namn</span><input class="input" id="hfName" maxlength="60" value="${esc(old ? old.name : 'Jakt ' + fmtDay(todayISO()))}"></label>
-    <div class="row2"><label class="field"><span>Datum</span><input class="input" type="date" id="hfDay" value="${day0}"${live ? ' disabled' : ''}></label>
-    <label class="field"><span>Startar kl.</span><input class="input" type="time" id="hfStart" value="${old && old.starts ? hmOf(old.starts) : nowHM()}"${live ? ' disabled' : ''}></label></div>
-    <label class="field"><span>Slutar kl.</span><input class="input" type="time" id="hfEnd" value="${old ? hmOf(old.expires) : '23:59'}"></label>
+    <div class="row2"><label class="field"><span>Datum</span><input class="input" type="date" id="hfDay" value="${esc(day0)}"${live ? ' disabled' : ''}></label>
+    <label class="field"><span>Startar kl.</span><input class="input" type="time" id="hfStart" value="${esc(old && old.starts ? hmOf(old.starts) : nowHM())}"${live ? ' disabled' : ''}></label></div>
+    <label class="field"><span>Slutar kl.</span><input class="input" type="time" id="hfEnd" value="${esc(old ? hmOf(old.expires) : '23:59')}"></label>
     <p class="note" style="margin-top:0">Positioner kan bara delas och ses mellan start och slut. Gästernas åtkomst gäller till sluttiden.</p>
     <label class="field"><span>Län</span><select class="input" id="hfLan"><option value="">Välj län</option>${LAN.map(l => `<option${l === lan0 ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
-    <div class="field"><span>Områden som gästerna får se</span>${areas.length ? areas.map(a => `<label class="checkline"><input type="checkbox" data-area="${a.id}"${area0(a) ? ' checked' : ''}><span>${esc(a.name)}</span></label>`).join('') : '<span class="small muted">Laget har inga delade områden ännu. Gäster ser då bara varandras positioner.</span>'}</div>
+    <div class="field"><span>Områden som gästerna får se</span>${areas.length ? areas.map(a => `<label class="checkline"><input type="checkbox" data-area="${esc(a.id)}"${area0(a) ? ' checked' : ''}><span>${esc(a.name)}</span></label>`).join('') : '<span class="small muted">Laget har inga delade områden ännu. Gäster ser då bara varandras positioner.</span>'}</div>
     <div class="field"><span>Jaktbart vilt</span><div id="hfVilt"></div></div>
     <div class="actions">${old ? '<button class="btn primary grow" type="submit" id="hfOk">Spara ändringar</button>' : '<button class="btn primary grow" type="submit" id="hfPlan" data-plan="1">Skapa och planera</button><button class="btn" type="submit" id="hfOk">Skapa jakt</button>'}<button class="btn ghost" type="button" id="hfCancel">Avbryt</button></div></form>`, m => {
     const draw = () => {
@@ -3058,7 +3140,7 @@ function openHuntForm(g, hid){
         const rows = v.lic ? [] : viltLawful(v, lan, md);
         if(!v.lic && !rows.length){ delete sel[v.id]; continue; }
         const info = v.lic ? 'Enligt licens eller länsstyrelsens beslut' : rows.map(r => [rowLabel(r), fmtPer(r.per), r.note].filter(Boolean).join(' · ')).join(' | ');
-        out += `<label class="checkline"><input type="checkbox" data-vilt="${v.id}" ${sel[v.id] ? 'checked' : ''}><span>${esc(v.name)}<br><span class="small muted">${esc(info)}</span></span></label>`;
+        out += `<label class="checkline"><input type="checkbox" data-vilt="${esc(v.id)}" ${sel[v.id] ? 'checked' : ''}><span>${esc(v.name)}<br><span class="small muted">${esc(info)}</span></span></label>`;
       }
       m.querySelector('#hfVilt').innerHTML = out + '<p class="note">Bara arter med allmän jakttid den dagen i länet visas. Kontrollera alltid mot Jägareförbundets tabell.</p>';
     };
@@ -3100,6 +3182,26 @@ function openHuntForm(g, hid){
     });
   });
 }
+/* Avslutar en jakt: arkiverar viltobservationerna utan namn (för värmekartan) och raderar jakten med positioner,
+   spår, observationer, plan, svar, meddelanden, kod, gäster och gästernas nycklar.
+   auto: körs av sig själv en stund efter sluttiden (bara hos jaktledare och admin), utan felmeddelande. */
+async function endHunt(g, hid, auto){
+  const hunt = g.hunts[hid], up = {};
+  // Viltobservationerna sparas utan namn i lagets arkiv, för värmekartan. Bara jaktledare och admin kan läsa arkivet.
+  let obs = {}; try { obs = (await fb.db.ref(`groups/${g.id}/huntObs/${hid}`).get()).val() || {}; } catch(e){}
+  let na = 0;
+  for(const [oid, o] of Object.entries(obs)) if(o && typeof o.lat === 'number' && typeof o.lng === 'number' && typeof o.sp === 'string' && o.n >= 1){
+    up[`groups/${g.id}/obsArchive/${oid}`] = {sp:o.sp.slice(0, 40), n:Math.min(999, Math.round(o.n)), lat:o.lat, lng:o.lng, t:Math.min(o.t || Date.now(), Date.now()), hid:String(hid).slice(0, 40)}; na++;
+  }
+  up[`groups/${g.id}/hunts/${hid}`] = null; up[`groups/${g.id}/huntPos/${hid}`] = null; up[`groups/${g.id}/huntTrail/${hid}`] = null; up[`groups/${g.id}/huntObs/${hid}`] = null; up[`groups/${g.id}/huntPlan/${hid}`] = null; up[`groups/${g.id}/huntRsvp/${hid}`] = null; up[`groups/${g.id}/huntMsg/${hid}`] = null;
+  for(const [gu, v] of Object.entries(g.guests || {})) if(v && v.hid === hid){ up[`groups/${g.id}/guests/${gu}`] = null; up[`groups/${g.id}/msgKeys/${gu}`] = null; }
+  // Koden tas bara bort om den finns kvar och hör till jakten (annars nekas hela skrivningen och jakten blir aldrig städad)
+  if(hunt && hunt.code){ try { const c = (await fb.db.ref(`huntCodes/${hunt.code}`).get()).val(); if(c && c.hid === hid && c.gid === g.id) up[`huntCodes/${hunt.code}`] = null; } catch(e){} }
+  return fb.db.ref().update(up).then(() => {
+    if(auto) toast(`Jakten ”${hunt ? hunt.name : ''}” har passerat sluttiden och är avslutad.` + (na ? ` ${na === 1 ? 'En observation' : na + ' observationer'} sparades till värmekartan.` : ''), 5000);
+    else toast('Jakten är avslutad. Gästernas åtkomst är borttagen.' + (na ? ` ${na === 1 ? 'En observation' : na + ' observationer'} sparades till värmekartan.` : ''), 5000);
+  }, err => { if(!auto) fail()(err); });
+}
 $('#paneJakt').addEventListener('click', e => {
   const b = e.target.closest('[data-j]'); if(!b || b.tagName === 'SELECT') return;
   const act = b.dataset.j, g = cloud.groups[b.dataset.g], u = b.dataset.u, hid = b.dataset.h;
@@ -3119,20 +3221,11 @@ $('#paneJakt').addEventListener('click', e => {
   else if(act === 'plan') openPlan(g, hid);
   else if(act === 'msg-new') openMsgForm(g, hid);
   else if(act === 'msg-reply') openMsgForm(g, hid, u);
-  else if(act === 'rsvp'){ delete cloud.autoOff[g.id + '/' + hid]; fb.db.ref(`groups/${g.id}/huntRsvp/${hid}/${myUid()}`).set({name:myName(), t:Date.now()}).then(() => toast(huntLive(g.hunts[hid]) ? 'Du deltar. Din position delas med jaktlaget.' : 'Du deltar. Din position delas automatiskt när jakten startar.', 4500)).catch(fail()); }
+  else if(act === 'rsvp'){ delete cloud.autoOff[g.id + '/' + hid]; cloud.rsvpAt = Date.now(); fb.db.ref(`groups/${g.id}/huntRsvp/${hid}/${myUid()}`).set({name:myName(), t:Date.now()}).then(() => toast(huntLive(g.hunts[hid]) ? 'Du deltar. Din position delas med jaktlaget.' : 'Du deltar. Din position delas automatiskt när jakten startar.', 4500)).catch(fail()); }
   else if(act === 'rsvp-no') fb.db.ref(`groups/${g.id}/huntRsvp/${hid}/${myUid()}`).remove().catch(fail());
   else if(act === 'plan-go') gotoPin(b.dataset.p);
   else if(act === 'hunt-link'){ const hunt = g.hunts[hid]; copyText(`${hunt.name}: gå med i jakten med kod ${hunt.code}\n${shareLink('j', hunt.code)}`, 'Länken är kopierad'); }
-  else if(act === 'hunt-end') confirmClick(b, 'Bekräfta', async () => { const hunt = g.hunts[hid], up = {};
-    // Viltobservationerna sparas utan namn i lagets arkiv, för värmekartan. Bara jaktledare och admin kan läsa arkivet.
-    let obs = {}; try { obs = (await fb.db.ref(`groups/${g.id}/huntObs/${hid}`).get()).val() || {}; } catch(e){}
-    let na = 0;
-    for(const [oid, o] of Object.entries(obs)) if(o && typeof o.lat === 'number' && typeof o.lng === 'number' && typeof o.sp === 'string' && o.n >= 1){
-      up[`groups/${g.id}/obsArchive/${oid}`] = {sp:o.sp.slice(0, 40), n:Math.min(999, Math.round(o.n)), lat:o.lat, lng:o.lng, t:Math.min(o.t || Date.now(), Date.now()), hid:String(hid).slice(0, 40)}; na++;
-    }
-    up[`groups/${g.id}/hunts/${hid}`] = null; up[`groups/${g.id}/huntPos/${hid}`] = null; up[`groups/${g.id}/huntTrail/${hid}`] = null; up[`groups/${g.id}/huntObs/${hid}`] = null; up[`groups/${g.id}/huntPlan/${hid}`] = null; up[`groups/${g.id}/huntRsvp/${hid}`] = null; up[`groups/${g.id}/huntMsg/${hid}`] = null; if(hunt && hunt.code) up[`huntCodes/${hunt.code}`] = null;
-    for(const [gu, v] of Object.entries(g.guests || {})) if(v && v.hid === hid){ up[`groups/${g.id}/guests/${gu}`] = null; up[`groups/${g.id}/msgKeys/${gu}`] = null; }
-    fb.db.ref().update(up).then(() => toast('Jakten är avslutad. Gästernas åtkomst är borttagen.' + (na ? ` ${na === 1 ? 'En observation' : na + ' observationer'} sparades till värmekartan.` : ''), 5000)).catch(fail()); });
+  else if(act === 'hunt-end') confirmClick(b, 'Bekräfta', () => endHunt(g, hid));
   else if(act === 'guest-del') fb.db.ref(`groups/${g.id}/guests/${u}`).remove().catch(fail());
   else if(act === 'member-del') confirmClick(b, 'Bekräfta', () => fb.db.ref(`groups/${g.id}/members/${u}`).remove().then(() => toast('Medlemmen är borttagen')).catch(fail()));
   else if(act === 'invite') openInvite(g);
@@ -3146,7 +3239,7 @@ $('#paneJakt').addEventListener('change', e => {
   fb.db.ref(`groups/${b.dataset.g}/members/${b.dataset.u}/role`).set(b.value).then(() => toast('Rättigheten är ändrad')).catch(fail());
 });
 function openInvite(g){
-  openModal(`<h2>Bjud in till ${esc(gname(g))}</h2><label class="field"><span>Rättighet</span><select class="input" id="ivRole">${['editor','viewer','leader'].map(k => `<option value="${k}">${ROLES[k]} – ${ROLE_HELP[k].toLowerCase()}</option>`).join('')}</select></label>
+  openModal(`<h2>Bjud in till ${esc(gname(g))}</h2><label class="field"><span>Rättighet</span><select class="input" id="ivRole">${['editor','viewer','leader'].map(k => `<option value="${esc(k)}">${ROLES[k]} – ${ROLE_HELP[k].toLowerCase()}</option>`).join('')}</select></label>
     <p class="note" style="margin-top:0">Länken gäller i sju dagar och kan användas av flera. Du kan ändra rättigheten efteråt.</p>
     <div class="actions"><button class="btn primary grow" type="button" id="ivOk">Skapa inbjudan</button><button class="btn ghost" type="button" id="ivCancel">Avbryt</button></div>`, m => {
     m.querySelector('#ivCancel').addEventListener('click', closeModal);
@@ -3287,7 +3380,12 @@ function lineStyle(kind, pts, interactive){
   const path = kind === 'path', o = {interactive:!!interactive, bubblingMouseEvents:false};
   return [L.polyline(pts, Object.assign({color:'#ffffff', weight:path ? 6 : 8, opacity:.85}, o)), L.polyline(pts, Object.assign({color:path ? '#7a2e8f' : '#8a4b12', weight:path ? 3 : 4.5, dashArray:path ? '7 6' : null}, o))];
 }
+let lineSig = null;
 function renderLines(){
+  // Rita bara om när vägarna har ändrats (annars stängs en öppen vägruta vid varje ändring i molnet)
+  const sig = JSON.stringify([state.areas.filter(a => a.visible !== false).map(a => [a.id, a.name, a.lines || null]), drawing && drawing.lid, !drawing && !placing]);
+  if(sig === lineSig) return;
+  lineSig = sig;
   lineLayer.clearLayers();
   for(const a of state.areas){
     if(a.visible === false) continue;
@@ -3337,9 +3435,9 @@ function openLineForm(opts){
   const cur = opts.lid ? (areaById(opts.areaId) || {}).lines : null, l = cur && cur[opts.lid] ? cur[opts.lid] : {k:'path', n:''};
   const sel = opts.areaId || (editable.find(a => a.visible !== false && !a.example) || editable[0]).id;
   openModal(`<h2>${opts.lid ? 'Ändra' : 'Rita'} väg eller stig</h2><form id="lfForm">
-    <div class="field"><span>Typ</span><div class="row2">${Object.entries(LINE_KIND).map(([k, t]) => `<label class="radio-card" style="margin:0"><input type="radio" name="lfKind" value="${k}" ${l.k === k ? 'checked' : ''}> ${t}<br><span class="small muted">${k === 'road' ? 'Brun heldragen' : 'Lila streckad'}</span></label>`).join('')}</div></div>
+    <div class="field"><span>Typ</span><div class="row2">${Object.entries(LINE_KIND).map(([k, t]) => `<label class="radio-card" style="margin:0"><input type="radio" name="lfKind" value="${esc(k)}" ${l.k === k ? 'checked' : ''}> ${t}<br><span class="small muted">${k === 'road' ? 'Brun heldragen' : 'Lila streckad'}</span></label>`).join('')}</div></div>
     <label class="field"><span>Namn (valfritt)</span><input class="input" id="lfName" maxlength="60" value="${esc(l.n || '')}" placeholder="${opts.lid ? '' : 'Till exempel Stigen till tornet'}"></label>
-    <label class="field"><span>Område</span><select class="input" id="lfArea">${editable.map(a => `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.gid ? ' (delas med ' + esc(gname(cloud.groups[a.gid])) + ')' : ''}</option>`).join('')}</select></label>
+    <label class="field"><span>Område</span><select class="input" id="lfArea">${editable.map(a => `<option value="${esc(a.id)}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.gid ? ' (delas med ' + esc(gname(cloud.groups[a.gid])) + ')' : ''}</option>`).join('')}</select></label>
     <p class="note" style="margin-top:0">Vägen visas när området är påslaget och delas med jaktlaget om området är delat.</p>
     <div class="actions"><button class="btn primary grow" type="submit">${opts.lid ? 'Spara' : 'Börja rita'}</button>${opts.lid ? '<button class="btn" type="button" id="lfRedraw">Rita om</button>' : ''}<button class="btn ghost" type="button" id="lfCancel">Avbryt</button></div></form>`, m => {
     const read = () => ({k:(m.querySelector('input[name=lfKind]:checked') || {}).value || 'path', n:m.querySelector('#lfName').value.trim(), areaId:m.querySelector('#lfArea').value});
@@ -3624,7 +3722,7 @@ function openShotForm(s){
   if(!s) return;
   openModal(`<h2>Skärmdump</h2><form id="seForm">
     <label class="field"><span>Namn</span><input class="input" id="seName" maxlength="60" value="${esc(s.name)}"></label>
-    <label class="trail-range" style="padding:0"><span style="display:flex;justify-content:space-between"><strong>Genomskinlighet</strong><span id="seOpTxt">${Math.round(s.opacity * 100)} %</span></span><input type="range" id="seOpacity" min="10" max="100" step="5" value="${Math.round(s.opacity * 100)}"></label>
+    <label class="trail-range" style="padding:0"><span style="display:flex;justify-content:space-between"><strong>Genomskinlighet</strong><span id="seOpTxt">${Math.round(s.opacity * 100)} %</span></span><input type="range" id="seOpacity" min="10" max="100" step="5" value="${esc(Math.round(s.opacity * 100))}"></label>
     <label class="checkline"><input type="checkbox" id="seVis" ${s.visible ? 'checked' : ''}><span>Visa på kartan</span></label>
     <div class="btnrow" style="margin-top:10px"><button class="btn" type="button" id="seAdjust">Flytta, skala och vrid</button><button class="btn" type="button" id="seRedo">Gör om punkterna</button><button class="btn" type="button" id="seDraw">Rita gräns</button></div>
     <div class="actions"><button class="btn primary grow" type="submit">Klar</button><button class="btn danger" type="button" id="seDel">Ta bort</button></div></form>`, m => {
@@ -3650,7 +3748,7 @@ function openBorderPick(areaId){
   const editable = state.areas.filter(a => canEditArea(a));
   if(!editable.length){ toast('Skapa ett område under Filter först.'); return; }
   const sel = areaId || (cal && cal.areaId) || (editable.find(a => !a.example) || editable[0]).id;
-  openModal(`<h2>Rita gräns</h2><label class="field"><span>Område</span><select class="input" id="obArea">${editable.map(a => `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.border ? ' (en ny gränsdel läggs till)' : ''}</option>`).join('')}</select></label>
+  openModal(`<h2>Rita gräns</h2><label class="field"><span>Område</span><select class="input" id="obArea">${editable.map(a => `<option value="${esc(a.id)}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.border ? ' (en ny gränsdel läggs till)' : ''}</option>`).join('')}</select></label>
     <div class="actions"><button class="btn primary grow" type="button" id="obGo">Börja rita</button><button class="btn ghost" type="button" id="obCancel">Avbryt</button></div>`, m => {
     m.querySelector('#obCancel').addEventListener('click', closeModal);
     m.querySelector('#obGo').addEventListener('click', () => { const id = m.querySelector('#obArea').value; endAdjust(); cal = null; endCalBar(); startDrawing(id); });
@@ -3803,7 +3901,7 @@ function startAdjust(s){
   draw();
   $('#btnAdd').hidden = true; if(!isDesktop()) setSheet('min');
   $('#ovbar').innerHTML = `<p>Dra en <b>punkt</b> för att passa in bilden: det skalar och vrider den. Dra <b>mitten</b> för att flytta hela bilden. Förstoringsglaset visas medan du drar.</p>
-    <label class="trail-range" style="padding:0"><span style="display:flex;justify-content:space-between"><strong>Genomskinlighet</strong><span id="ovOpTxt">${Math.round(s.opacity * 100)} %</span></span><input type="range" id="ovOpacity" min="10" max="100" step="5" value="${Math.round(s.opacity * 100)}"></label>
+    <label class="trail-range" style="padding:0"><span style="display:flex;justify-content:space-between"><strong>Genomskinlighet</strong><span id="ovOpTxt">${Math.round(s.opacity * 100)} %</span></span><input type="range" id="ovOpacity" min="10" max="100" step="5" value="${esc(Math.round(s.opacity * 100))}"></label>
     <div class="btnrow"><button class="btn primary" id="ovAdjDone" type="button">Klar</button><button class="btn" id="ovAdjRedo" type="button">Gör om punkterna</button></div>`;
   $('#ovbar').hidden = false;
   $('#ovOpacity').addEventListener('input', e => { s.opacity = e.target.value / 100; $('#ovOpTxt').textContent = e.target.value + ' %'; if(s.layer) s.layer.setOpacity(s.opacity); });
@@ -3840,8 +3938,9 @@ const metersPerPixel = (lat, z) => 40075016.686 * Math.cos(lat * Math.PI / 180) 
 const blocked = () => placing || drawing || (typeof cal !== 'undefined' && cal) || (typeof adj !== 'undefined' && adj);
 
 /* ---------- Vindriktning ----------
-   Vinden hämtas från Open-Meteo (gratis, utan nyckel). Det gula området visar vart vittringen driver,
-   från din position (eller korset om positionen inte är känd), och de blå pilarna rör sig med vinden. */
+   Vinden hämtas från Open-Meteo (gratis, utan nyckel). Det gula området visar vart vittringen driver från din position,
+   och visas bara när positionen är känd (det följer alltså aldrig kartans mitt). De blå pilarna rör sig med vinden
+   över hela den synliga kartan. */
 const WIND_LEN = 600;
 map.createPane('wind'); map.getPane('wind').style.zIndex = 450; map.getPane('wind').style.pointerEvents = 'none';
 const wind = {data:null, at:0, from:null, busy:false, layer:L.layerGroup().addTo(map), canvas:null, raf:0, sector:null, timer:null};
@@ -3867,7 +3966,8 @@ async function windFetch(force){
 }
 /* Det gula området: spets i origo, öppning mot det håll vinden blåser. */
 function windSector(){
-  const o = windOrigin(), d = wind.data; if(!d) return null;
+  const d = wind.data; if(!d || !myPos) return null;
+  const o = L.latLng(myPos.lat, myPos.lng);
   const axis = (d.dir + 180) % 360, half = windHalf(d.speed), pts = [o];
   for(let a = -half; a <= half + 1e-9; a += half / 8) pts.push(destPoint(o, WIND_LEN, axis + a));
   return {o, axis, half, pts};
@@ -3876,7 +3976,7 @@ function windRender(){
   wind.layer.clearLayers(); wind.sector = null;
   if(!windOn() || !wind.data){ windChip(); windAnim(false); renderWindNote(); return; }
   const s = wind.sector = windSector();
-  L.polygon(s.pts, {color:'#e8b500', weight:2, opacity:.9, fillColor:'#ffd400', fillOpacity:.28, interactive:false, className:'wind-sector'}).addTo(wind.layer);
+  if(s) L.polygon(s.pts, {color:'#e8b500', weight:2, opacity:.9, fillColor:'#ffd400', fillOpacity:.28, interactive:false, className:'wind-sector'}).addTo(wind.layer);
   windChip(); windAnim(true); renderWindNote();
 }
 function windChip(){
@@ -3892,7 +3992,7 @@ const fmtNum = v => (Math.round(v * 10) / 10).toLocaleString('sv-SE');
 function renderWindNote(){
   const n = $('#windNote'); if(!n) return;
   const d = wind.data;
-  n.textContent = !windOn() ? 'Gult område där vittringen driver, med pilar som visar vinden' : d ? `Vind från ${dirName(d.dir)}, ${fmtNum(d.speed)} m/s. Från ${myPos ? 'din position' : 'korset'}. Open-Meteo.` : 'Hämtar …';
+  n.textContent = !windOn() ? 'Gult område där vittringen driver, med pilar som visar vinden' : d ? `Vind från ${dirName(d.dir)}, ${fmtNum(d.speed)} m/s. ${myPos ? 'Gula området utgår från din position.' : 'Gula området visas när din position är känd.'} Open-Meteo.` : 'Hämtar …';
   const c = $('#popWind'); if(c) c.checked = windOn();
 }
 function setWind(on){
@@ -3901,7 +4001,7 @@ function setWind(on){
   else { clearInterval(wind.timer); }
   windRender();
 }
-/* Blå pilar som rör sig i vindens riktning inne i det gula området, ritade på en canvas som följer kartan. */
+/* Blå pilar som rör sig i vindens riktning över hela den synliga kartan, ritade på en canvas som följer kartan. */
 function windAnim(on){
   if(!on){ cancelAnimationFrame(wind.raf); wind.raf = 0; if(wind.canvas) wind.canvas.hidden = true; return; }
   if(!wind.canvas){ wind.canvas = L.DomUtil.create('canvas', 'wind-arrows', map.getPane('wind')); }
@@ -3910,22 +4010,22 @@ function windAnim(on){
 }
 function windFrame(t){
   wind.raf = 0;
-  const s = wind.sector, cv = wind.canvas; if(!s || !cv || cv.hidden) return;
+  const d = wind.data, cv = wind.canvas; if(!d || !cv || cv.hidden) return;
   if(!document.hidden){
     const size = map.getSize(), dpr = window.devicePixelRatio || 1;
     if(cv.width !== Math.round(size.x * dpr) || cv.height !== Math.round(size.y * dpr)){ cv.width = Math.round(size.x * dpr); cv.height = Math.round(size.y * dpr); cv.style.width = size.x + 'px'; cv.style.height = size.y + 'px'; }
     L.DomUtil.setPosition(cv, map.containerPointToLayerPoint([0, 0]));
     const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, size.x, size.y);
-    const P = s.pts.map(ll => map.latLngToContainerPoint(ll)), A = P[0];
-    g.save(); g.beginPath(); P.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); g.closePath(); g.clip();
-    const r = Math.PI / 180, ax = Math.sin(s.axis * r), ay = -Math.cos(s.axis * r), px = -ay, py = ax;   // axel (nedvind) och tvärs
-    const R = Math.max(...P.map(p => Math.hypot(p.x - A.x, p.y - A.y)));
-    const step = 30, len = 11, speed = 14 + wind.data.speed * 5;                 // pixlar mellan pilarna, pilens längd, fart (px/s)
+    // Rutnätet är fäst i kartan (där vinden hämtades), så pilarna följer kartan när man flyttar den
+    const A = map.latLngToContainerPoint(wind.from || map.getCenter()), axis = (d.dir + 180) % 360;
+    g.save();
+    const r = Math.PI / 180, ax = Math.sin(axis * r), ay = -Math.cos(axis * r), px = -ay, py = ax;   // axel (nedvind) och tvärs
+    const step = 34, len = 11, speed = 14 + d.speed * 5;                 // pixlar mellan pilarna, pilens längd, fart (px/s)
     const phase = ((t / 1000) * speed) % step;
     // Bara den del av rutnätet som syns på skärmen
     const cs = [[0, 0], [size.x, 0], [size.x, size.y], [0, size.y]].map(([x, y]) => [(x - A.x) * ax + (y - A.y) * ay, (x - A.x) * px + (y - A.y) * py]);
-    const u0 = Math.max(-step, Math.min(...cs.map(c => c[0]))), u1 = Math.min(R, Math.max(...cs.map(c => c[0])));
-    const v0 = Math.max(-R, Math.min(...cs.map(c => c[1]))), v1 = Math.min(R, Math.max(...cs.map(c => c[1])));
+    const u0 = Math.min(...cs.map(c => c[0])) - step, u1 = Math.max(...cs.map(c => c[0])) + step;
+    const v0 = Math.min(...cs.map(c => c[1])) - step, v1 = Math.max(...cs.map(c => c[1])) + step;
     g.strokeStyle = '#1a73e8'; g.fillStyle = '#1a73e8'; g.lineWidth = 2; g.lineCap = 'round';
     let n = 0;
     for(let u = Math.floor(u0 / step) * step; u <= u1 && n < 4000; u += step){
@@ -3943,7 +4043,6 @@ function windFrame(t){
   }
   wind.raf = requestAnimationFrame(windFrame);
 }
-map.on('move zoom', () => { if(windOn() && wind.data && !myPos) windRender(); });
 map.on('moveend', () => { if(windOn()) windFetch(); });
 $('#popWind').addEventListener('change', e => setWind(e.target.checked));
 $('#windChip').addEventListener('click', () => { windFetch(true); toast('Hämtar vinden igen …', 1500); });
@@ -4069,7 +4168,7 @@ map.whenReady(() => setTimeout(() => { pan.ready = true; if(windOn()) setWind(tr
 /* ---------- Riktningen jag tittar åt ----------
    En blå kon från positionspricken och en kompass uppe till vänster, efter telefonens kompass. Startas av ett tryck på positionsknappen
    (på iPhone krävs ett tryck för att få tillåtelse att läsa kompassen). */
-const compass = {on:false, heading:null, raf:0, rot:0, timer:null};
+const compass = {on:false, heading:null, raf:0, rot:0, timer:null, mask:0, bad:false};
 const compassOn = () => state.settings.compass !== false;
 const isTouch = () => !!(window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
 const screenAngle = () => (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (typeof window.orientation === 'number' ? window.orientation : 0);
@@ -4094,8 +4193,21 @@ function renderCompass(){
   const last = ((compass.rot % 360) + 360) % 360; let d = h - last; if(d > 180) d -= 360; if(d < -180) d += 360;
   compass.rot += d;
   $('#compassDial').style.transform = `rotate(${-compass.rot}deg)`;
+  // Förbjudna skjutriktningar på mitt pass: röda fält i rosen, och varning när telefonen pekar in i ett
+  const mask = typeof myNoFireMask === 'function' ? myNoFireMask() : 0;
+  if(mask !== compass.mask){
+    compass.mask = mask;
+    const pt = (r, a) => `${(r * Math.sin(a * Math.PI / 180)).toFixed(2)},${(-r * Math.cos(a * Math.PI / 180)).toFixed(2)}`;
+    $('#cmpNo').innerHTML = maskRuns(mask).map(([i, n]) => { const a0 = i * 22.5 - 11.25, a1 = a0 + n * 22.5, big = n * 22.5 > 180 ? 1 : 0;
+      return n >= 16 ? '<path d="M0,-47A47,47 0 1 1 0,47A47,47 0 1 1 0,-47Z"/>' : `<path d="M0,0L${pt(47, a0)}A47,47 0 ${big} 1 ${pt(47, a1)}Z"/>`; }).join('');
+  }
+  const bad = !!(mask & (1 << (Math.round(h / 22.5) % 16)));
+  btn.classList.toggle('nofire', bad);
+  if(bad && !compass.bad){ try { if(navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch(e){} }
+  compass.bad = bad;
   const t = `${dirName(h)} ${Math.round(h) % 360}°`;
-  $('#compassTxt').textContent = t; btn.setAttribute('aria-label', 'Telefonen pekar mot ' + t);
+  $('#compassTxt').textContent = bad ? `Förbjuden riktning · ${t}` : t;
+  btn.setAttribute('aria-label', bad ? `Förbjuden skjutriktning: telefonen pekar mot ${t}` : 'Telefonen pekar mot ' + t);
 }
 function renderHeading(){
   renderCompass();
@@ -4250,7 +4362,7 @@ function openRenumber(){
     <p class="note" style="margin-top:0">Passen får nummer i ordning efter var de ligger. Varje jaktmark numreras för sig. Text efter numret behålls.</p>
     <div class="row2">
       <label class="field"><span>Jaktmark</span><select class="input" id="rnArea">${areas.map(a => `<option value="${esc(a.id)}"${a.id === areaKey ? ' selected' : ''}>${esc(a.name)} (${a.n})</option>`).join('')}${areas.length > 1 ? `<option value="*"${areaKey === '*' ? ' selected' : ''}>Alla, var för sig</option>` : ''}</select></label>
-      <label class="field"><span>Ordning</span><select class="input" id="rnDir">${Object.entries(RENUM_DIRS).map(([k, v]) => `<option value="${k}"${k === dir ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+      <label class="field"><span>Ordning</span><select class="input" id="rnDir">${Object.entries(RENUM_DIRS).map(([k, v]) => `<option value="${esc(k)}"${k === dir ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
     </div>
     <label class="field rn-start"><span>Börja på nummer</span><input class="input" id="rnStart" type="number" inputmode="numeric" min="1" max="999" step="1" value="1"></label>
     <div class="field"><span>Så här blir det</span><div id="rnPreview" class="rn-preview"></div></div>
@@ -4360,10 +4472,34 @@ function routeStyle(kind, pts){
   return [L.polyline(pts, Object.assign({color:'#ffffff', weight:6, opacity:.8}, o)), L.polyline(pts, Object.assign({color:k.color, weight:3, dashArray:'2 7', lineCap:'round', className:'plan-route ' + kind}, o))];
 }
 
+/* Mitt pass under en pågående jakt, med förbjudna riktningar (för kompassen). {mask, lat, lng} eller null. */
+var planMine = null;
+function findMyNoFire(){
+  let mine = null;
+  for(const {g, hid, hunt} of planHunts()){
+    if(!huntLive(hunt)) continue;
+    for(const [pid, s] of Object.entries(planOf(g, hid).stands || {})){
+      if(!s || s.uid !== myUid() || !s.no) continue;
+      const p = pinById(pid); if(!p) continue;
+      mine = mine ? Object.assign(mine, {mask:mine.mask | s.no}) : {mask:s.no, lat:p.lat, lng:p.lng, name:p.name || 'Pass'};
+    }
+  }
+  return mine;
+}
+/* Gäller bara nära passet (inom 300 m) eller när positionen inte är känd. */
+const NOFIRE_NEAR = 300;
+function myNoFireMask(){
+  const m = planMine; if(!m) return 0;
+  if(myPos && distM(myPos, m) > NOFIRE_NEAR) return 0;
+  return m.mask;
+}
+
 /* ---------- Planen på kartan ---------- */
 function renderPlan(){
   if(!planLayer) planLayer = L.layerGroup().addTo(map);
   planLayer.clearLayers();
+  planMine = findMyNoFire();
+  if(typeof renderCompass === 'function') renderCompass();
   if(!planOn()) return;
   const pins = new Map(state.pins.map(p => [p.id, p]));
   for(const {g, hid} of planHunts()){
@@ -4398,14 +4534,14 @@ function planCardHtml(g, hid, hunt, lead){
   if(!lead && !shown.length && !routes.length && !nd) return '';
   const me = myUid(), mine = passes.filter(p => stands[p.id] && stands[p.id].uid === me), myRoutes = routes.filter(r => r.uid === me);
   let h = `<div class="lbl">Jaktplan</div>`;
-  if(mine.length) h += `<div class="plan-mine">Ditt pass: <b>${mine.map(p => esc(p.name || 'Pass')).join(', ')}</b>${maskDirs(stands[mine[0].id].no).length ? `. Skjut inte mot ${maskDirs(stands[mine[0].id].no).join(', ')}.` : ''} <button class="linkbtn" type="button" data-j="plan-go" data-g="${g.id}" data-p="${mine[0].id}">Visa</button></div>`;
+  if(mine.length) h += `<div class="plan-mine">Ditt pass: <b>${mine.map(p => esc(p.name || 'Pass')).join(', ')}</b>${maskDirs(stands[mine[0].id].no).length ? `. Skjut inte mot ${maskDirs(stands[mine[0].id].no).join(', ')}.` : ''} <button class="linkbtn" type="button" data-j="plan-go" data-g="${esc(g.id)}" data-p="${esc(mine[0].id)}">Visa</button></div>`;
   for(const r of myRoutes) h += `<div class="plan-mine">Du går som <b>${ROUTE_KIND[r.kind].name.toLowerCase()}</b>.</div>`;
   if(shown.length) h += `<div class="small plan-list">${shown.map(p => { const s = stands[p.id], no = maskDirs(s.no);
     return `<div><span>${esc(p.name || 'Pass')}</span>: ${s.who ? `<b>${esc(s.who)}</b>` : '<span class="muted">ingen</span>'}${no.length ? ` <span class="muted">· ej mot ${no.join(', ')}</span>` : ''}</div>`; }).join('')}</div>`;
   if(routes.length) h += `<div class="small plan-list">${routes.map(r => `<div>${ROUTE_KIND[r.kind].name}: ${r.who ? `<b>${esc(r.who)}</b>` : '<span class="muted">ingen</span>'} <span class="muted">· ${fmtDist(lineLen(parseBorder(r.pts)))}</span></div>`).join('')}</div>`;
   const set = passes.filter(p => stands[p.id] && stands[p.id].who).length;
   h += `<div class="small muted">${set} av ${passes.length} pass tillsatta · ${nd} ${nd === 1 ? 'såt' : 'såtar'} · ${routes.length} ${routes.length === 1 ? 'väg' : 'vägar'}</div>`;
-  if(lead) h += `<div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" data-j="plan" data-g="${g.id}" data-h="${hid}">Planera</button></div>`;
+  if(lead) h += `<div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" data-j="plan" data-g="${esc(g.id)}" data-h="${esc(hid)}">Planera</button></div>`;
   return h;
 }
 
@@ -4441,17 +4577,17 @@ function planBodyRender(force){
   for(const p of passes){
     const s = (plan.stands || {})[p.id] || {}, no = maskDirs(s.no);
     h += `<div class="plan-row"><span class="pr-name">${esc(p.name || 'Pass')}</span>
-      <select class="input" data-pl="who" data-p="${p.id}" aria-label="Vem står på ${esc(p.name || 'passet')}">${opts(s.who, s.uid)}</select>
-      <button class="btn sm${no.length ? ' nofire' : ''}" type="button" data-pl="dirs" data-p="${p.id}">${no.length ? 'Ej mot ' + no.join(', ') : 'Skjutriktningar'}</button></div>`;
+      <select class="input" data-pl="who" data-p="${esc(p.id)}" aria-label="Vem står på ${esc(p.name || 'passet')}">${opts(s.who, s.uid)}</select>
+      <button class="btn sm${no.length ? ' nofire' : ''}" type="button" data-pl="dirs" data-p="${esc(p.id)}">${no.length ? 'Ej mot ' + no.join(', ') : 'Skjutriktningar'}</button></div>`;
   }
   h += `<h3 class="sec">Såtar</h3>`;
   const drives = Object.entries(plan.drives || {}).filter(([, d]) => d);
   if(!drives.length) h += `<p class="note" style="margin-top:0">Ingen såt är ritad.</p>`;
   for(const [did, d] of drives){
-    h += `<div class="plan-row"><input class="input" data-pl="dname" data-d="${did}" maxlength="60" value="${esc(d.name || '')}" aria-label="Namn på såten">
+    h += `<div class="plan-row"><input class="input" data-pl="dname" data-d="${esc(did)}" maxlength="60" value="${esc(d.name || '')}" aria-label="Namn på såten">
       <span class="small muted">${fmtHa(areaHa(parseBorder(d.ring)))}</span>
-      <button class="btn sm" type="button" data-pl="drive-draw" data-d="${did}">Ändra</button>
-      <button class="iconbtn" type="button" data-pl="drive-del" data-d="${did}" aria-label="Ta bort ${esc(d.name || 'såten')}">${ICON_TRASH}</button></div>`;
+      <button class="btn sm" type="button" data-pl="drive-draw" data-d="${esc(did)}">Ändra</button>
+      <button class="iconbtn" type="button" data-pl="drive-del" data-d="${esc(did)}" aria-label="Ta bort ${esc(d.name || 'såten')}">${ICON_TRASH}</button></div>`;
   }
   h += `<div class="btnrow"><button class="btn sm" type="button" data-pl="drive-draw">Rita såt</button></div>`;
   h += `<h3 class="sec">Hundförare och drevkarlar</h3>`;
@@ -4459,9 +4595,9 @@ function planBodyRender(force){
   if(!routes.length) h += `<p class="note" style="margin-top:0">Rita hur hundförare och drevkarlar ska gå.</p>`;
   for(const [rid, r] of routes){
     h += `<div class="plan-row"><span class="pr-name"><span class="route-dot ${r.kind}"></span>${ROUTE_KIND[r.kind].name}<br><span class="small muted">${fmtDist(lineLen(parseBorder(r.pts)))}</span></span>
-      <select class="input" data-pl="rwho" data-r="${rid}" aria-label="Vem går som ${ROUTE_KIND[r.kind].name.toLowerCase()}">${opts(r.who, r.uid)}</select>
-      <button class="btn sm" type="button" data-pl="route-draw" data-r="${rid}" data-k="${r.kind}">Ändra</button>
-      <button class="iconbtn" type="button" data-pl="route-del" data-r="${rid}" aria-label="Ta bort vägen">${ICON_TRASH}</button></div>`;
+      <select class="input" data-pl="rwho" data-r="${esc(rid)}" aria-label="Vem går som ${ROUTE_KIND[r.kind].name.toLowerCase()}">${opts(r.who, r.uid)}</select>
+      <button class="btn sm" type="button" data-pl="route-draw" data-r="${esc(rid)}" data-k="${esc(r.kind)}">Ändra</button>
+      <button class="iconbtn" type="button" data-pl="route-del" data-r="${esc(rid)}" aria-label="Ta bort vägen">${ICON_TRASH}</button></div>`;
   }
   h += `<div class="btnrow"><button class="btn sm" type="button" data-pl="route-draw" data-k="hund">Rita väg för hundförare</button><button class="btn sm" type="button" data-pl="route-draw" data-k="drev">Rita väg för drevkarl</button></div>`;
   body.innerHTML = h;
@@ -4533,7 +4669,7 @@ function roseSvg(no){
   const R = 100, r0 = 26, pt = (r, a) => `${(r * Math.sin(a * Math.PI / 180)).toFixed(2)},${(-r * Math.cos(a * Math.PI / 180)).toFixed(2)}`;
   return `<svg class="rose" viewBox="-110 -110 220 220" role="group" aria-label="Skjutriktningar">${DIR16.map((d, i) => {
     const a0 = i * 22.5 - 11.25, a1 = a0 + 22.5, on = !!(no & (1 << i)), lp = pt(i % 2 ? 80 : 74, i * 22.5).split(',');
-    return `<g class="rose-w${on ? ' on' : ''}" data-i="${i}" role="button" tabindex="0" aria-pressed="${on}" aria-label="${d}"><path d="M${pt(r0, a0)}L${pt(R, a0)}A${R} ${R} 0 0 1 ${pt(R, a1)}L${pt(r0, a1)}A${r0} ${r0} 0 0 0 ${pt(r0, a0)}Z"/><text x="${lp[0]}" y="${lp[1]}">${d}</text></g>`;
+    return `<g class="rose-w${on ? ' on' : ''}" data-i="${esc(i)}" role="button" tabindex="0" aria-pressed="${on}" aria-label="${d}"><path d="M${pt(r0, a0)}L${pt(R, a0)}A${R} ${R} 0 0 1 ${pt(R, a1)}L${pt(r0, a1)}A${r0} ${r0} 0 0 0 ${pt(r0, a0)}Z"/><text x="${lp[0]}" y="${lp[1]}">${d}</text></g>`;
   }).join('')}<circle r="${r0 - 4}" class="rose-c"/></svg>`;
 }
 function openDirs(g, hid, pid){
@@ -4549,7 +4685,7 @@ function openDirs(g, hid, pid){
     };
     const toggle = w => { if(!w) return; no ^= 1 << +w.dataset.i; draw(); };
     m.querySelector('#roseBox').addEventListener('click', e => toggle(e.target.closest('.rose-w')));
-    m.querySelector('#roseBox').addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); const i = e.target.closest('.rose-w'); toggle(i); const n = m.querySelector(`.rose-w[data-i="${i && i.dataset.i}"]`); if(n) n.focus(); } });
+    m.querySelector('#roseBox').addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); const i = e.target.closest('.rose-w'); toggle(i); const n = m.querySelector(`.rose-w[data-i="${esc(i && i.dataset.i)}"]`); if(n) n.focus(); } });
     m.querySelector('#roseClear').addEventListener('click', () => { no = 0; draw(); });
     m.querySelector('#roseCancel').addEventListener('click', () => openPlan(g, hid));
     m.querySelector('#roseOk').addEventListener('click', () => {
@@ -4568,6 +4704,8 @@ $('#popPlan').addEventListener('change', e => { state.settings.planOn = e.target
    (och avsändarens egna) med en nyckel som härleds med ECDH + HKDF. Databasen ser alltså bara vem som skrivit till vem,
    aldrig texten. Meddelandena ligger i groups/<lag>/huntMsg/<jakt> och finns bara medan jakten pågår. */
 const MSG_MAX = 1000;
+const KEY_TTL = 90 * 864e5;   // nycklar från enheter som inte använts på 90 dagar används inte och tas bort
+const keyFresh = d => !!d && !!d.k && (d.t || 0) >= Date.now() - KEY_TTL;
 var msgKeyP = null;                 // Promise med {did, priv, pubB64}
 const msgPlain = {};                // mid -> {text} | {err}
 const msgPair = {};                 // publik nyckel (base64) -> härledd AES-nyckel
@@ -4646,7 +4784,10 @@ async function msgPublish(g){
   if(g.kind === 'member' ? !(g.members || {})[myUid()] : !(g.guest && g.guest.hid)) return;
   let me; try { me = await myMsgKey(); } catch(e){ return; }
   const cur = ((g.msgKeys || {})[myUid()] || {})[me.did], hid = g.kind === 'guest' ? g.guest.hid : null;
-  if(cur && cur.k === me.pubB64 && cur.name === myName() && (cur.hid || null) === hid) return;
+  // Mina gamla enheters nycklar tas bort, så att meddelanden inte krypteras till enheter som inte används
+  for(const [did, d] of Object.entries((g.msgKeys || {})[myUid()] || {})) if(did !== me.did && !keyFresh(d)) fb.db.ref(`groups/${g.id}/msgKeys/${myUid()}/${did}`).remove().catch(() => {});
+  // Tiden uppdateras högst en gång per dygn: den visar att enheten används
+  if(cur && cur.k === me.pubB64 && cur.name === myName() && (cur.hid || null) === hid && Date.now() - (cur.t || 0) < 864e5) return;
   const v = {k:me.pubB64, name:myName(), t:Date.now()}; if(hid) v.hid = hid;
   fb.db.ref(`groups/${g.id}/msgKeys/${myUid()}/${me.did}`).set(v).catch(() => {});
 }
@@ -4655,7 +4796,7 @@ function msgPeople(g, hid){
   const out = [];
   for(const [u, devs] of Object.entries(g.msgKeys || {})){
     if(!devs || u === myUid()) continue;
-    const list = Object.entries(devs).filter(([, d]) => d && d.k && (!d.hid || d.hid === hid));
+    const list = Object.entries(devs).filter(([, d]) => keyFresh(d) && (!d.hid || d.hid === hid));
     if(!list.length) continue;
     if(g.kind === 'member' && !(g.members || {})[u] && !Object.entries(g.guests || {}).some(([gu, v]) => gu === u && v && v.hid === hid)) continue;
     const guest = list.every(([, d]) => d.hid);
@@ -4664,7 +4805,7 @@ function msgPeople(g, hid){
   }
   return out.sort((a, b) => a.name.localeCompare(b.name, 'sv'));
 }
-const myDevices = g => Object.entries((g.msgKeys || {})[myUid()] || {}).filter(([, d]) => d && d.k).map(([did, d]) => ({id:myUid() + '~' + did, k:d.k}));
+const myDevices = g => Object.entries((g.msgKeys || {})[myUid()] || {}).filter(([, d]) => keyFresh(d)).map(([did, d]) => ({id:myUid() + '~' + did, k:d.k}));
 
 /* Meddelanden som rör mig: jag skrev dem eller de är skickade till mig. */
 function msgMine(g, hid){
@@ -4682,8 +4823,8 @@ function msgHtml(g, hid){
     if(!p) msgLoad(g, mid, m);
     return `<div class="msg${mine ? ' me' : ''}"><div class="msg-h"><b>${esc(mine ? 'Du' : m.name || 'Deltagare')}</b> till ${esc(msgToText(g, hid, m))} <span class="muted">· ${esc(fmtClock(m.t))}</span></div>
       <div class="msg-t">${p ? (p.text != null ? esc(p.text) : `<span class="muted">${esc(p.err)}</span>`) : '<span class="muted">Låser upp …</span>'}</div>
-      ${!mine ? `<button class="linkbtn" type="button" data-j="msg-reply" data-g="${g.id}" data-h="${hid}" data-u="${esc(m.from)}">Svara</button>` : ''}</div>`; }).join('')}</div>`;
-  h += `<div class="btnrow" style="margin-top:6px"><button class="btn sm primary" type="button" data-j="msg-new" data-g="${g.id}" data-h="${hid}">Nytt meddelande</button></div>`;
+      ${!mine ? `<button class="linkbtn" type="button" data-j="msg-reply" data-g="${esc(g.id)}" data-h="${esc(hid)}" data-u="${esc(m.from)}">Svara</button>` : ''}</div>`; }).join('')}</div>`;
+  h += `<div class="btnrow" style="margin-top:6px"><button class="btn sm primary" type="button" data-j="msg-new" data-g="${esc(g.id)}" data-h="${esc(hid)}">Nytt meddelande</button></div>`;
   return h;
 }
 function msgLoad(g, mid, m){
@@ -4720,8 +4861,10 @@ function openMsgForm(g, hid, to){
       if(!chosen.length){ toast('Välj minst en mottagare.'); return; }
       const btn = m.querySelector('#msgSend'); btn.disabled = true;
       try {
-        await msgSend(g, hid, text, chosen, toAll);
-        closeModal(); toast(toAll ? 'Meddelandet är skickat till alla i jakten.' : `Meddelandet är skickat till ${chosen.map(p => p.name).join(', ')}.`);
+        const r = await msgSend(g, hid, text, chosen, toAll);
+        closeModal();
+        if(r === 'queued') toast('Ingen täckning: meddelandet skickas när täckningen kommer tillbaka. Håll appen öppen.', 6000);
+        else toast(toAll ? 'Meddelandet är skickat till alla i jakten.' : `Meddelandet är skickat till ${chosen.map(p => p.name).join(', ')}.`);
       } catch(err){ btn.disabled = false; toast('Kunde inte skicka meddelandet. Kontrollera nätverket.', 5000); }
     });
   });
@@ -4735,10 +4878,24 @@ async function msgSend(g, hid, text, people, toAll){
   if(toAll) msg.all = true; else { msg.to = {}; for(const p of people) msg.to[p.uid] = true; }
   const mid = 'm' + uid().replace(/[^a-z0-9]/gi, '');
   msgPlain[mid] = {text};
-  await fb.db.ref(`groups/${g.id}/huntMsg/${hid}/${mid}`).set(msg);
+  const sent = fb.db.ref(`groups/${g.id}/huntMsg/${hid}/${mid}`).set(msg);
+  // Utan täckning lägger Firebase meddelandet i kö och skickar det när täckningen kommer tillbaka (så länge appen är öppen)
+  if(!navigator.onLine){ sent.catch(() => toast('Ett meddelande kunde inte skickas.', 5000)); return 'queued'; }
+  await sent;
 }
 $('#tab-jakt').addEventListener('click', () => $('#tab-jakt').classList.remove('has-news'));
 
+
+/* ---------- Offline ----------
+   Service workern sparar appen och de kartrutor man har tittat på, så att appen startar och visar kartan utan täckning.
+   Den registreras på webbadressen (https), och lokalt bara med ?sw=1 (för testerna). */
+if('serviceWorker' in navigator && (location.protocol === 'https:' || new URLSearchParams(location.search).has('sw'))){
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+function renderNet(){ const b = $('#netBar'); if(b) b.hidden = navigator.onLine; }
+window.addEventListener('online', () => { renderNet(); toast('Täckningen är tillbaka. Ändringar skickas nu.'); });
+window.addEventListener('offline', renderNet);
+renderNet();
 
 /* ---------- Start ---------- */
 map.on('moveend', () => { const c = map.getCenter(); state.settings.view = {lat:+c.lat.toFixed(5), lng:+c.lng.toFixed(5), z:map.getZoom()}; save(); });
@@ -4761,7 +4918,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {msgPlain:() => msgPlain, compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

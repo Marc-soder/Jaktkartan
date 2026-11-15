@@ -1,10 +1,10 @@
 """Bygger index.html och database.rules.json från filerna i src/.
 
 Körs från repots rot efter `npm ci`:
-    python3 src/build.py            # skriver index.html och database.rules.json
+    python3 src/build.py            # skriver index.html, database.rules.json, sw.js, manifest.webmanifest och icons/
     python3 src/build.py --check    # bygger i minnet och kontrollerar att filerna i repot är aktuella
 """
-import json, os, subprocess, sys
+import hashlib, json, os, subprocess, sys
 
 SRC = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(SRC)
@@ -31,20 +31,34 @@ def build():
     return html, rules
 
 
-def main():
+def outputs():
+    """Alla filer som byggs, som bytes. Service workern får en version från index.html, så att telefoner hämtar nya versioner."""
     html, rules = build()
-    targets = {os.path.join(ROOT, 'index.html'): html, os.path.join(ROOT, 'database.rules.json'): rules}
+    out = {'index.html': html.encode('utf-8'), 'database.rules.json': rules.encode('utf-8')}
+    version = hashlib.sha1(out['index.html']).hexdigest()[:10]
+    sw = read(os.path.join(SRC, 'sw.js'))
+    assert sw.count('/*VERSION*/') == 1
+    out['sw.js'] = sw.replace('/*VERSION*/', version).encode('utf-8')
+    out['manifest.webmanifest'] = open(os.path.join(SRC, 'manifest.webmanifest'), 'rb').read()
+    for name in sorted(os.listdir(os.path.join(SRC, 'icons'))):
+        out['icons/' + name] = open(os.path.join(SRC, 'icons', name), 'rb').read()
+    return out
+
+
+def main():
+    targets = {os.path.join(ROOT, k): v for k, v in outputs().items()}
     if '--check' in sys.argv:
-        stale = [os.path.relpath(p, ROOT) for p, text in targets.items() if not os.path.exists(p) or read(p) != text]
+        stale = [os.path.relpath(p, ROOT) for p, data in targets.items() if not os.path.exists(p) or open(p, 'rb').read() != data]
         if stale:
             print('Inaktuella filer: ' + ', '.join(stale) + '. Kör `npm run build` och committa resultatet.')
             sys.exit(1)
-        print('index.html och database.rules.json stämmer med src/.')
+        print('index.html, database.rules.json och appfilerna stämmer med src/.')
         return
-    for p, text in targets.items():
-        with open(p, 'w', encoding='utf-8', newline='') as f:
-            f.write(text)
-        print(f'{os.path.relpath(p, ROOT)}: {len(text)} tecken')
+    for p, data in targets.items():
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, 'wb') as f:
+            f.write(data)
+        print(f'{os.path.relpath(p, ROOT)}: {len(data)} byte')
 
 
 if __name__ == '__main__':

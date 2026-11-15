@@ -17,8 +17,9 @@ const metersPerPixel = (lat, z) => 40075016.686 * Math.cos(lat * Math.PI / 180) 
 const blocked = () => placing || drawing || (typeof cal !== 'undefined' && cal) || (typeof adj !== 'undefined' && adj);
 
 /* ---------- Vindriktning ----------
-   Vinden hämtas från Open-Meteo (gratis, utan nyckel). Det gula området visar vart vittringen driver,
-   från din position (eller korset om positionen inte är känd), och de blå pilarna rör sig med vinden. */
+   Vinden hämtas från Open-Meteo (gratis, utan nyckel). Det gula området visar vart vittringen driver från din position,
+   och visas bara när positionen är känd (det följer alltså aldrig kartans mitt). De blå pilarna rör sig med vinden
+   över hela den synliga kartan. */
 const WIND_LEN = 600;
 map.createPane('wind'); map.getPane('wind').style.zIndex = 450; map.getPane('wind').style.pointerEvents = 'none';
 const wind = {data:null, at:0, from:null, busy:false, layer:L.layerGroup().addTo(map), canvas:null, raf:0, sector:null, timer:null};
@@ -44,7 +45,8 @@ async function windFetch(force){
 }
 /* Det gula området: spets i origo, öppning mot det håll vinden blåser. */
 function windSector(){
-  const o = windOrigin(), d = wind.data; if(!d) return null;
+  const d = wind.data; if(!d || !myPos) return null;
+  const o = L.latLng(myPos.lat, myPos.lng);
   const axis = (d.dir + 180) % 360, half = windHalf(d.speed), pts = [o];
   for(let a = -half; a <= half + 1e-9; a += half / 8) pts.push(destPoint(o, WIND_LEN, axis + a));
   return {o, axis, half, pts};
@@ -53,7 +55,7 @@ function windRender(){
   wind.layer.clearLayers(); wind.sector = null;
   if(!windOn() || !wind.data){ windChip(); windAnim(false); renderWindNote(); return; }
   const s = wind.sector = windSector();
-  L.polygon(s.pts, {color:'#e8b500', weight:2, opacity:.9, fillColor:'#ffd400', fillOpacity:.28, interactive:false, className:'wind-sector'}).addTo(wind.layer);
+  if(s) L.polygon(s.pts, {color:'#e8b500', weight:2, opacity:.9, fillColor:'#ffd400', fillOpacity:.28, interactive:false, className:'wind-sector'}).addTo(wind.layer);
   windChip(); windAnim(true); renderWindNote();
 }
 function windChip(){
@@ -69,7 +71,7 @@ const fmtNum = v => (Math.round(v * 10) / 10).toLocaleString('sv-SE');
 function renderWindNote(){
   const n = $('#windNote'); if(!n) return;
   const d = wind.data;
-  n.textContent = !windOn() ? 'Gult område där vittringen driver, med pilar som visar vinden' : d ? `Vind från ${dirName(d.dir)}, ${fmtNum(d.speed)} m/s. Från ${myPos ? 'din position' : 'korset'}. Open-Meteo.` : 'Hämtar …';
+  n.textContent = !windOn() ? 'Gult område där vittringen driver, med pilar som visar vinden' : d ? `Vind från ${dirName(d.dir)}, ${fmtNum(d.speed)} m/s. ${myPos ? 'Gula området utgår från din position.' : 'Gula området visas när din position är känd.'} Open-Meteo.` : 'Hämtar …';
   const c = $('#popWind'); if(c) c.checked = windOn();
 }
 function setWind(on){
@@ -78,7 +80,7 @@ function setWind(on){
   else { clearInterval(wind.timer); }
   windRender();
 }
-/* Blå pilar som rör sig i vindens riktning inne i det gula området, ritade på en canvas som följer kartan. */
+/* Blå pilar som rör sig i vindens riktning över hela den synliga kartan, ritade på en canvas som följer kartan. */
 function windAnim(on){
   if(!on){ cancelAnimationFrame(wind.raf); wind.raf = 0; if(wind.canvas) wind.canvas.hidden = true; return; }
   if(!wind.canvas){ wind.canvas = L.DomUtil.create('canvas', 'wind-arrows', map.getPane('wind')); }
@@ -87,22 +89,22 @@ function windAnim(on){
 }
 function windFrame(t){
   wind.raf = 0;
-  const s = wind.sector, cv = wind.canvas; if(!s || !cv || cv.hidden) return;
+  const d = wind.data, cv = wind.canvas; if(!d || !cv || cv.hidden) return;
   if(!document.hidden){
     const size = map.getSize(), dpr = window.devicePixelRatio || 1;
     if(cv.width !== Math.round(size.x * dpr) || cv.height !== Math.round(size.y * dpr)){ cv.width = Math.round(size.x * dpr); cv.height = Math.round(size.y * dpr); cv.style.width = size.x + 'px'; cv.style.height = size.y + 'px'; }
     L.DomUtil.setPosition(cv, map.containerPointToLayerPoint([0, 0]));
     const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, size.x, size.y);
-    const P = s.pts.map(ll => map.latLngToContainerPoint(ll)), A = P[0];
-    g.save(); g.beginPath(); P.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); g.closePath(); g.clip();
-    const r = Math.PI / 180, ax = Math.sin(s.axis * r), ay = -Math.cos(s.axis * r), px = -ay, py = ax;   // axel (nedvind) och tvärs
-    const R = Math.max(...P.map(p => Math.hypot(p.x - A.x, p.y - A.y)));
-    const step = 30, len = 11, speed = 14 + wind.data.speed * 5;                 // pixlar mellan pilarna, pilens längd, fart (px/s)
+    // Rutnätet är fäst i kartan (där vinden hämtades), så pilarna följer kartan när man flyttar den
+    const A = map.latLngToContainerPoint(wind.from || map.getCenter()), axis = (d.dir + 180) % 360;
+    g.save();
+    const r = Math.PI / 180, ax = Math.sin(axis * r), ay = -Math.cos(axis * r), px = -ay, py = ax;   // axel (nedvind) och tvärs
+    const step = 34, len = 11, speed = 14 + d.speed * 5;                 // pixlar mellan pilarna, pilens längd, fart (px/s)
     const phase = ((t / 1000) * speed) % step;
     // Bara den del av rutnätet som syns på skärmen
     const cs = [[0, 0], [size.x, 0], [size.x, size.y], [0, size.y]].map(([x, y]) => [(x - A.x) * ax + (y - A.y) * ay, (x - A.x) * px + (y - A.y) * py]);
-    const u0 = Math.max(-step, Math.min(...cs.map(c => c[0]))), u1 = Math.min(R, Math.max(...cs.map(c => c[0])));
-    const v0 = Math.max(-R, Math.min(...cs.map(c => c[1]))), v1 = Math.min(R, Math.max(...cs.map(c => c[1])));
+    const u0 = Math.min(...cs.map(c => c[0])) - step, u1 = Math.max(...cs.map(c => c[0])) + step;
+    const v0 = Math.min(...cs.map(c => c[1])) - step, v1 = Math.max(...cs.map(c => c[1])) + step;
     g.strokeStyle = '#1a73e8'; g.fillStyle = '#1a73e8'; g.lineWidth = 2; g.lineCap = 'round';
     let n = 0;
     for(let u = Math.floor(u0 / step) * step; u <= u1 && n < 4000; u += step){
@@ -120,7 +122,6 @@ function windFrame(t){
   }
   wind.raf = requestAnimationFrame(windFrame);
 }
-map.on('move zoom', () => { if(windOn() && wind.data && !myPos) windRender(); });
 map.on('moveend', () => { if(windOn()) windFetch(); });
 $('#popWind').addEventListener('change', e => setWind(e.target.checked));
 $('#windChip').addEventListener('click', () => { windFetch(true); toast('Hämtar vinden igen …', 1500); });
@@ -246,7 +247,7 @@ map.whenReady(() => setTimeout(() => { pan.ready = true; if(windOn()) setWind(tr
 /* ---------- Riktningen jag tittar åt ----------
    En blå kon från positionspricken och en kompass uppe till vänster, efter telefonens kompass. Startas av ett tryck på positionsknappen
    (på iPhone krävs ett tryck för att få tillåtelse att läsa kompassen). */
-const compass = {on:false, heading:null, raf:0, rot:0, timer:null};
+const compass = {on:false, heading:null, raf:0, rot:0, timer:null, mask:0, bad:false};
 const compassOn = () => state.settings.compass !== false;
 const isTouch = () => !!(window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
 const screenAngle = () => (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (typeof window.orientation === 'number' ? window.orientation : 0);
@@ -271,8 +272,21 @@ function renderCompass(){
   const last = ((compass.rot % 360) + 360) % 360; let d = h - last; if(d > 180) d -= 360; if(d < -180) d += 360;
   compass.rot += d;
   $('#compassDial').style.transform = `rotate(${-compass.rot}deg)`;
+  // Förbjudna skjutriktningar på mitt pass: röda fält i rosen, och varning när telefonen pekar in i ett
+  const mask = typeof myNoFireMask === 'function' ? myNoFireMask() : 0;
+  if(mask !== compass.mask){
+    compass.mask = mask;
+    const pt = (r, a) => `${(r * Math.sin(a * Math.PI / 180)).toFixed(2)},${(-r * Math.cos(a * Math.PI / 180)).toFixed(2)}`;
+    $('#cmpNo').innerHTML = maskRuns(mask).map(([i, n]) => { const a0 = i * 22.5 - 11.25, a1 = a0 + n * 22.5, big = n * 22.5 > 180 ? 1 : 0;
+      return n >= 16 ? '<path d="M0,-47A47,47 0 1 1 0,47A47,47 0 1 1 0,-47Z"/>' : `<path d="M0,0L${pt(47, a0)}A47,47 0 ${big} 1 ${pt(47, a1)}Z"/>`; }).join('');
+  }
+  const bad = !!(mask & (1 << (Math.round(h / 22.5) % 16)));
+  btn.classList.toggle('nofire', bad);
+  if(bad && !compass.bad){ try { if(navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch(e){} }
+  compass.bad = bad;
   const t = `${dirName(h)} ${Math.round(h) % 360}°`;
-  $('#compassTxt').textContent = t; btn.setAttribute('aria-label', 'Telefonen pekar mot ' + t);
+  $('#compassTxt').textContent = bad ? `Förbjuden riktning · ${t}` : t;
+  btn.setAttribute('aria-label', bad ? `Förbjuden skjutriktning: telefonen pekar mot ${t}` : 'Telefonen pekar mot ' + t);
 }
 function renderHeading(){
   renderCompass();
@@ -427,7 +441,7 @@ function openRenumber(){
     <p class="note" style="margin-top:0">Passen får nummer i ordning efter var de ligger. Varje jaktmark numreras för sig. Text efter numret behålls.</p>
     <div class="row2">
       <label class="field"><span>Jaktmark</span><select class="input" id="rnArea">${areas.map(a => `<option value="${esc(a.id)}"${a.id === areaKey ? ' selected' : ''}>${esc(a.name)} (${a.n})</option>`).join('')}${areas.length > 1 ? `<option value="*"${areaKey === '*' ? ' selected' : ''}>Alla, var för sig</option>` : ''}</select></label>
-      <label class="field"><span>Ordning</span><select class="input" id="rnDir">${Object.entries(RENUM_DIRS).map(([k, v]) => `<option value="${k}"${k === dir ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+      <label class="field"><span>Ordning</span><select class="input" id="rnDir">${Object.entries(RENUM_DIRS).map(([k, v]) => `<option value="${esc(k)}"${k === dir ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
     </div>
     <label class="field rn-start"><span>Börja på nummer</span><input class="input" id="rnStart" type="number" inputmode="numeric" min="1" max="999" step="1" value="1"></label>
     <div class="field"><span>Så här blir det</span><div id="rnPreview" class="rn-preview"></div></div>

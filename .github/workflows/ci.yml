@@ -40,6 +40,8 @@ jobs:
         run: npm run test:tools
       - name: Tester av jaktlag och säkerhetsregler
         run: npm run test:cloud
+      - name: Tester av offlineläge
+        run: npm run test:offline
       - name: Spara skärmbilder
         if: always()
         uses: actions/upload-artifact@v4
