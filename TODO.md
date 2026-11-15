@@ -220,41 +220,74 @@ geolocation till insticksprogrammet när appen körs i skalet. Webbsidan finns k
 - [ ] CI fortsätter testa webbdelen som i dag. Bygg även appen i CI (`./gradlew assembleDebug`) så att bygget inte går sönder.
 - [ ] Delningen i bakgrunden kan inte testas i CI. Prova på riktiga telefoner enligt listan under Android.
 
-### Android (först)
+### Android (först): exakt vad som krävs
 
-**Behörigheter i `AndroidManifest.xml`** (kontrollera mot insticksprogrammets dokumentation)
+**1. Konton och kostnader**
+- [ ] Firebase-projektet finns redan. Lägg till en Android-app i Firebase-konsolen, med ett paketnamn som ni väljer
+  (till exempel `se.exempel.jaktkartan`).
+- [ ] Ingen avgift om appen sprids som APK-fil eller med Firebase App Distribution. Google Play kostar 25 USD en gång.
+- [ ] Google har aviserat att appar på certifierade Android-telefoner från 2027 ska komma från en verifierad utvecklare,
+  även när de installeras utanför Google Play. Kontrollera vad som gäller när appen ska spridas.
+
+**2. Verktyg på datorn som bygger**
+- [ ] Node.js och npm.
+- [ ] Android Studio, eller JDK och Android SDK, i de versioner som aktuell Capacitor kräver.
+  Fungerar på Windows, Mac och Linux, och i GitHub Actions.
+- [ ] `keytool` (följer med JDK) för att skapa signeringsnyckeln.
+
+**3. Programpaket (npm)**
+- [ ] `@capacitor/core` (innehåller `CapacitorHttp`), `@capacitor/cli` och `@capacitor/android`.
+- [ ] `@capacitor-community/background-geolocation`: positionen i bakgrunden.
+- [ ] `@capacitor/local-notifications`: aviseringen när jakten startar.
+- [ ] `@capacitor-firebase/authentication`: inloggning med Google i appen.
+
+**4. Nya filer i repot**
+- [ ] `capacitor.config.json` med appens id, namn och `webDir`, och `server.url` om appen ska ladda sidan från GitHub Pages.
+- [ ] Mappen `android/` (skapas med `npx cap add android`).
+- [ ] `android/app/google-services.json` från Firebase-konsolen. Den är inte hemlig.
+- [ ] `.gitignore`: `*.jks`, `*.keystore` och `key.properties`.
+- [ ] Ett steg i CI som bygger appen (`./gradlew assembleDebug`).
+
+**5. Behörigheter i `AndroidManifest.xml`** (kontrollera mot insticksprogrammets dokumentation)
 - [ ] `ACCESS_FINE_LOCATION` och `ACCESS_COARSE_LOCATION`.
 - [ ] `FOREGROUND_SERVICE` och `FOREGROUND_SERVICE_LOCATION` (Android 14 och senare), och tjänsten med `foregroundServiceType="location"`.
 - [ ] `POST_NOTIFICATIONS` (Android 13 och senare), för aviseringen som visar att positionen delas.
-- [ ] `ACCESS_BACKGROUND_LOCATION` bara om delningen ska kunna starta när appen inte är öppen. Den behörigheten måste
-  användaren ge i inställningarna ("Tillåt alltid"), och Google Play granskar den särskilt.
+- [ ] `ACCESS_BACKGROUND_LOCATION` bara om delningen ska kunna starta utan att appen öppnas. Den måste användaren ge
+  i inställningarna ("Tillåt alltid"), och Google Play granskar den särskilt.
 
-**När delningen startar**
-- [ ] Android tillåter i regel inte att en förgrundstjänst startas när appen ligger i bakgrunden. Starta därför delningen
-  när man öppnar appen under en jakt man deltar i, eller trycker Dela position.
-- [ ] Lägg en lokal avisering vid jaktens start (`@capacitor/local-notifications`): "Jakten har börjat. Tryck för att dela din position."
-  Ett tryck öppnar appen och startar delningen. Efter det fortsätter den med släckt skärm.
+**6. Ändringar i koden (`src/`)**
+- [ ] Känna av när koden körs i appen. Wake Lock behövs inte där.
+- [ ] `gpsStart` och `gpsPos` tar positionen från insticksprogrammet i stället för från webbläsaren.
+- [ ] `sendPos`: `onDisconnect().remove()` tas bort i appen, annars försvinner man från kartan när skärmen släcks.
+- [ ] Vid behov skickar appen positionen själv till Firebase REST, med inloggningen förnyad varje timme.
+- [ ] Inloggning med Google i telefonens eget system, som lämnas över till webbdelen med `signInWithCredential`.
+- [ ] Android tillåter i regel inte att en förgrundstjänst startas när appen ligger i bakgrunden. Därför: en lokal avisering
+  vid jaktens start, "Jakten har börjat. Tryck för att dela din position." Ett tryck öppnar appen och startar delningen,
+  som sedan fortsätter med släckt skärm.
+- [ ] En instruktion i appen för att undanta Jaktkartan från batterioptimering (se dontkillmyapp.com för respektive märke).
 
-**Batterisparfunktioner**
-- [ ] Samsung, Xiaomi, OnePlus och Huawei stänger gärna av appar i bakgrunden. Visa en instruktion i appen för att
-  undanta Jaktkartan från batterioptimering (se dontkillmyapp.com för respektive märke).
+**7. Signering och Firebase**
+- [ ] Skapa en signeringsnyckel. Spara en säkerhetskopia utanför repot: tappas den går appen inte att uppdatera,
+  och alla måste avinstallera och installera om.
+- [ ] Lägg in nyckelns SHA-1-fingeravtryck i Firebase-konsolen. Annars fungerar inte inloggningen med Google.
+- [ ] Nyckeln och lösenorden som hemligheter i GitHub, om appen ska byggas i CI.
+- [ ] Signerat release-bygge: `./gradlew assembleRelease` (APK) eller `bundleRelease` (Google Play).
 
-**Hur laget får appen: välj en väg**
+**8. Hur laget får appen: välj en väg**
 - [ ] **APK från GitHub Releases.** Enklast och gratis. Repot är publikt, så vem som helst kan ladda ner den, men den kräver
-  inloggning i laget som i dag. Man måste tillåta "Installera okända appar" och kan få en varning från Play Protect.
-  Uppdateringar installeras för hand (med väg B ovan gäller det bara skalet).
+  inloggning i laget som i dag. Uppdateringar installeras för hand (med väg B under Uppdateringar gäller det bara skalet).
 - [ ] **Firebase App Distribution.** Gratis. Laget bjuds in och får besked när en ny version finns.
 - [ ] **Google Play, intern testning.** 25 USD en gång. Upp till 100 testare, och uppdateringar kommer automatiskt.
   Kräver en deklaration om position i bakgrunden om `ACCESS_BACKGROUND_LOCATION` används.
   Publicering för alla kräver för nya personliga konton först ett slutet test med 12 testare i 14 dagar.
-- [ ] Google har aviserat att appar på certifierade Android-telefoner från 2027 ska komma från en verifierad utvecklare,
-  även när de installeras utanför Google Play. Kontrollera vad som gäller när appen ska spridas.
 
-**Bygge**
-- [ ] Android Studio, eller bara JDK och Android SDK. Fungerar på Linux, Windows och Mac, och i GitHub Actions.
-- [ ] Signerat release-bygge (`./gradlew assembleRelease` eller `bundleRelease` för Google Play) med nyckeln som hemlighet i GitHub.
+**9. På varje telefon i laget**
+- [ ] Installera appen. För en APK-fil: tillåt "Installera okända appar". Play Protect kan visa en varning.
+- [ ] Tillåt plats (gärna exakt position) och aviseringar.
+- [ ] Undanta Jaktkartan från batterioptimering, särskilt på Samsung och Xiaomi.
+- [ ] En Android-version som Capacitor stöder.
 
-**Prova på riktiga telefoner**
+**10. Prov innan laget använder appen**
 - [ ] Skärmen släckt och telefonen i fickan i minst en timme: kommer positionen fram, och hur ofta?
 - [ ] Byte till en annan app, och tillbaka.
 - [ ] Dålig och ingen täckning: kommer positionen fram när nätet kommer tillbaka?
@@ -281,7 +314,7 @@ geolocation till insticksprogrammet när appen körs i skalet. Webbsidan finns k
 - [ ] **App Store.** Full granskning. Apple granskar position i bakgrunden noga, och en app som mest är en webbsida kan nekas.
 
 **Prova**
-- [ ] Samma lista som för Android, på minst en iPhone.
+- [ ] Samma prov som för Android (punkt 10), på minst en iPhone.
 
 ### Ordning för arbetet (Android)
 
