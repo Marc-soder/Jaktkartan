@@ -154,34 +154,146 @@ positionen delas (Wake Lock), och sparläget minskar förbrukningen så mycket d
 ### Det som krävs: en riktig app
 
 Lägg webbappen i ett tunt skal med **Capacitor**, och använd ett insticksprogram för position i bakgrunden
-(till exempel `@capacitor-community/background-geolocation`). Kartan, jakterna, planen och Firebase-koden kan återanvändas.
-Bara positionsdelningen (`gpsStart`, `gpsPos` och `sendPos` i `src/cloud.js`) byter källa från webbläsarens
-geolocation till insticksprogrammet när appen körs i skalet.
+(till exempel `@capacitor-community/background-geolocation`, MIT-licens). Kartan, jakterna, planen och Firebase-koden kan återanvändas.
+Positionsdelningen (`gpsStart`, `gpsPos` och `sendPos` i `src/cloud.js`) byter källa från webbläsarens
+geolocation till insticksprogrammet när appen körs i skalet. Webbsidan finns kvar som i dag, till exempel för gäster.
+
+**Hela jaktlaget har Android.** Android byggs därför först, och iPhone tas bara om någon i laget behöver det.
 
 | | Android | iPhone |
 |---|---|---|
-| Hur | En tjänst i förgrunden med en fast avisering ("Jaktkartan delar din position") | Behörigheten "Plats: Alltid" och bakgrundsläget `location` |
-| Behörigheter | Platsåtkomst, platsåtkomst i bakgrunden, förgrundstjänst för plats | "Alltid"-plats, och en text som förklarar varför |
-| Hur laget får appen | Enklast: en APK-fil som laget installerar direkt. Google Play kräver en särskild granskning för position i bakgrunden. | App Store eller TestFlight. Kräver Apple Developer Program (årsavgift) och en Mac för att bygga. |
+| Hur | En tjänst i förgrunden med en fast avisering ("Jaktkartan delar din position") | Bakgrundsläget `location`, och en blå markering medan positionen delas |
+| Behörigheter | Plats, avisering, förgrundstjänst för plats. "Tillåt alltid" bara om delningen ska starta av sig själv | "När appen används" räcker om delningen startas i appen, annars "Alltid" |
+| Hur laget får appen | En APK-fil, Firebase App Distribution eller Google Play | TestFlight eller App Store |
+| Kostnad | Gratis (Google Play: 25 USD en gång) | Apple Developer Program, cirka 99 USD per år, och en Mac eller molnbyggen |
 | Insats | Måttlig | Större |
 
-### Att tänka på
+### Gemensamt för Android och iPhone
 
-- Webbsidan finns kvar, till exempel för gäster som bara ska vara med en dag.
-- Appen måste byggas och uppdateras separat. Webbsidan uppdateras som i dag när en PR mergas.
-- Delningen i bakgrunden ska bara vara på under jakter man deltar i (samma regler som i dag: "Jag deltar", start och slut)
-  och synas tydligt, med en avisering på Android.
-- Batteri: GPS:en går i bakgrunden, men skärmen kan vara släckt. Skärmen är oftast den största förbrukaren,
-  så totalt blir det troligen bättre än i dag. Sparlägets gles GPS och sändning på passet bör användas även i appen.
-- Delningen i bakgrunden kan inte testas i CI. Den måste provas på riktiga telefoner, både Android och iPhone.
+**Projektet**
+- [ ] Lägg till `@capacitor/core` och `@capacitor/cli` och en `capacitor.config.json` (app-id, namn, `webDir`).
+- [ ] Låt `npm run build` även lägga `index.html`, `manifest.webmanifest` och `icons/` i `webDir`, och kör `npx cap sync`.
+- [ ] Appikoner och startskärm från `src/icons/`.
+- [ ] Webbkoden känner av appen med `window.Capacitor && Capacitor.isNativePlatform()`. Wake Lock behövs inte i appen.
+
+**Uppdateringar: välj en väg**
+- [ ] **A. Webbkoden ligger i appen.** Fungerar utan nät från start, men varje ändring kräver en ny version av appen.
+- [ ] **B. Appen laddar sidan från GitHub Pages** (`server.url`). Webbdelen uppdateras som i dag när en PR mergas,
+  och bara ändringar i själva skalet kräver en ny app. Service workern cachar sidan som i dag, så appen startar även utan täckning
+  om den har öppnats en gång. Rekommenderas för Android när appen inte ligger på Google Play.
+
+**Positionen i bakgrunden**
+- [ ] `addWatcher` från insticksprogrammet ger positioner till `gpsPos`, med `backgroundTitle` och `backgroundMessage`
+  för aviseringen. `removeWatcher` när delningen stoppas eller jakten slutar.
+- [ ] Samma regler som i dag: bara under jakter man deltar i ("Jag deltar"), start och slut, och man kan alltid stoppa.
+- [ ] **`onDisconnect().remove()` i `sendPos` måste ändras i appen.** När telefonen kopplar ner i bakgrunden tar Firebase annars
+  bort positionen, och man försvinner från kartan för de andra. Låt i stället positionen ligga kvar och visa hur gammal den är,
+  och ta bort den när man stoppar delningen eller jakten slutar (det görs redan av `endHunt`).
+- [ ] Sparläget gäller även i appen: gles GPS och sändning varje minut när man är incheckad på passet.
+
+**Sändningen när skärmen är släckt (största tekniska risken)**
+- [ ] Prova först om Firebase-koden i webbdelen fortsätter skicka med släckt skärm i minst en timme.
+- [ ] Räcker inte det: skicka positionen med appens egen HTTP (`CapacitorHttp`) till Firebase REST,
+  `PUT https://<databas>/groups/<lag>/huntPos/<jakt>/<uid>.json?auth=<ID-token>`, och spårpunkter med `POST` till `huntTrail`.
+  ID-token gäller en timme och måste förnyas. Pausas webbdelen helt behöver även inloggningen ligga i appens egen kod (se nedan).
+- [ ] Utan täckning: skicka bara den senaste positionen när nätet kommer tillbaka, inte alla som köats.
+- [ ] Alternativ: Transistorsofts betalda `capacitor-background-geolocation` har inbyggd sändning, köhantering och
+  batterisnål rörelseavkänning. Android-byggen för release kräver en licens.
+- [ ] Reglerna i `src/rules.js` behöver inte ändras: samma sökvägar och samma fält.
+
+**Inloggning**
+- [ ] Google blockerar inloggning i popup-fönster inuti appar, så `signInWithPopup` fungerar inte i skalet.
+  Använd `@capacitor-firebase/authentication` för inloggning med Google i telefonens eget system, och logga sedan in
+  webbdelen med `signInWithCredential`.
+- [ ] Anonym inloggning för gäster fungerar som i dag.
+- [ ] Firebase-konsolen: lägg till appen i projektet. Är API-nyckeln begränsad till webbadresser behöver appen få använda den.
+
+**Säkerhet (repot är publikt)**
+- [ ] Signeringsnycklar och lösenord (`*.jks`, `*.keystore`, `key.properties`, Apples certifikat och profiler) läggs aldrig i repot.
+  Lägg dem i `.gitignore` och som hemligheter i GitHub.
+- [ ] Spara en säkerhetskopia av Androids signeringsnyckel utanför repot. Tappas den går appen inte att uppdatera,
+  och alla måste avinstallera och installera om.
+- [ ] `google-services.json` och `GoogleService-Info.plist` innehåller samma sorts uppgifter som konfigurationen i
+  `src/cloud.js` och är inte hemliga.
+
+**Tester**
+- [ ] CI fortsätter testa webbdelen som i dag. Bygg även appen i CI (`./gradlew assembleDebug`) så att bygget inte går sönder.
+- [ ] Delningen i bakgrunden kan inte testas i CI. Prova på riktiga telefoner enligt listan under Android.
+
+### Android (först)
+
+**Behörigheter i `AndroidManifest.xml`** (kontrollera mot insticksprogrammets dokumentation)
+- [ ] `ACCESS_FINE_LOCATION` och `ACCESS_COARSE_LOCATION`.
+- [ ] `FOREGROUND_SERVICE` och `FOREGROUND_SERVICE_LOCATION` (Android 14 och senare), och tjänsten med `foregroundServiceType="location"`.
+- [ ] `POST_NOTIFICATIONS` (Android 13 och senare), för aviseringen som visar att positionen delas.
+- [ ] `ACCESS_BACKGROUND_LOCATION` bara om delningen ska kunna starta när appen inte är öppen. Den behörigheten måste
+  användaren ge i inställningarna ("Tillåt alltid"), och Google Play granskar den särskilt.
+
+**När delningen startar**
+- [ ] Android tillåter i regel inte att en förgrundstjänst startas när appen ligger i bakgrunden. Starta därför delningen
+  när man öppnar appen under en jakt man deltar i, eller trycker Dela position.
+- [ ] Lägg en lokal avisering vid jaktens start (`@capacitor/local-notifications`): "Jakten har börjat. Tryck för att dela din position."
+  Ett tryck öppnar appen och startar delningen. Efter det fortsätter den med släckt skärm.
+
+**Batterisparfunktioner**
+- [ ] Samsung, Xiaomi, OnePlus och Huawei stänger gärna av appar i bakgrunden. Visa en instruktion i appen för att
+  undanta Jaktkartan från batterioptimering (se dontkillmyapp.com för respektive märke).
+
+**Hur laget får appen: välj en väg**
+- [ ] **APK från GitHub Releases.** Enklast och gratis. Repot är publikt, så vem som helst kan ladda ner den, men den kräver
+  inloggning i laget som i dag. Man måste tillåta "Installera okända appar" och kan få en varning från Play Protect.
+  Uppdateringar installeras för hand (med väg B ovan gäller det bara skalet).
+- [ ] **Firebase App Distribution.** Gratis. Laget bjuds in och får besked när en ny version finns.
+- [ ] **Google Play, intern testning.** 25 USD en gång. Upp till 100 testare, och uppdateringar kommer automatiskt.
+  Kräver en deklaration om position i bakgrunden om `ACCESS_BACKGROUND_LOCATION` används.
+  Publicering för alla kräver för nya personliga konton först ett slutet test med 12 testare i 14 dagar.
+- [ ] Google har aviserat att appar på certifierade Android-telefoner från 2027 ska komma från en verifierad utvecklare,
+  även när de installeras utanför Google Play. Kontrollera vad som gäller när appen ska spridas.
+
+**Bygge**
+- [ ] Android Studio, eller bara JDK och Android SDK. Fungerar på Linux, Windows och Mac, och i GitHub Actions.
+- [ ] Signerat release-bygge (`./gradlew assembleRelease` eller `bundleRelease` för Google Play) med nyckeln som hemlighet i GitHub.
+
+**Prova på riktiga telefoner**
+- [ ] Skärmen släckt och telefonen i fickan i minst en timme: kommer positionen fram, och hur ofta?
+- [ ] Byte till en annan app, och tillbaka.
+- [ ] Dålig och ingen täckning: kommer positionen fram när nätet kommer tillbaka?
+- [ ] Batteri: förbrukning per timme, jämfört med webbappen med tänd skärm.
+- [ ] Minst två märken, helst en Samsung.
+- [ ] Omstart av telefonen under jakten, och att delningen slutar när jakten slutar.
+
+### iPhone (senare, om någon i laget behöver det)
+
+**Det som behövs**
+- [ ] Apple Developer Program (cirka 99 USD per år).
+- [ ] En Mac med Xcode, eller molnbyggen (till exempel macOS i GitHub Actions). Certifikat och profiler som hemligheter i GitHub.
+
+**I appen**
+- [ ] `Info.plist`: `UIBackgroundModes` med `location`, och texterna `NSLocationWhenInUseUsageDescription` och
+  `NSLocationAlwaysAndWhenInUseUsageDescription` på svenska, som förklarar att positionen bara delas under jakten.
+- [ ] Delningen startas i appen, som på Android (en app på iPhone kan inte starta vanlig GPS från bakgrunden).
+- [ ] **Logga in med Apple** krävs troligen i App Store när inloggning med Google finns. Det behöver också läggas till i Firebase.
+- [ ] Offline: service workers fungerar bara i appens webbvy med App-Bound Domains (högst tio domäner).
+  Cachen för kartrutor måste lösas på annat sätt, eller få finnas bara på webben.
+
+**Hur laget får appen**
+- [ ] **TestFlight.** Räcker för ett jaktlag. Kräver en kortare granskning, och varje bygge slutar fungera efter 90 dagar.
+- [ ] **App Store.** Full granskning. Apple granskar position i bakgrunden noga, och en app som mest är en webbsida kan nekas.
+
+**Prova**
+- [ ] Samma lista som för Android, på minst en iPhone.
+
+### Ordning för arbetet (Android)
+
+1. Prototyp: Capacitor och insticksprogrammet, bara positionen till Firebase, en APK som provas en jaktdag med släckt skärm.
+2. Bestäm hur positionen skickas (webbdelen eller Firebase REST), och ändra `onDisconnect`.
+3. Inloggning med Google i appen.
+4. Välj väg för uppdateringar och spridning.
+5. Signering och bygge av appen i CI.
+6. Provning på lagets telefoner, och sedan spridning till laget.
 
 ### Alternativ utan egen app
 
 - **Meshtastic-radio med GPS:** radion sänder själv sin position med jämna mellanrum, utan telefon och utan täckning.
   Se avsnittet om Meshtastic ovan.
 - **Tills vidare:** sparläget, mörkt läge och låg ljusstyrka på telefonen.
-
-### Innan arbetet börjar
-
-- Ta reda på hur många i laget som har Android respektive iPhone. Har de flesta Android är en Android-app som
-  installeras direkt det mest realistiska första steget.
