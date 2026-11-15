@@ -27,7 +27,7 @@ Efter merge klistrar du in den nya filen i Firebase-konsolen under Realtime Data
 | `src/src.html` | Sidans HTML, CSS och huvudsakliga JavaScript. |
 | `src/vilt.js` | Jakttider per art och län. |
 | `src/cloud.js` | Jaktlag, inbjudningar, gäster, positioner, spår och synk mot Firebase. |
-| `src/border.js` | Gränser för jaktmarken, skogsvägar och egna vägar och stigar. |
+| `src/border.js` | Gränser för jaktmarken, skogsvägar och egna vägar, stigar och bäckar. |
 | `src/loupe.js` | Förstoringsglas som visas när man placerar eller drar en punkt. |
 | `src/tools.js` | Vindriktning, kryss med avståndsringar och mätning av avstånd. |
 | `src/overlay.js` | Skärmdumpar ovanpå kartan, som hjälp att rita gränser och lägga ut pass. Sparas bara i webbläsaren. |

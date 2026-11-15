@@ -48,15 +48,18 @@ function zoomToArea(id){
     else map.fitBounds(L.latLngBounds(pts), {paddingTopLeft:[30, 30], paddingBottomRight:[70, bottomPad() + 30], maxZoom:17});
   }, isDesktop() ? 0 : 280);
 }
-/* ---------- Egna vägar och stigar ----------
-   Sparas per område som a.lines = {id: {k:'road'|'path', p:'lat,lng;lat,lng', n:'namn'}} och delas med jaktlaget tillsammans med området. */
+/* ---------- Egna vägar, stigar och bäckar ----------
+   Sparas per område som a.lines = {id: {k:'road'|'path'|'stream', p:'lat,lng;lat,lng', n:'namn'}} och delas med jaktlaget tillsammans med området. */
 const lineLayer = L.layerGroup().addTo(map);
-const LINE_KIND = {road:'Väg', path:'Stig'};
+const LINE_KIND = {road:'Väg', path:'Stig', stream:'Bäck'};
+const LINE_DESC = {road:'Brun heldragen', path:'Lila streckad', stream:'Blå'};
+const LINE_COLOR = {road:'#8a4b12', path:'#7a2e8f', stream:'#1f6fb2'};
 function lineLen(pts){ let m = 0; for(let i = 1; i < pts.length; i++) m += distM({lat:pts[i-1][0], lng:pts[i-1][1]}, {lat:pts[i][0], lng:pts[i][1]}); return m; }
 const areaLines = a => Object.entries(a && a.lines && typeof a.lines === 'object' ? a.lines : {}).filter(([, l]) => l && LINE_KIND[l.k] && parseBorder(l.p).length >= 2);
 function lineStyle(kind, pts, interactive){
-  const path = kind === 'path', o = {interactive:!!interactive, bubblingMouseEvents:false};
-  return [L.polyline(pts, Object.assign({color:'#ffffff', weight:path ? 6 : 8, opacity:.85}, o)), L.polyline(pts, Object.assign({color:path ? '#7a2e8f' : '#8a4b12', weight:path ? 3 : 4.5, dashArray:path ? '7 6' : null}, o))];
+  const k = LINE_COLOR[kind] ? kind : 'road', o = {interactive:!!interactive, bubblingMouseEvents:false};
+  const w = {road:[8, 4.5], path:[6, 3], stream:[7, 3.5]}[k];
+  return [L.polyline(pts, Object.assign({color:'#ffffff', weight:w[0], opacity:.85}, o)), L.polyline(pts, Object.assign({color:LINE_COLOR[k], weight:w[1], dashArray:k === 'path' ? '7 6' : null, lineCap:'round', lineJoin:'round'}, o))];
 }
 let lineSig = null;
 function renderLines(){
@@ -97,7 +100,7 @@ function moveAreaContent(fromId, toId, what){
   if(!canEditArea(from) || !canEditArea(to)) return 'Du har inte rättighet att ändra något av områdena.';
   const done = [], now = Date.now();
   if(what.border && areaRings(from).length){ const r = areaRings(from); setRings(to, areaRings(to).concat(r)); delete from.border; done.push(r.length === 1 ? 'gränsen' : `${r.length} gränsdelar`); }
-  if(what.lines && areaLines(from).length){ const n = areaLines(from).length; to.lines = Object.assign({}, to.lines || {}, from.lines); delete from.lines; done.push(n === 1 ? '1 väg eller stig' : `${n} vägar och stigar`); }
+  if(what.lines && areaLines(from).length){ const n = areaLines(from).length; to.lines = Object.assign({}, to.lines || {}, from.lines); delete from.lines; done.push(n === 1 ? '1 väg, stig eller bäck' : `${n} vägar, stigar och bäckar`); }
   if(what.pins){ const ps = state.pins.filter(p => p.areaId === fromId); ps.forEach(p => { p.areaId = toId; p.updated = now; }); if(ps.length) done.push(ps.length === 1 ? '1 nål' : `${ps.length} nålar`); }
   if(!done.length) return 'Det fanns inget att flytta.';
   from.updated = now; to.updated = now; delete from.example; delete to.example;
@@ -105,18 +108,18 @@ function moveAreaContent(fromId, toId, what){
   save(); renderAll();
   return `Flyttade ${done.join(', ').replace(/, ([^,]*)$/, ' och $1')} till ${to.name}.`;
 }
-/* Formulär för en ny eller befintlig väg/stig. opts: {areaId, lid} */
+/* Formulär för en ny eller befintlig väg, stig eller bäck. opts: {areaId, lid} */
 function openLineForm(opts){
   opts = opts || {};
   const editable = state.areas.filter(a => canEditArea(a));
   if(!editable.length){ toast('Skapa ett område under Filter först. Vägen sparas i ett område.', 5000); return; }
   const cur = opts.lid ? (areaById(opts.areaId) || {}).lines : null, l = cur && cur[opts.lid] ? cur[opts.lid] : {k:'path', n:''};
   const sel = opts.areaId || (editable.find(a => a.visible !== false && !a.example) || editable[0]).id;
-  openModal(`<h2>${opts.lid ? 'Ändra' : 'Rita'} väg eller stig</h2><form id="lfForm">
-    <div class="field"><span>Typ</span><div class="row2">${Object.entries(LINE_KIND).map(([k, t]) => `<label class="radio-card" style="margin:0"><input type="radio" name="lfKind" value="${esc(k)}" ${l.k === k ? 'checked' : ''}> ${t}<br><span class="small muted">${k === 'road' ? 'Brun heldragen' : 'Lila streckad'}</span></label>`).join('')}</div></div>
+  openModal(`<h2>${opts.lid ? 'Ändra' : 'Rita'} väg, stig eller bäck</h2><form id="lfForm">
+    <div class="field"><span>Typ</span><div class="row3">${Object.entries(LINE_KIND).map(([k, t]) => `<label class="radio-card" style="margin:0"><input type="radio" name="lfKind" value="${esc(k)}" ${l.k === k ? 'checked' : ''}> ${t}<br><span class="small muted">${LINE_DESC[k]}</span></label>`).join('')}</div></div>
     <label class="field"><span>Namn (valfritt)</span><input class="input" id="lfName" maxlength="60" value="${esc(l.n || '')}" placeholder="${opts.lid ? '' : 'Till exempel Stigen till tornet'}"></label>
     <label class="field"><span>Område</span><select class="input" id="lfArea">${editable.map(a => `<option value="${esc(a.id)}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.gid ? ' (delas med ' + esc(gname(cloud.groups[a.gid])) + ')' : ''}</option>`).join('')}</select></label>
-    <p class="note" style="margin-top:0">Vägen visas när området är påslaget och delas med jaktlaget om området är delat.</p>
+    <p class="note" style="margin-top:0">Linjen visas när området är påslaget och delas med jaktlaget om området är delat.</p>
     <div class="actions"><button class="btn primary grow" type="submit">${opts.lid ? 'Spara' : 'Börja rita'}</button>${opts.lid ? '<button class="btn" type="button" id="lfRedraw">Rita om</button>' : ''}<button class="btn ghost" type="button" id="lfCancel">Avbryt</button></div></form>`, m => {
     const read = () => ({k:(m.querySelector('input[name=lfKind]:checked') || {}).value || 'path', n:m.querySelector('#lfName').value.trim(), areaId:m.querySelector('#lfArea').value});
     m.querySelector('#lfCancel').addEventListener('click', closeModal);
@@ -151,7 +154,7 @@ function drawPush(){ drawing.hist.push(drawing.pts.map(p => p.slice())); if(draw
    Mellan två punkter finns ett +: tryck för att lägga in en punkt där, eller dra det dit punkten ska. */
 function drawHandlesRender(){
   drawHandles.clearLayers(); if(!drawing) return;
-  const P = drawing.pts, cls = drawing.custom ? drawing.custom.cls : drawing.mode === 'line' ? (drawing.kind === 'path' ? 'path' : 'road') : 'border';
+  const P = drawing.pts, cls = drawing.custom ? drawing.custom.cls : drawing.mode === 'line' ? (LINE_COLOR[drawing.kind] ? drawing.kind : 'road') : 'border';
   P.forEach((pt, i) => {
     const m = dragHandle(pt, cls + (i === P.length - 1 ? ' last' : '') + (drawing.sel === i ? ' sel' : ''));
     m.on('dragstart', () => { drawPush(); drawing.sel = i; });
