@@ -763,7 +763,7 @@ a{color:var(--accent)}
 .drag-handle.sel span{width:24px;height:24px;margin:-12px 0 0 -12px;box-shadow:0 0 0 3px #1a73e8,0 0 0 5px #fff}
 .drag-handle.mid span{width:16px;height:16px;margin:-8px 0 0 -8px;background:rgba(255,255,255,.9);border:2px solid #d9520e;box-shadow:none}
 .drag-handle.mid span::after{content:"+";position:absolute;inset:0;display:grid;place-items:center;color:#d9520e;font:700 13px/1 var(--font-body)}
-.drag-handle.road span{background:#8a4b12}.drag-handle.path span{background:#7a2e8f}
+.drag-handle.road span{background:#8a4b12}.drag-handle.path span{background:#7a2e8f}.drag-handle.stream span{background:#1f6fb2}
 .drag-handle.shot span{width:22px;height:22px;margin:-11px 0 0 -11px;border-width:3px}
 .drag-handle.shot.first span{background:#1a73e8}
 .drag-handle.shot.move span{width:30px;height:30px;margin:-15px 0 0 -15px;background:rgba(255,255,255,.85);border:2px solid #d9520e}
@@ -953,6 +953,7 @@ h3.sec:first-child{margin-top:2px}
 .input,select.input,textarea.input{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 12px;font-size:16px;min-height:44px}
 textarea.input{min-height:84px;resize:vertical}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 @media (max-width:380px){.row2{grid-template-columns:1fr}}
 
 /* Brytare */
@@ -1119,7 +1120,7 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
   <label class="base-opt" id="satLabelsRow"><input type="checkbox" id="satLabels"><span>Ortnamn och gränser på satellit</span></label>
   <div class="pop-sep"></div>
   <label class="base-opt"><input type="checkbox" id="popRoads"><span><strong>Skogsvägar och stigar</strong><small id="roadNote">Från OpenStreetMap, syns när du zoomat in</small></span></label>
-  <button class="base-opt" type="button" id="popDrawLine" style="width:100%;border:0;background:none;text-align:left;color:inherit;font:inherit"><span style="width:18px;text-align:center;font-weight:700;color:var(--accent)">+</span><span><strong>Rita egen väg eller stig</strong><small>Saknas en väg? Rita den så syns den för jaktlaget</small></span></button>
+  <button class="base-opt" type="button" id="popDrawLine" style="width:100%;border:0;background:none;text-align:left;color:inherit;font:inherit"><span style="width:18px;text-align:center;font-weight:700;color:var(--accent)">+</span><span><strong>Rita egen väg, stig eller bäck</strong><small>Saknas en väg eller bäck? Rita den så syns den för jaktlaget</small></span></button>
   <a class="base-opt" href="https://minkarta.lantmateriet.se/" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><span style="width:18px"></span><span><strong>Fastighetsgränser</strong><small>Öppnas i Lantmäteriets Min karta</small></span></a>
   <label class="base-opt"><input type="checkbox" id="popWind"><span><strong>Vindriktning</strong><small id="windNote">Gult område där vittringen driver, med pilar som visar vinden</small></span></label>
   <label class="base-opt" id="planRow" hidden><input type="checkbox" id="popPlan"><span><strong>Jaktplan</strong><small>Såtar, vägar, vem som står var och förbjudna skjutriktningar</small></span></label>
@@ -2031,12 +2032,12 @@ function openAreaForm(id){
     <div class="field" style="margin-top:14px"><span>Gräns</span>${rings.length ? rings.map((r, k) => `<div class="frow"><span class="fname">${rings.length > 1 ? `Del ${k + 1}` : 'Gränsen'}<br><span class="small muted">${r.length} punkter · ${fmtHa(areaHa(r))}</span></span><button class="btn sm" type="button" data-ring-edit="${k}">Ändra</button><button class="btn sm danger" type="button" data-ring-del="${k}">Ta bort</button></div>`).join('') + (rings.length > 1 ? `<div class="small" style="margin-top:4px">Totalt ${fmtHa(ringsHa(rings))} i ${rings.length} delar.</div>` : '') : '<div class="small">Ingen gräns är ritad.</div>'}
       <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afDraw">${rings.length ? 'Rita en till del' : 'Rita gräns'}</button><button class="btn sm" type="button" id="afImport">Importera från fil</button><button class="btn sm" type="button" id="afShot">Från skärmdump</button></div>
       ${rings.length ? '<p class="note" style="margin:6px 0 0">Består marken av flera skiften? Rita en del för varje. Alla delar hör till samma område och delas med samma jaktlag.</p>' : ''}</div>
-    <div class="field" style="margin-top:14px"><span>Egna vägar och stigar</span>${areaLines(a).length ? areaLines(a).map(([lid, l]) => `<div class="frow"><span class="fname">${esc(l.n || LINE_KIND[l.k])}<br><span class="small muted">${LINE_KIND[l.k]} · ${fmtDist(lineLen(parseBorder(l.p)))}</span></span><button class="btn sm" type="button" data-line-edit="${lid}">Ändra</button></div>`).join('') : '<div class="small">Inga egna vägar eller stigar.</div>'}
-      <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afLine">Rita väg eller stig</button></div></div>
+    <div class="field" style="margin-top:14px"><span>Egna vägar, stigar och bäckar</span>${areaLines(a).length ? areaLines(a).map(([lid, l]) => `<div class="frow"><span class="fname">${esc(l.n || LINE_KIND[l.k])}<br><span class="small muted">${LINE_KIND[l.k]} · ${fmtDist(lineLen(parseBorder(l.p)))}</span></span><button class="btn sm" type="button" data-line-edit="${lid}">Ändra</button></div>`).join('') : '<div class="small">Inga egna vägar, stigar eller bäckar.</div>'}
+      <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afLine">Rita väg, stig eller bäck</button></div></div>
     ${moveTargets(a).length && (a.border || areaLines(a).length || n) ? `<details class="field" style="margin-top:14px" id="afMoveBox"><summary><span>Flytta till ett annat område</span></summary>
       <label class="field" style="margin-top:8px"><span>Till</span><select class="input" id="afMoveTo">${moveTargets(a).map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('')}</select></label>
       ${rings.length ? `<label class="checkline"><input type="checkbox" id="afMvBorder" checked><span>${rings.length > 1 ? `Gränsen (${rings.length} delar)` : 'Gränsen'}</span></label>` : ''}
-      ${areaLines(a).length ? `<label class="checkline"><input type="checkbox" id="afMvLines" checked><span>Vägar och stigar (${areaLines(a).length})</span></label>` : ''}
+      ${areaLines(a).length ? `<label class="checkline"><input type="checkbox" id="afMvLines" checked><span>Vägar, stigar och bäckar (${areaLines(a).length})</span></label>` : ''}
       ${n ? `<label class="checkline"><input type="checkbox" id="afMvPins" checked><span>Nålar och pass (${n})</span></label>` : ''}
       <div class="btnrow"><button class="btn sm" type="button" id="afMove">Flytta</button></div></details>` : ''}
     <div class="actions"><button class="btn primary grow" type="submit">Spara</button><button class="btn ghost" type="button" id="afCancel">Avbryt</button></div></form>`, m => {
@@ -3390,7 +3391,7 @@ function loupeLayers(){
   for(const a of state.areas){
     if(a.visible === false) continue;
     areaRings(a).forEach((pts, k) => { if(!(drawing && drawing.mode === 'border' && drawing.id === a.id && drawing.ring === k)) L.polygon(pts, {color:'#d9520e', weight:3, fill:false, dashArray:'10 6', interactive:false}).addTo(loupe.vec); });
-    for(const [, l] of areaLines(a)) L.polyline(parseBorder(l.p), {color:l.k === 'path' ? '#7a2e8f' : '#8a4b12', weight:3, interactive:false}).addTo(loupe.vec);
+    for(const [, l] of areaLines(a)) L.polyline(parseBorder(l.p), {color:LINE_COLOR[l.k] || LINE_COLOR.road, weight:3, interactive:false}).addTo(loupe.vec);
   }
   if(drawing && drawing.pts.length >= 2){
     const p = drawing.pts, o = {color:'#d9520e', weight:3, interactive:false};
@@ -3481,15 +3482,18 @@ function zoomToArea(id){
     else map.fitBounds(L.latLngBounds(pts), {paddingTopLeft:[30, 30], paddingBottomRight:[70, bottomPad() + 30], maxZoom:17});
   }, isDesktop() ? 0 : 280);
 }
-/* ---------- Egna vägar och stigar ----------
-   Sparas per område som a.lines = {id: {k:'road'|'path', p:'lat,lng;lat,lng', n:'namn'}} och delas med jaktlaget tillsammans med området. */
+/* ---------- Egna vägar, stigar och bäckar ----------
+   Sparas per område som a.lines = {id: {k:'road'|'path'|'stream', p:'lat,lng;lat,lng', n:'namn'}} och delas med jaktlaget tillsammans med området. */
 const lineLayer = L.layerGroup().addTo(map);
-const LINE_KIND = {road:'Väg', path:'Stig'};
+const LINE_KIND = {road:'Väg', path:'Stig', stream:'Bäck'};
+const LINE_DESC = {road:'Brun heldragen', path:'Lila streckad', stream:'Blå'};
+const LINE_COLOR = {road:'#8a4b12', path:'#7a2e8f', stream:'#1f6fb2'};
 function lineLen(pts){ let m = 0; for(let i = 1; i < pts.length; i++) m += distM({lat:pts[i-1][0], lng:pts[i-1][1]}, {lat:pts[i][0], lng:pts[i][1]}); return m; }
 const areaLines = a => Object.entries(a && a.lines && typeof a.lines === 'object' ? a.lines : {}).filter(([, l]) => l && LINE_KIND[l.k] && parseBorder(l.p).length >= 2);
 function lineStyle(kind, pts, interactive){
-  const path = kind === 'path', o = {interactive:!!interactive, bubblingMouseEvents:false};
-  return [L.polyline(pts, Object.assign({color:'#ffffff', weight:path ? 6 : 8, opacity:.85}, o)), L.polyline(pts, Object.assign({color:path ? '#7a2e8f' : '#8a4b12', weight:path ? 3 : 4.5, dashArray:path ? '7 6' : null}, o))];
+  const k = LINE_COLOR[kind] ? kind : 'road', o = {interactive:!!interactive, bubblingMouseEvents:false};
+  const w = {road:[8, 4.5], path:[6, 3], stream:[7, 3.5]}[k];
+  return [L.polyline(pts, Object.assign({color:'#ffffff', weight:w[0], opacity:.85}, o)), L.polyline(pts, Object.assign({color:LINE_COLOR[k], weight:w[1], dashArray:k === 'path' ? '7 6' : null, lineCap:'round', lineJoin:'round'}, o))];
 }
 let lineSig = null;
 function renderLines(){
@@ -3530,7 +3534,7 @@ function moveAreaContent(fromId, toId, what){
   if(!canEditArea(from) || !canEditArea(to)) return 'Du har inte rättighet att ändra något av områdena.';
   const done = [], now = Date.now();
   if(what.border && areaRings(from).length){ const r = areaRings(from); setRings(to, areaRings(to).concat(r)); delete from.border; done.push(r.length === 1 ? 'gränsen' : `${r.length} gränsdelar`); }
-  if(what.lines && areaLines(from).length){ const n = areaLines(from).length; to.lines = Object.assign({}, to.lines || {}, from.lines); delete from.lines; done.push(n === 1 ? '1 väg eller stig' : `${n} vägar och stigar`); }
+  if(what.lines && areaLines(from).length){ const n = areaLines(from).length; to.lines = Object.assign({}, to.lines || {}, from.lines); delete from.lines; done.push(n === 1 ? '1 väg, stig eller bäck' : `${n} vägar, stigar och bäckar`); }
   if(what.pins){ const ps = state.pins.filter(p => p.areaId === fromId); ps.forEach(p => { p.areaId = toId; p.updated = now; }); if(ps.length) done.push(ps.length === 1 ? '1 nål' : `${ps.length} nålar`); }
   if(!done.length) return 'Det fanns inget att flytta.';
   from.updated = now; to.updated = now; delete from.example; delete to.example;
@@ -3538,18 +3542,18 @@ function moveAreaContent(fromId, toId, what){
   save(); renderAll();
   return `Flyttade ${done.join(', ').replace(/, ([^,]*)$/, ' och $1')} till ${to.name}.`;
 }
-/* Formulär för en ny eller befintlig väg/stig. opts: {areaId, lid} */
+/* Formulär för en ny eller befintlig väg, stig eller bäck. opts: {areaId, lid} */
 function openLineForm(opts){
   opts = opts || {};
   const editable = state.areas.filter(a => canEditArea(a));
   if(!editable.length){ toast('Skapa ett område under Filter först. Vägen sparas i ett område.', 5000); return; }
   const cur = opts.lid ? (areaById(opts.areaId) || {}).lines : null, l = cur && cur[opts.lid] ? cur[opts.lid] : {k:'path', n:''};
   const sel = opts.areaId || (editable.find(a => a.visible !== false && !a.example) || editable[0]).id;
-  openModal(`<h2>${opts.lid ? 'Ändra' : 'Rita'} väg eller stig</h2><form id="lfForm">
-    <div class="field"><span>Typ</span><div class="row2">${Object.entries(LINE_KIND).map(([k, t]) => `<label class="radio-card" style="margin:0"><input type="radio" name="lfKind" value="${esc(k)}" ${l.k === k ? 'checked' : ''}> ${t}<br><span class="small muted">${k === 'road' ? 'Brun heldragen' : 'Lila streckad'}</span></label>`).join('')}</div></div>
+  openModal(`<h2>${opts.lid ? 'Ändra' : 'Rita'} väg, stig eller bäck</h2><form id="lfForm">
+    <div class="field"><span>Typ</span><div class="row3">${Object.entries(LINE_KIND).map(([k, t]) => `<label class="radio-card" style="margin:0"><input type="radio" name="lfKind" value="${esc(k)}" ${l.k === k ? 'checked' : ''}> ${t}<br><span class="small muted">${LINE_DESC[k]}</span></label>`).join('')}</div></div>
     <label class="field"><span>Namn (valfritt)</span><input class="input" id="lfName" maxlength="60" value="${esc(l.n || '')}" placeholder="${opts.lid ? '' : 'Till exempel Stigen till tornet'}"></label>
     <label class="field"><span>Område</span><select class="input" id="lfArea">${editable.map(a => `<option value="${esc(a.id)}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.gid ? ' (delas med ' + esc(gname(cloud.groups[a.gid])) + ')' : ''}</option>`).join('')}</select></label>
-    <p class="note" style="margin-top:0">Vägen visas när området är påslaget och delas med jaktlaget om området är delat.</p>
+    <p class="note" style="margin-top:0">Linjen visas när området är påslaget och delas med jaktlaget om området är delat.</p>
     <div class="actions"><button class="btn primary grow" type="submit">${opts.lid ? 'Spara' : 'Börja rita'}</button>${opts.lid ? '<button class="btn" type="button" id="lfRedraw">Rita om</button>' : ''}<button class="btn ghost" type="button" id="lfCancel">Avbryt</button></div></form>`, m => {
     const read = () => ({k:(m.querySelector('input[name=lfKind]:checked') || {}).value || 'path', n:m.querySelector('#lfName').value.trim(), areaId:m.querySelector('#lfArea').value});
     m.querySelector('#lfCancel').addEventListener('click', closeModal);
@@ -3584,7 +3588,7 @@ function drawPush(){ drawing.hist.push(drawing.pts.map(p => p.slice())); if(draw
    Mellan två punkter finns ett +: tryck för att lägga in en punkt där, eller dra det dit punkten ska. */
 function drawHandlesRender(){
   drawHandles.clearLayers(); if(!drawing) return;
-  const P = drawing.pts, cls = drawing.custom ? drawing.custom.cls : drawing.mode === 'line' ? (drawing.kind === 'path' ? 'path' : 'road') : 'border';
+  const P = drawing.pts, cls = drawing.custom ? drawing.custom.cls : drawing.mode === 'line' ? (LINE_COLOR[drawing.kind] ? drawing.kind : 'road') : 'border';
   P.forEach((pt, i) => {
     const m = dragHandle(pt, cls + (i === P.length - 1 ? ' last' : '') + (drawing.sel === i ? ' sel' : ''));
     m.on('dragstart', () => { drawPush(); drawing.sel = i; });
