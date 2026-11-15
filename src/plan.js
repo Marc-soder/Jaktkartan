@@ -334,22 +334,50 @@ function planDrawRoute(g, hid, kind, rid){
     cancel:() => openPlan(g, hid)});
 }
 
-/* Förbjudna skjutriktningar: tryck på riktningarna i kompassrosen. */
-function roseSvg(no){
+/* Förbjudna skjutriktningar: tryck på riktningarna i kompassrosen.
+   Passgrannarna (andra pass i jakten inom NEIGH_MAX meter) visas runt rosen i sin riktning, med nummer, och i en lista
+   med namn, vem som står där, avstånd och riktning. Ligger en granne i en riktning som inte är spärrad syns det. */
+const NEIGH_MAX = 1500, NEIGH_N = 8;
+const dirIdx = deg => Math.round((((deg % 360) + 360) % 360) / 22.5) % 16;
+function passNeighbors(g, hid, p){
+  const hunt = (g.hunts || {})[hid];
+  if(!p || !hunt) return [];
+  const stands = planOf(g, hid).stands || {};
+  return planPasses(g, hunt).filter(q => q.id !== p.id)
+    .map(q => { const b = bearingDeg(p, q); return {p:q, d:distM(p, q), b, i:dirIdx(b), who:(stands[q.id] || {}).who || ''}; })
+    .filter(x => x.d <= NEIGH_MAX).sort((a, b) => a.d - b.d).slice(0, NEIGH_N);
+}
+function roseSvg(no, nb){
   const R = 100, r0 = 26, pt = (r, a) => `${(r * Math.sin(a * Math.PI / 180)).toFixed(2)},${(-r * Math.cos(a * Math.PI / 180)).toFixed(2)}`;
-  return `<svg class="rose" viewBox="-110 -110 220 220" role="group" aria-label="Skjutriktningar">${DIR16.map((d, i) => {
+  const xy = (r, a) => pt(r, a).split(',');
+  const nbs = (nb || []).map((x, k) => {
+    // Avståndet läggs utanför numret: till höger om det på östra sidan, till vänster på västra, ovanför eller under i norr och söder
+    const sn = Math.sin(x.b * Math.PI / 180), anc = sn > 0.35 ? 'start' : sn < -0.35 ? 'end' : 'middle';
+    const [x0, y0] = xy(r0, x.b), [x1, y1] = xy(R + 12, x.b), [tx, ty] = xy(anc === 'middle' ? R + 29 : R + 24, x.b), open = !(no & (1 << x.i));
+    return `<g class="rose-nb${open ? ' open' : ''}" aria-hidden="true"><line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}"/><circle cx="${x1}" cy="${y1}" r="9"/><text class="n" x="${x1}" y="${y1}">${k + 1}</text><text class="d" x="${tx}" y="${ty}" text-anchor="${anc}">${esc(fmtDist(x.d))}</text></g>`;
+  }).join('');
+  return `<svg class="rose" viewBox="-172 -142 344 284" role="group" aria-label="Skjutriktningar">${DIR16.map((d, i) => {
     const a0 = i * 22.5 - 11.25, a1 = a0 + 22.5, on = !!(no & (1 << i)), lp = pt(i % 2 ? 80 : 74, i * 22.5).split(',');
     return `<g class="rose-w${on ? ' on' : ''}" data-i="${esc(i)}" role="button" tabindex="0" aria-pressed="${on}" aria-label="${d}"><path d="M${pt(r0, a0)}L${pt(R, a0)}A${R} ${R} 0 0 1 ${pt(R, a1)}L${pt(r0, a1)}A${r0} ${r0} 0 0 0 ${pt(r0, a0)}Z"/><text x="${lp[0]}" y="${lp[1]}">${d}</text></g>`;
-  }).join('')}<circle r="${r0 - 4}" class="rose-c"/></svg>`;
+  }).join('')}<circle r="${r0 - 4}" class="rose-c"/><circle r="5" class="rose-me"/>${nbs}</svg>`;
+}
+function neighborList(nb, no){
+  if(!nb.length) return `<p class="small muted" id="roseNb">Inga andra pass i jakten inom ${fmtDist(NEIGH_MAX)}.</p>`;
+  return `<div class="lbl">Passgrannar inom ${fmtDist(NEIGH_MAX)}</div><ol class="rose-nbl" id="roseNb">${nb.map((x, k) => {
+    const open = !(no & (1 << x.i));
+    return `<li class="${open ? 'open' : ''}"><span class="rose-nbn">${k + 1}</span><span><b>${esc(x.p.name || 'Pass')}</b>${x.who ? ' (' + esc(x.who) + ')' : ''} · ${esc(fmtDist(x.d))} mot ${DIR16[x.i]} (${Math.round(x.b)}°)<br><span class="small ${open ? 'warn' : 'muted'}">${open ? '⚠ Riktningen mot passet är inte spärrad' : 'Riktningen är spärrad'}</span></span></li>`;
+  }).join('')}</ol>`;
 }
 function openDirs(g, hid, pid){
   const p = pinById(pid), plan = planOf(g, hid), s = (plan.stands || {})[pid] || {};
   let no = s.no || 0;
-  openModal(`<h2>Skjutriktningar</h2><p class="note" style="margin-top:0"><b>${esc(p ? p.name || 'Pass' : 'Pass')}</b>. Tryck på de riktningar där det är <b>förbjudet</b> att skjuta. Norr är uppåt, som på kartan.</p>
-    <div id="roseBox"></div><p class="small" id="roseTxt"></p>
+  const nb = passNeighbors(g, hid, p);
+  openModal(`<h2>Skjutriktningar</h2><p class="note" style="margin-top:0"><b>${esc(p ? p.name || 'Pass' : 'Pass')}</b>${s.who ? ' (' + esc(s.who) + ')' : ''}. Tryck på de riktningar där det är <b>förbjudet</b> att skjuta. Norr är uppåt, som på kartan. Siffrorna runt rosen är passgrannarna.</p>
+    <div id="roseBox"></div><p class="small" id="roseTxt"></p><div id="roseNbBox"></div>
     <div class="actions"><button class="btn primary grow" type="button" id="roseOk">Spara</button><button class="btn" type="button" id="roseClear">Rensa</button><button class="btn ghost" type="button" id="roseCancel">Avbryt</button></div>`, m => {
     const draw = () => {
-      m.querySelector('#roseBox').innerHTML = roseSvg(no);
+      m.querySelector('#roseBox').innerHTML = roseSvg(no, nb);
+      m.querySelector('#roseNbBox').innerHTML = neighborList(nb, no);
       const d = maskDirs(no);
       m.querySelector('#roseTxt').textContent = d.length ? `Förbjudet att skjuta mot ${d.join(', ')}.` : 'Inga förbjudna riktningar.';
     };
