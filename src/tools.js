@@ -99,7 +99,7 @@ function windFrame(t){
     const A = map.latLngToContainerPoint(wind.from || map.getCenter()), axis = (d.dir + 180) % 360;
     g.save();
     const r = Math.PI / 180, ax = Math.sin(axis * r), ay = -Math.cos(axis * r), px = -ay, py = ax;   // axel (nedvind) och tvärs
-    const step = 34, len = 11, speed = 14 + d.speed * 5;                 // pixlar mellan pilarna, pilens längd, fart (px/s)
+    const step = 56, len = 11, speed = 6 + d.speed * 2.5;                // pixlar mellan pilarna, pilens längd, fart (px/s): glest och lugnt
     const phase = ((t / 1000) * speed) % step;
     // Bara den del av rutnätet som syns på skärmen
     const cs = [[0, 0], [size.x, 0], [size.x, size.y], [0, size.y]].map(([x, y]) => [(x - A.x) * ax + (y - A.y) * ay, (x - A.x) * px + (y - A.y) * py]);
