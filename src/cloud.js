@@ -88,12 +88,12 @@ function purgeLocal(gid){
 }
 function dropGroup(gid){
   const g = cloud.groups[gid]; if(!g) return;
-  g.refs.forEach(r => r.off()); Object.values(g.posRefs).forEach(r => r.off()); Object.values(g.trailRefs).forEach(r => r.off()); Object.values(g.obsRefs).forEach(r => r.off()); Object.values(g.msgRefs).forEach(r => r.off()); delete cloud.groups[gid];
+  g.refs.forEach(r => r.off()); Object.values(g.posRefs).forEach(r => r.off()); Object.values(g.trailRefs).forEach(r => r.off()); Object.values(g.obsRefs).forEach(r => r.off()); Object.values(g.msgRefs).forEach(r => r.off()); Object.values(g.checkRefs).forEach(r => r.off()); delete cloud.groups[gid];
   purgeLocal(gid); scheduleRender(); renderPositions();
 }
 function forgetGroup(gid){ if(fb && cloud.user) fb.db.ref('userGroups/' + myUid() + '/' + gid).remove().catch(() => {}); dropGroup(gid); }
 function subGroup(gid, kind){
-  const g = cloud.groups[gid] = {id:gid, kind, meta:null, members:{}, areas:{}, pins:{}, types:{}, hunts:{}, guests:{}, guest:null, refs:[], areaRefs:{}, huntRef:null, posRefs:{}, huntPos:{}, trailRefs:{}, huntTrail:{}, obsRefs:{}, huntObs:{}, huntPlan:{}, huntRsvp:{}, msgRefs:{}, huntMsg:{}, msgKeys:{}, disc:{}};
+  const g = cloud.groups[gid] = {id:gid, kind, meta:null, members:{}, areas:{}, pins:{}, types:{}, hunts:{}, guests:{}, guest:null, refs:[], areaRefs:{}, huntRef:null, posRefs:{}, huntPos:{}, trailRefs:{}, huntTrail:{}, obsRefs:{}, huntObs:{}, huntPlan:{}, huntRsvp:{}, msgRefs:{}, huntMsg:{}, msgKeys:{}, checkRefs:{}, huntCheck:{}, disc:{}};
   const on = (path, fn) => { const r = fb.db.ref('groups/' + gid + '/' + path); r.on('value', s => { if(cloud.groups[gid] === g) fn(s.val()); }, () => { if(cloud.groups[gid] === g) fn(null, true); }); g.refs.push(r); return r; };
   on('meta', v => { g.meta = v; if(!v){ forgetGroup(gid); toast('Du har inte längre åtkomst till ett jaktlag eller en jakt.'); return; } scheduleRender(); });
   on('types', v => { g.types = v || {}; applyRemote(gid); });
@@ -113,15 +113,23 @@ function subGroup(gid, kind){
       msgPublish(g);
       if(g.huntRef) return;
       on('huntPlan/' + v.hid, pv => { g.huntPlan = pv ? {[v.hid]: pv} : {}; scheduleRender(); });
-      g.huntRef = on('hunts/' + v.hid, hv => {
-        g.hunts = hv ? {[v.hid]: hv} : {}; syncHuntPos();
+      // Nekas en läsning (t.ex. om den hinner före gästposten i databasen) försöker vi igen efter en stund,
+      // annars skulle gästen sakna jaktens områden och nålar tills sidan laddas om.
+      const alive = () => cloud.groups[gid] === g && g.guest && g.guest.hid === v.hid;
+      const areasFor = hv => {
         const want = hv && hv.areas ? Object.keys(hv.areas).filter(k => hv.areas[k] === true) : [];
         for(const aid of want){ if(g.areaRefs[aid]) continue; g.areaRefs[aid] = true;
-          on('areas/' + aid, av => { if(av) g.areas[aid] = av; else delete g.areas[aid]; applyRemote(gid); });
-          on('pins/' + aid, pv => { if(pv) g.pins[aid] = pv; else delete g.pins[aid]; applyRemote(gid); }); }
+          const retry = () => { delete g.areaRefs[aid]; setTimeout(() => { if(alive()) areasFor((g.hunts || {})[v.hid]); }, 3000); };
+          on('areas/' + aid, (av, err) => { if(err){ retry(); return; } if(av) g.areas[aid] = av; else delete g.areas[aid]; applyRemote(gid); });
+          on('pins/' + aid, (pv, err) => { if(err){ retry(); return; } if(pv) g.pins[aid] = pv; else delete g.pins[aid]; applyRemote(gid); }); }
         for(const aid of Object.keys(g.areas)) if(!want.includes(aid)){ delete g.areas[aid]; delete g.pins[aid]; }
         applyRemote(gid);
-      });
+      };
+      const subHunt = () => { g.huntRef = on('hunts/' + v.hid, (hv, err) => {
+        if(err){ g.huntRef = null; setTimeout(() => { if(alive() && !g.huntRef) subHunt(); }, 3000); return; }
+        g.hunts = hv ? {[v.hid]: hv} : {}; syncHuntPos(); areasFor(hv);
+      }); };
+      subHunt();
     });
   }
 }
@@ -214,7 +222,13 @@ function syncHuntPos(){
     for(const hid of Object.keys(g.trailRefs)) if(!live.has(hid)){ g.trailRefs[hid].off(); delete g.trailRefs[hid]; delete g.huntTrail[hid]; }
     for(const hid of Object.keys(g.obsRefs)) if(!live.has(hid)){ g.obsRefs[hid].off(); delete g.obsRefs[hid]; delete g.huntObs[hid]; }
     for(const hid of Object.keys(g.msgRefs)) if(!live.has(hid)){ g.msgRefs[hid].off(); delete g.msgRefs[hid]; delete g.huntMsg[hid]; }
+    for(const hid of Object.keys(g.checkRefs)) if(!live.has(hid)){ g.checkRefs[hid].off(); delete g.checkRefs[hid]; delete g.huntCheck[hid]; }
     for(const hid of live){
+      if(!g.checkRefs[hid]){
+        const cr = fb.db.ref(`groups/${g.id}/huntCheck/${hid}`);
+        cr.on('value', s => { if(g.checkRefs[hid] === cr){ const prev = g.huntCheck[hid]; g.huntCheck[hid] = s.val() || {}; checkNotify(g, hid, prev); scheduleRender(); } }, () => { if(g.checkRefs[hid] === cr){ delete g.checkRefs[hid]; delete g.huntCheck[hid]; } });
+        g.checkRefs[hid] = cr;
+      }
       if(!g.msgRefs[hid] && msgCryptoOk()){
         const mr = fb.db.ref(`groups/${g.id}/huntMsg/${hid}`);
         mr.on('value', s => { if(g.msgRefs[hid] === mr){ g.huntMsg[hid] = s.val() || {}; msgOnData(g, hid); scheduleRender(); } }, () => { if(g.msgRefs[hid] === mr){ delete g.msgRefs[hid]; delete g.huntMsg[hid]; } });
@@ -243,6 +257,7 @@ function syncHuntPos(){
   }
   if(cloud.sharing && !anyLiveHunt()){ stopSharing(); toast('Jakten är slut. Din position delas inte längre.', 5000); }
   autoShare();
+  if(typeof checkPass === 'function') checkPass();
   renderPositions(); renderObs(); scheduleRender();
   clearTimeout(huntPosTimer);
   if(next < Infinity) huntPosTimer = setTimeout(syncHuntPos, Math.min(next - Date.now() + 1000, 2147483000));
@@ -398,7 +413,8 @@ function renderTrailControls(){
 function startTrailRec(){
   if(!('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); renderTrailControls(); return; }
   trail.watchId = navigator.geolocation.watchPosition(pos => showMe(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0),
-    err => { stopTrailRec(); toast(err.code === 1 ? 'Positionen är blockerad. Tillåt plats för sidan i webbläsarens inställningar.' : 'Kunde inte läsa din position.'); }, {enableHighAccuracy:true, maximumAge:5000, timeout:30000});
+    err => { if(err.code === 1){ stopTrailRec(); toast('Positionen är blockerad. Tillåt plats för sidan i webbläsarens inställningar.'); } },   // tillfälliga GPS-fel: fortsätt spela in
+    {enableHighAccuracy:true, maximumAge:5000, timeout:30000});
   try { if(navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { trail.wake = l; }).catch(() => {}); } catch(e){}
   if(!trailMinutes()){ state.settings.trailMin = 30; save(); }
   renderTrailControls(); renderTrails();
@@ -432,17 +448,42 @@ function sendPos(){
 function startSharing(){
   if(!('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); return; }
   if(!anyLiveHunt()){ toast('Positioner kan bara delas medan en jakt pågår.'); renderJakt(); return; }
-  cloud.sharing = true; cloud.lastSent = 0; cloud.lastTrail = null;
-  cloud.watchId = navigator.geolocation.watchPosition(pos => {
-    showMe(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0);
-    if(Date.now() - cloud.lastSent < 8000) return;
-    cloud.lastSent = Date.now(); sendPos();
-  }, err => { for(const k of acceptedLive()) cloud.autoOff[k] = true; stopSharing(); toast(err.code === 1 ? 'Positionen är blockerad. Tillåt plats för sidan i webbläsarens inställningar.' : 'Kunde inte läsa din position.'); renderJakt(); }, {enableHighAccuracy:true, maximumAge:5000, timeout:30000});
+  cloud.sharing = true; cloud.lastSent = 0; cloud.lastTrail = null; cloud.sentAt = null;
+  gpsStart(powerOn());
   try { if(navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { cloud.wake = l; }).catch(() => {}); } catch(e){}
   renderJakt();
 }
-function stopSharing(silent){
+/* GPS: i vanligt läge följs positionen hela tiden. I sparläget görs en mätning var 30:e sekund (fortfarande med hög
+   noggrannhet, så att utcheckningen från passet blir rätt). Positionen skickas var 8:e sekund, i sparläget var 60:e
+   sekund eller direkt om man har rört sig mer än 15 m. */
+const GPS_SAVE_MS = 30000, SEND_MS = 8000, SEND_SAVE_MS = 60000, SEND_MOVE_M = 15;
+function gpsPos(pos){
+  showMe(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0);
+  const save = powerOn(), moved = cloud.sentAt && myPos ? distM(cloud.sentAt, myPos) : Infinity;
+  if(Date.now() - cloud.lastSent < (save ? SEND_SAVE_MS : SEND_MS) && !(save && moved > SEND_MOVE_M && Date.now() - cloud.lastSent >= SEND_MS)) return;
+  cloud.lastSent = Date.now(); cloud.sentAt = myPos ? {lat:myPos.lat, lng:myPos.lng} : null; sendPos();
+}
+/* Bara nekad platsåtkomst stänger av delningen. Tillfälliga fel (ingen GPS-signal, för långsamt svar) är vanliga i skogen:
+   då fortsätter delningen, och positionen skickas igen när GPS:en svarar. */
+function gpsErr(err){
+  if(err && err.code === 1){ for(const k of acceptedLive()) cloud.autoOff[k] = true; stopSharing(); toast('Positionen är blockerad. Tillåt plats för sidan i webbläsarens inställningar.'); renderJakt(); return; }
+  if(Date.now() - (cloud.gpsWarned || 0) > 120000){ cloud.gpsWarned = Date.now(); toast('Svag GPS-signal just nu. Positionen skickas igen så fort telefonen får en.', 5000); }
+}
+function gpsStop(){
   if(cloud.watchId != null){ navigator.geolocation.clearWatch(cloud.watchId); cloud.watchId = null; }
+  if(cloud.gpsTimer){ clearInterval(cloud.gpsTimer); cloud.gpsTimer = null; }
+}
+function gpsStart(save){
+  gpsStop(); cloud.gpsSave = !!save;
+  const opt = {enableHighAccuracy:true, maximumAge:5000, timeout:30000};
+  if(!save){ cloud.watchId = navigator.geolocation.watchPosition(gpsPos, gpsErr, opt); return; }
+  const once = () => navigator.geolocation.getCurrentPosition(gpsPos, gpsErr, Object.assign({}, opt, {maximumAge:10000}));
+  once(); cloud.gpsTimer = setInterval(once, GPS_SAVE_MS);
+}
+/* Byt GPS-läge när sparläget slås på eller av (bara medan positionen delas). */
+function gpsSync(){ if(cloud.sharing && cloud.gpsSave !== powerOn()) gpsStart(powerOn()); }
+function stopSharing(silent){
+  gpsStop();
   if(cloud.wake){ try { cloud.wake.release(); } catch(e){} cloud.wake = null; }
   const was = cloud.sharing; cloud.sharing = false; cloud.autoShared = false;
   if(was && !silent && fb && cloud.user) for(const g of Object.values(cloud.groups)) for(const hid of liveHunts(g)){ fb.db.ref(`groups/${g.id}/huntPos/${hid}/${myUid()}`).remove().catch(() => {}); fb.db.ref(`groups/${g.id}/huntTrail/${hid}/${myUid()}`).remove().catch(() => {}); }
@@ -686,7 +727,7 @@ async function endHunt(g, hid, auto){
   for(const [oid, o] of Object.entries(obs)) if(o && typeof o.lat === 'number' && typeof o.lng === 'number' && typeof o.sp === 'string' && o.n >= 1){
     up[`groups/${g.id}/obsArchive/${oid}`] = {sp:o.sp.slice(0, 40), n:Math.min(999, Math.round(o.n)), lat:o.lat, lng:o.lng, t:Math.min(o.t || Date.now(), Date.now()), hid:String(hid).slice(0, 40)}; na++;
   }
-  up[`groups/${g.id}/hunts/${hid}`] = null; up[`groups/${g.id}/huntPos/${hid}`] = null; up[`groups/${g.id}/huntTrail/${hid}`] = null; up[`groups/${g.id}/huntObs/${hid}`] = null; up[`groups/${g.id}/huntPlan/${hid}`] = null; up[`groups/${g.id}/huntRsvp/${hid}`] = null; up[`groups/${g.id}/huntMsg/${hid}`] = null;
+  up[`groups/${g.id}/hunts/${hid}`] = null; up[`groups/${g.id}/huntPos/${hid}`] = null; up[`groups/${g.id}/huntTrail/${hid}`] = null; up[`groups/${g.id}/huntObs/${hid}`] = null; up[`groups/${g.id}/huntPlan/${hid}`] = null; up[`groups/${g.id}/huntRsvp/${hid}`] = null; up[`groups/${g.id}/huntMsg/${hid}`] = null; up[`groups/${g.id}/huntCheck/${hid}`] = null;
   for(const [gu, v] of Object.entries(g.guests || {})) if(v && v.hid === hid){ up[`groups/${g.id}/guests/${gu}`] = null; up[`groups/${g.id}/msgKeys/${gu}`] = null; }
   // Koden tas bara bort om den finns kvar och hör till jakten (annars nekas hela skrivningen och jakten blir aldrig städad)
   if(hunt && hunt.code){ try { const c = (await fb.db.ref(`huntCodes/${hunt.code}`).get()).val(); if(c && c.hid === hid && c.gid === g.id) up[`huntCodes/${hunt.code}`] = null; } catch(e){} }
@@ -712,6 +753,8 @@ $('#paneJakt').addEventListener('click', e => {
   else if(act === 'hunt-new') openHuntForm(g);
   else if(act === 'hunt-edit') openHuntForm(g, hid);
   else if(act === 'plan') openPlan(g, hid);
+  else if(act === 'check-in') checkSet(g, hid, b.dataset.p, true, true);
+  else if(act === 'check-out') checkSet(g, hid, b.dataset.p, false, true);
   else if(act === 'msg-new') openMsgForm(g, hid);
   else if(act === 'msg-reply') openMsgForm(g, hid, u);
   else if(act === 'rsvp'){ delete cloud.autoOff[g.id + '/' + hid]; cloud.rsvpAt = Date.now(); fb.db.ref(`groups/${g.id}/huntRsvp/${hid}/${myUid()}`).set({name:myName(), t:Date.now()}).then(() => toast(huntLive(g.hunts[hid]) ? 'Du deltar. Din position delas med jaktlaget.' : 'Du deltar. Din position delas automatiskt när jakten startar.', 4500)).catch(fail()); }

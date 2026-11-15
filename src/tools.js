@@ -82,10 +82,10 @@ function setWind(on){
 }
 /* Blå pilar som rör sig i vindens riktning över hela den synliga kartan, ritade på en canvas som följer kartan. */
 function windAnim(on){
-  if(!on){ cancelAnimationFrame(wind.raf); wind.raf = 0; if(wind.canvas) wind.canvas.hidden = true; return; }
+  if(!on){ cancelAnimationFrame(wind.raf); clearTimeout(wind.tmo); wind.raf = 0; wind.tmo = 0; if(wind.canvas) wind.canvas.hidden = true; return; }
   if(!wind.canvas){ wind.canvas = L.DomUtil.create('canvas', 'wind-arrows', map.getPane('wind')); }
   wind.canvas.hidden = false;
-  if(!wind.raf) wind.raf = requestAnimationFrame(windFrame);
+  if(!wind.raf && !wind.tmo) wind.raf = requestAnimationFrame(windFrame);
 }
 function windFrame(t){
   wind.raf = 0;
@@ -120,7 +120,9 @@ function windFrame(t){
     g.restore();
     wind.frames = (wind.frames || 0) + 1;
   }
-  wind.raf = requestAnimationFrame(windFrame);
+  // I sparläget ritas pilarna om cirka tio gånger i sekunden i stället för sextio
+  if(power.on) wind.tmo = setTimeout(() => { wind.tmo = 0; wind.raf = requestAnimationFrame(windFrame); }, POWER_FRAME_MS);
+  else wind.raf = requestAnimationFrame(windFrame);
 }
 map.on('moveend', () => { if(windOn()) windFetch(); });
 $('#popWind').addEventListener('change', e => setWind(e.target.checked));
@@ -247,7 +249,35 @@ map.whenReady(() => setTimeout(() => { pan.ready = true; if(windOn()) setWind(tr
 /* ---------- Riktningen jag tittar åt ----------
    En blå kon från positionspricken och en kompass uppe till vänster, efter telefonens kompass. Startas av ett tryck på positionsknappen
    (på iPhone krävs ett tryck för att få tillåtelse att läsa kompassen). */
-const compass = {on:false, heading:null, raf:0, rot:0, timer:null, mask:0, bad:false};
+const compass = {on:false, heading:null, raf:0, rot:0, timer:null, mask:0, bad:false, last:0};
+
+/* ---------- Sparläge ----------
+   Slås på när man är incheckad på sitt pass under en pågående jakt och inte har rört skärmen på 30 sekunder,
+   och (där webbläsaren berättar det, t.ex. Android) när batteriet är under 20 % och telefonen inte laddas.
+   Då mäter GPS:en mer sällan, positionen skickas mer sällan och vindpilar och kompass ritas om cirka tio gånger
+   i sekunden. Ett tryck på skärmen, att lämna passet eller att peka mot en förbjuden riktning ger full fart direkt. */
+const power = {on:false, touch:Date.now(), battery:null, reason:''};
+const POWER_IDLE_MS = 30000, POWER_FRAME_MS = 100;
+const powerAllowed = () => state.settings.powerSave !== false;
+const powerOn = () => power.on;
+function powerReason(){
+  if(!powerAllowed() || compass.bad || Date.now() - power.touch < POWER_IDLE_MS) return '';
+  const b = power.battery;
+  if(b && !b.charging && b.level < 0.2) return 'battery';
+  if(typeof checkOf === 'function' && typeof myStands === 'function' && myStands().some(({g, hid, p}) => { const c = checkOf(g, hid); return c && c.in && c.pid === p.id; })) return 'pass';
+  return '';
+}
+function powerUpdate(){
+  const r = powerReason(), on = !!r;
+  power.reason = r;
+  if(on !== power.on){ power.on = on; if(typeof gpsSync === 'function') gpsSync(); }
+  const chip = $('#powerChip'); if(chip){ chip.hidden = !on; chip.textContent = r === 'battery' ? 'Sparläge · lågt batteri' : 'Sparläge'; }
+}
+['pointerdown', 'keydown', 'wheel'].forEach(ev => window.addEventListener(ev, () => { power.touch = Date.now(); if(power.on) powerUpdate(); }, {passive:true, capture:true}));
+setInterval(powerUpdate, 5000);
+try { if(navigator.getBattery) navigator.getBattery().then(b => { power.battery = b; b.addEventListener('levelchange', powerUpdate); b.addEventListener('chargingchange', powerUpdate); powerUpdate(); }).catch(() => {}); } catch(e){}
+$('#popPower').addEventListener('change', e => { state.settings.powerSave = e.target.checked; save(); powerUpdate(); });
+$('#powerChip').addEventListener('click', () => toast(power.reason === 'battery' ? 'Sparläge: batteriet är under 20 %. GPS, sändning och animationer går långsammare. Tryck på skärmen för full fart en stund.' : 'Sparläge på passet: GPS och sändning går mer sällan och animationer långsammare. Lämnar du passet eller rör skärmen blir det full fart igen.', 6000));
 const compassOn = () => state.settings.compass !== false;
 const isTouch = () => !!(window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
 const screenAngle = () => (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (typeof window.orientation === 'number' ? window.orientation : 0);
@@ -257,7 +287,11 @@ function onOrient(e){
   else if(e.absolute && typeof e.alpha === 'number') hd = 360 - e.alpha;                                            // Android: moturs från norr
   if(hd == null) return;
   compass.heading = ((hd + screenAngle()) % 360 + 360) % 360;
-  if(!compass.raf) compass.raf = requestAnimationFrame(() => { compass.raf = 0; renderHeading(); });
+  if(compass.raf) return;
+  // I sparläget ritas kompassen om högst tio gånger i sekunden
+  const wait = power.on ? Math.max(0, POWER_FRAME_MS - (Date.now() - compass.last)) : 0;
+  const draw = () => { compass.raf = 0; compass.last = Date.now(); const was = compass.bad; renderHeading(); if(compass.bad !== was) powerUpdate(); };
+  compass.raf = wait ? setTimeout(() => requestAnimationFrame(draw), wait) : requestAnimationFrame(draw);
 }
 /* Kompassen uppe till vänster. Syns på telefon (och på dator om den ger en riktning). */
 function renderCompass(){

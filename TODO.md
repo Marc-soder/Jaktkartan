@@ -139,3 +139,49 @@ Källor: [Meshtastic: publik nyckelkryptering i 2.5](https://meshtastic.org/blog
 [@meshtastic/core: MeshDevice.sendText](https://jsr.io/@meshtastic/core/doc/~/MeshDevice.prototype.sendText),
 [meshtastic/protobufs (GPL-3.0)](https://www.github.com/meshtastic/protobufs),
 [@meshtastic/protobufs på JSR (GPL-3.0-only)](https://jsr.io/@meshtastic/protobufs@2.7.26).
+
+## Spåra positionen med släckt skärm (väntar)
+
+Målet är att positionen ska delas under jakten även när skärmen är släckt eller man använder en annan app.
+
+### Varför det inte går i webbappen
+
+En webbsida får bara läsa positionen medan den är öppen och syns. När skärmen släcks, eller man byter app, pausas sidan
+och GPS-uppdateringarna slutar. Det gäller Android och iPhone, i alla webbläsare, och även när appen är installerad på
+hemskärmen. Service workern har inte tillgång till positionen alls. Därför håller appen i dag skärmen tänd när
+positionen delas (Wake Lock), och sparläget minskar förbrukningen så mycket det går.
+
+### Det som krävs: en riktig app
+
+Lägg webbappen i ett tunt skal med **Capacitor**, och använd ett insticksprogram för position i bakgrunden
+(till exempel `@capacitor-community/background-geolocation`). Kartan, jakterna, planen och Firebase-koden kan återanvändas.
+Bara positionsdelningen (`gpsStart`, `gpsPos` och `sendPos` i `src/cloud.js`) byter källa från webbläsarens
+geolocation till insticksprogrammet när appen körs i skalet.
+
+| | Android | iPhone |
+|---|---|---|
+| Hur | En tjänst i förgrunden med en fast avisering ("Jaktkartan delar din position") | Behörigheten "Plats: Alltid" och bakgrundsläget `location` |
+| Behörigheter | Platsåtkomst, platsåtkomst i bakgrunden, förgrundstjänst för plats | "Alltid"-plats, och en text som förklarar varför |
+| Hur laget får appen | Enklast: en APK-fil som laget installerar direkt. Google Play kräver en särskild granskning för position i bakgrunden. | App Store eller TestFlight. Kräver Apple Developer Program (årsavgift) och en Mac för att bygga. |
+| Insats | Måttlig | Större |
+
+### Att tänka på
+
+- Webbsidan finns kvar, till exempel för gäster som bara ska vara med en dag.
+- Appen måste byggas och uppdateras separat. Webbsidan uppdateras som i dag när en PR mergas.
+- Delningen i bakgrunden ska bara vara på under jakter man deltar i (samma regler som i dag: "Jag deltar", start och slut)
+  och synas tydligt, med en avisering på Android.
+- Batteri: GPS:en går i bakgrunden, men skärmen kan vara släckt. Skärmen är oftast den största förbrukaren,
+  så totalt blir det troligen bättre än i dag. Sparlägets gles GPS och sändning på passet bör användas även i appen.
+- Delningen i bakgrunden kan inte testas i CI. Den måste provas på riktiga telefoner, både Android och iPhone.
+
+### Alternativ utan egen app
+
+- **Meshtastic-radio med GPS:** radion sänder själv sin position med jämna mellanrum, utan telefon och utan täckning.
+  Se avsnittet om Meshtastic ovan.
+- **Tills vidare:** sparläget, mörkt läge och låg ljusstyrka på telefonen.
+
+### Innan arbetet börjar
+
+- Ta reda på hur många i laget som har Android respektive iPhone. Har de flesta Android är en Android-app som
+  installeras direkt det mest realistiska första steget.
