@@ -306,7 +306,7 @@ function renderCompass(){
   const last = ((compass.rot % 360) + 360) % 360; let d = h - last; if(d > 180) d -= 360; if(d < -180) d += 360;
   compass.rot += d;
   $('#compassDial').style.transform = `rotate(${-compass.rot}deg)`;
-  // Förbjudna skjutriktningar på mitt pass: röda fält i rosen, och varning när telefonen pekar in i ett
+  // Förbjudna skjutriktningar på mitt pass: röda fält i rosen, och varning när telefonen pekar in i ett (utan vibration)
   const mask = typeof myNoFireMask === 'function' ? myNoFireMask() : 0;
   if(mask !== compass.mask){
     compass.mask = mask;
@@ -316,7 +316,6 @@ function renderCompass(){
   }
   const bad = !!(mask & (1 << (Math.round(h / 22.5) % 16)));
   btn.classList.toggle('nofire', bad);
-  if(bad && !compass.bad){ try { if(navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch(e){} }
   compass.bad = bad;
   const t = `${dirName(h)} ${Math.round(h) % 360}°`;
   $('#compassTxt').textContent = bad ? `Förbjuden riktning · ${t}` : t;
