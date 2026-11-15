@@ -208,6 +208,15 @@ const gids = () => Object.keys(data.groups || {});
   check(plan().stands[pB] && plan().stands[pB].who === 'Kalle utan app' && !plan().stands[pB].uid, 'ett pass kan få ett eget namn för någon utan appen');
   await B.click(`[data-pl="dirs"][data-p="${pA}"]`); await W(B, 200);
   check(await B.locator('.rose .rose-w').count() === 16, 'kompassrosen har 16 riktningar');
+  // Passgrannen visas i sin riktning, med avstånd, och om riktningen mot den är spärrad
+  const nbI = await B.evaluate(([g, h, a]) => { const x = __fk.passNeighbors(__fk.cloud.groups[g], h, __fk.pinById(a))[0]; return x && {name:x.p.name, id:x.p.id, m:x.d, deg:Math.round(x.b), i:x.i, who:x.who}; }, [gid, hid, pA]);
+  const nbP = data.groups[gid].pins[aid][pB], nbM = await B.evaluate(([a, b]) => { const m = __fk.distM(a, b), x = __fk.bearingDeg(a, b), D = ['N', 'NNO', 'NO', 'ONO', 'O', 'OSO', 'SO', 'SSO', 'S', 'SSV', 'SV', 'VSV', 'V', 'VNV', 'NV', 'NNV']; return {m, d:__fk.fmtDist(m), deg:Math.round(x), dir:D[Math.round(x / 22.5) % 16]}; }, [data.groups[gid].pins[aid][pA], nbP]);
+  Object.assign(nbI, {d:nbM.d, dir:nbM.dir});
+  let nbT = await B.innerText('#roseNb');
+  check(nbI.id === pB && Math.abs(nbI.m - nbM.m) < 1 && Math.abs(nbI.deg - nbM.deg) <= 1 && nbI.m <= 1500 && nbT.includes(nbP.name) && nbT.includes('(Kalle utan app)') && nbT.includes(`${nbI.d} mot ${nbI.dir} (${nbI.deg}°)`) && nbT.includes('inte spärrad') && await B.locator('.rose-nb.open').count() === 1 && (await B.textContent('.rose-nb .d')) === nbI.d, `passgrannen visas med namn, vem som står där, avstånd och riktning: ${nbT}`);
+  await B.click(`.rose-w[data-i="${nbI.i}"]`); nbT = await B.innerText('#roseNb');
+  check(nbT.includes('Riktningen är spärrad') && await B.locator('.rose-nb.open').count() === 0 && await B.locator('.rose-nb').count() === 1, 'när riktningen mot grannen spärras syns det direkt');
+  await B.click(`.rose-w[data-i="${nbI.i}"]`);
   for(const i of [15, 0, 1]) await B.click(`.rose-w[data-i="${i}"]`);
   check((await B.innerText('#roseTxt')).includes('NNV, N, NNO'), `valda riktningar visas: ${await B.innerText('#roseTxt')}`);
   await B.screenshot({path:shot('b_rose.png')});

@@ -119,13 +119,30 @@ a{color:var(--accent)}
 .route-dot.hund{background:#db2777}.route-dot.drev{background:#6d28d9}
 .plan-mine{margin:4px 0;padding:8px 10px;border-radius:10px;background:var(--surface-2);border-left:3px solid var(--accent)}
 .plan-list{display:grid;gap:2px;margin:4px 0}
-.rose{display:block;width:min(280px,80vw);margin:6px auto;touch-action:manipulation;user-select:none}
+.rose{display:block;width:min(400px,100%);margin:6px auto;touch-action:manipulation;user-select:none}
 .rose-w path{fill:var(--surface-2);stroke:var(--line);stroke-width:1.5;cursor:pointer}
 .rose-w.on path{fill:#dc2626;stroke:#991b1b}
 .rose-w text{font:600 11px/1 var(--font-body);fill:var(--fg);text-anchor:middle;dominant-baseline:central;pointer-events:none}
 .rose-w.on text{fill:#fff}
 .rose-w:focus-visible{outline:none}.rose-w:focus-visible path{stroke:var(--accent);stroke-width:3}
 .rose-c{fill:var(--surface);stroke:var(--line)}
+.rose-me{fill:var(--fg)}
+.rose-nb{pointer-events:none}
+.rose-nb line{stroke:var(--fg);stroke-width:1.5;stroke-dasharray:3 3;opacity:.7}
+.rose-nb circle{fill:#374151;stroke:#fff;stroke-width:1.5}
+.rose-nb.open circle{fill:#d97706}
+.rose-nb text{text-anchor:middle;dominant-baseline:central}
+.rose-nb text.d[text-anchor=start]{text-anchor:start}
+.rose-nb text.d[text-anchor=end]{text-anchor:end}
+.rose-nb text.n{font:700 10px/1 var(--font-body);fill:#fff}
+.rose-nb text.d{font:600 11px/1 var(--font-body);fill:var(--fg);paint-order:stroke;stroke:var(--surface);stroke-width:3px}
+.rose-nbl{list-style:none;margin:4px 0 8px;padding:0;display:grid;gap:6px;font:400 13px/1.35 var(--font-body)}
+.rose-nbl li{display:flex;gap:8px;align-items:flex-start}
+.rose-nbn{flex:none;display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#374151;color:#fff;font:700 11px/1 var(--font-body)}
+.rose-nbl li.open .rose-nbn{background:#d97706}
+.rose-nbl .warn{color:#b45309;font-weight:600}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .rose-nbl .warn{color:#fbbf24}}
+:root[data-theme="dark"] .rose-nbl .warn{color:#fbbf24}
 .plan-lbl{width:0;height:0}
 .plan-lbl span{position:absolute;left:0;top:0;transform:translate(-50%,-50%);white-space:nowrap;font:600 11px/1.2 var(--font-body);padding:2px 6px;border-radius:6px;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.3)}
 .plan-lbl.who span{top:-50px;background:#16231c;color:#fff}
@@ -1762,7 +1779,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>
