@@ -413,7 +413,8 @@ function renderTrailControls(){
 function startTrailRec(){
   if(!('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); renderTrailControls(); return; }
   trail.watchId = navigator.geolocation.watchPosition(pos => showMe(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0),
-    err => { stopTrailRec(); toast(err.code === 1 ? 'Positionen är blockerad. Tillåt plats för sidan i webbläsarens inställningar.' : 'Kunde inte läsa din position.'); }, {enableHighAccuracy:true, maximumAge:5000, timeout:30000});
+    err => { if(err.code === 1){ stopTrailRec(); toast('Positionen är blockerad. Tillåt plats för sidan i webbläsarens inställningar.'); } },   // tillfälliga GPS-fel: fortsätt spela in
+    {enableHighAccuracy:true, maximumAge:5000, timeout:30000});
   try { if(navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { trail.wake = l; }).catch(() => {}); } catch(e){}
   if(!trailMinutes()){ state.settings.trailMin = 30; save(); }
   renderTrailControls(); renderTrails();
@@ -447,17 +448,42 @@ function sendPos(){
 function startSharing(){
   if(!('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); return; }
   if(!anyLiveHunt()){ toast('Positioner kan bara delas medan en jakt pågår.'); renderJakt(); return; }
-  cloud.sharing = true; cloud.lastSent = 0; cloud.lastTrail = null;
-  cloud.watchId = navigator.geolocation.watchPosition(pos => {
-    showMe(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0);
-    if(Date.now() - cloud.lastSent < 8000) return;
-    cloud.lastSent = Date.now(); sendPos();
-  }, err => { for(const k of acceptedLive()) cloud.autoOff[k] = true; stopSharing(); toast(err.code === 1 ? 'Positionen är blockerad. Tillåt plats för sidan i webbläsarens inställningar.' : 'Kunde inte läsa din position.'); renderJakt(); }, {enableHighAccuracy:true, maximumAge:5000, timeout:30000});
+  cloud.sharing = true; cloud.lastSent = 0; cloud.lastTrail = null; cloud.sentAt = null;
+  gpsStart(powerOn());
   try { if(navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { cloud.wake = l; }).catch(() => {}); } catch(e){}
   renderJakt();
 }
-function stopSharing(silent){
+/* GPS: i vanligt läge följs positionen hela tiden. I sparläget görs en mätning var 30:e sekund (fortfarande med hög
+   noggrannhet, så att utcheckningen från passet blir rätt). Positionen skickas var 8:e sekund, i sparläget var 60:e
+   sekund eller direkt om man har rört sig mer än 15 m. */
+const GPS_SAVE_MS = 30000, SEND_MS = 8000, SEND_SAVE_MS = 60000, SEND_MOVE_M = 15;
+function gpsPos(pos){
+  showMe(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0);
+  const save = powerOn(), moved = cloud.sentAt && myPos ? distM(cloud.sentAt, myPos) : Infinity;
+  if(Date.now() - cloud.lastSent < (save ? SEND_SAVE_MS : SEND_MS) && !(save && moved > SEND_MOVE_M && Date.now() - cloud.lastSent >= SEND_MS)) return;
+  cloud.lastSent = Date.now(); cloud.sentAt = myPos ? {lat:myPos.lat, lng:myPos.lng} : null; sendPos();
+}
+/* Bara nekad platsåtkomst stänger av delningen. Tillfälliga fel (ingen GPS-signal, för långsamt svar) är vanliga i skogen:
+   då fortsätter delningen, och positionen skickas igen när GPS:en svarar. */
+function gpsErr(err){
+  if(err && err.code === 1){ for(const k of acceptedLive()) cloud.autoOff[k] = true; stopSharing(); toast('Positionen är blockerad. Tillåt plats för sidan i webbläsarens inställningar.'); renderJakt(); return; }
+  if(Date.now() - (cloud.gpsWarned || 0) > 120000){ cloud.gpsWarned = Date.now(); toast('Svag GPS-signal just nu. Positionen skickas igen så fort telefonen får en.', 5000); }
+}
+function gpsStop(){
   if(cloud.watchId != null){ navigator.geolocation.clearWatch(cloud.watchId); cloud.watchId = null; }
+  if(cloud.gpsTimer){ clearInterval(cloud.gpsTimer); cloud.gpsTimer = null; }
+}
+function gpsStart(save){
+  gpsStop(); cloud.gpsSave = !!save;
+  const opt = {enableHighAccuracy:true, maximumAge:5000, timeout:30000};
+  if(!save){ cloud.watchId = navigator.geolocation.watchPosition(gpsPos, gpsErr, opt); return; }
+  const once = () => navigator.geolocation.getCurrentPosition(gpsPos, gpsErr, Object.assign({}, opt, {maximumAge:10000}));
+  once(); cloud.gpsTimer = setInterval(once, GPS_SAVE_MS);
+}
+/* Byt GPS-läge när sparläget slås på eller av (bara medan positionen delas). */
+function gpsSync(){ if(cloud.sharing && cloud.gpsSave !== powerOn()) gpsStart(powerOn()); }
+function stopSharing(silent){
+  gpsStop();
   if(cloud.wake){ try { cloud.wake.release(); } catch(e){} cloud.wake = null; }
   const was = cloud.sharing; cloud.sharing = false; cloud.autoShared = false;
   if(was && !silent && fb && cloud.user) for(const g of Object.values(cloud.groups)) for(const hid of liveHunts(g)){ fb.db.ref(`groups/${g.id}/huntPos/${hid}/${myUid()}`).remove().catch(() => {}); fb.db.ref(`groups/${g.id}/huntTrail/${hid}/${myUid()}`).remove().catch(() => {}); }

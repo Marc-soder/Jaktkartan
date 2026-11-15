@@ -274,7 +274,9 @@ const gids = () => Object.keys(data.groups || {});
   // ---- Incheckning på passet ----
   const chk = () => (((data.groups[gid].huntCheck || {})[hid] || {})['anon-carl']) || null;
   await B.evaluate(() => { window.__toasts = []; const t = document.getElementById('toast'); new MutationObserver(() => window.__toasts.push(t.textContent)).observe(t, {childList:true, characterData:true, subtree:true}); });
-  const at = (dLat) => C.evaluate(([la, ln]) => __fk.showMe(la, ln, 5), [pa.lat + dLat, pa.lng]).then(() => W(C, 900));
+  // Flytta både telefonens (låtsade) GPS och positionen i appen, så att GPS-mätningarna i sparläget ger samma plats
+  const at = async (dLat) => { await C.context().setGeolocation({latitude:pa.lat + dLat, longitude:pa.lng, accuracy:5}); await C.evaluate(([la, ln]) => __fk.showMe(la, ln, 5), [pa.lat + dLat, pa.lng]); await W(C, 900); };
+  await C.evaluate(() => { window.__ct = []; const t = document.getElementById('toast'); new MutationObserver(() => window.__ct.push(t.textContent)).observe(t, {childList:true, characterData:true, subtree:true}); });
   await at(0.01);   // drygt en kilometer bort
   check(!chk() || chk().in === false, 'långt från passet är Carl inte incheckad');
   check(await C.locator(`[data-j="check-in"][data-h="${hid}"]`).count() === 1 && (await C.innerText('#paneJakt')).includes('Du checkas in automatiskt inom 40 m'), 'Carl har knappen Jag är på passet');
@@ -287,10 +289,23 @@ const gids = () => Object.keys(data.groups || {});
   await B.evaluate(() => { const c = document.querySelector('.plan-list'); if(c) c.scrollIntoView(); __fk.map.setView([58.7225, 14.606], 16, {animate:false}); }); await W(B, 400); await B.screenshot({path:shot('b_checkin.png')});
   await C.evaluate(() => { const c = document.querySelector('.check-row'); if(c) c.scrollIntoView(); }); await C.screenshot({path:shot('c_checkin.png'), clip:{x:0, y:0, width:380, height:900}});
   check((await C.innerText('#paneJakt')).includes('✓ Incheckad') && await C.locator(`[data-j="check-out"][data-h="${hid}"]`).count() === 1, 'Carl ser att han är incheckad, och kan säga att han lämnar passet');
+  // Sparläge på passet: incheckad och ingen beröring på en stund ger glesare GPS och sändning
+  await head(90);   // kompassen pekar åt ett tillåtet håll (mot en förbjuden riktning ska det vara full fart)
+  await C.evaluate(() => { __fk.power.touch = 0; __fk.powerUpdate(); }); await W(C, 300);
+  const pw1 = await C.evaluate(() => ({on:__fk.power.on, reason:__fk.power.reason, gps:__fk.gpsMode(), chip:!document.getElementById('powerChip').hidden}));
+  check(pw1.on && pw1.reason === 'pass' && pw1.gps.timer && !pw1.gps.watch && pw1.chip, `incheckad på passet går appen i sparläge: GPS var 30:e sekund (${JSON.stringify(pw1)})`);
+  await C.mouse.click(700, 450); await W(C, 300);
+  const pw2 = await C.evaluate(() => ({on:__fk.power.on, gps:__fk.gpsMode()}));
+  check(!pw2.on && pw2.gps.watch && !pw2.gps.timer, 'ett tryck på skärmen ger full fart direkt');
+  await C.evaluate(() => { __fk.power.touch = 0; __fk.powerUpdate(); });
   await at(0.0006);   // cirka 67 m: inom glappet
   check(chk().in === true, 'mellan 40 och 100 m är man fortfarande incheckad (GPS:en får hoppa)');
   await at(0.0015); await W(B, 400);   // cirka 167 m
   check(chk().in === false && (await B.innerText('#paneJakt')).includes('lämnade'), 'längre bort än 100 m checkas Carl ut, och jaktledaren ser när han lämnade');
+  await W(C, 1700);
+  const pw3 = await C.evaluate(() => ({on:__fk.power.on, gps:__fk.gpsMode()}));
+  check(!pw3.on && pw3.gps.watch, 'när Carl lämnar passet blir det full fart igen');
+  check(!(await C.evaluate(() => window.__ct)).some(t => t.includes('Kunde inte läsa')) && await C.evaluate(() => __fk.cloud.sharing), 'ett tillfälligt GPS-fel stänger inte av delningen');
   await C.click(`[data-j="check-in"][data-h="${hid}"]`); await W(C, 700);
   check(chk().in === true, 'Carl kan checka in för hand');
   await C.click(`[data-j="check-out"][data-h="${hid}"]`); await W(C, 700);
@@ -301,6 +316,7 @@ const gids = () => Object.keys(data.groups || {});
   const cw3 = await C.evaluate(([g, h, p]) => firebase.database().ref(`groups/${g}/huntCheck/${h}/anon-carl`).set({pid:p, in:true, t:Date.now(), name:'Carl'}).then(() => 'ok', () => 'denied'), [gid, hid, pB]);
   const aw3 = await A.evaluate(([g, h, p]) => firebase.database().ref(`groups/${g}/huntCheck/${h}/anon-carl`).set({pid:p, in:false, t:Date.now(), name:'Carl'}).then(() => 'ok', () => 'denied'), [gid, hid, pA]);
   check(cw3 === 'denied' && aw3 === 'denied', `man kan bara checka in på sitt eget pass, och bara sig själv (${cw3}, ${aw3})`);
+  await C.context().setGeolocation({latitude:58.72, longitude:14.61, accuracy:12});
   await C.evaluate(() => __fk.showMe(58.72, 14.61, 12)); await W(C, 600);
   // ---- Jag deltar: positionen delas automatiskt ----
   const hp = () => ((data.groups[gid].huntPos || {})[hid] || {});
@@ -312,6 +328,8 @@ const gids = () => Object.keys(data.groups || {});
   await A.click(`[data-j="rsvp"][data-h="${hid}"]`); await W(A, 900);
   const rs = () => ((data.groups[gid].huntRsvp || {})[hid] || {});
   check(rs().alice && rs().alice.name === 'Alice Test' && await A.isChecked('#shareToggle') && hp().alice, 'Alice trycker Jag deltar: svaret sparas och positionen delas direkt eftersom jakten pågår');
+  for(let i = 0; i < 15 && !(await A.evaluate(() => window.__toasts.length)); i++) await W(A, 200);   // vänta på aviseringen
+  await W(A, 1200);   // och en stund till, om en andra skulle komma
   { const ts = await A.evaluate(() => window.__toasts); check(ts.length === 1 && ts[0].startsWith('Du deltar'), `bara en avisering när man trycker Jag deltar under jakten: ${JSON.stringify(ts)}`); }
   check((await B.innerText('#paneJakt')).toUpperCase().includes('DELTAR (2)') && (await B.innerText('#paneJakt')).includes('Alice Test, Carl Gäst (gäst)'), 'jaktledaren ser vilka som deltar');
   const rw = await C.evaluate(([g, h]) => firebase.database().ref('groups/' + g + '/huntRsvp/' + h + '/bob').set({name:'Bob', t:Date.now()}).then(() => 'ok', () => 'denied'), [gid, hid]);

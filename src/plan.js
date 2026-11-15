@@ -110,6 +110,7 @@ function myStands(){
   return out;
 }
 function checkSet(g, hid, pid, inside, manual){
+  setTimeout(() => { if(typeof powerUpdate === 'function') powerUpdate(); }, 1500);
   const p = pinById(pid), key = g.id + '/' + hid;
   if(manual) checkState.manualOut[key] = !inside;
   checkState.busy[key] = Date.now();
