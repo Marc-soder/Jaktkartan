@@ -197,11 +197,24 @@ const initials = n => (n || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).
 const ago = t => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'nyss' : m < 60 ? `för ${m} min sedan` : `för ${Math.round(m / 60)} h sedan`; };
 /* Positioner delas bara under en pågående jakt. Varje jakt har sina egna positioner i groups/<lag>/huntPos/<jakt>,
    och säkerhetsreglerna släpper bara igenom läsning och skrivning mellan jaktens start och slut. */
-const huntLive = (h, now) => !!h && h.expires > (now || Date.now()) && !(h.starts > (now || Date.now()));
+/* En jakt kan planeras långt i förväg. Den startar antingen automatiskt vid starts, eller för hand (manual):
+   då är starts satt till en sekund före sluttiden, så att reglerna räknar den som kommande tills jaktledaren trycker
+   Starta jakten (som sätter starts till nu och tar bort manual). */
+const huntLive = (h, now) => !!h && !h.manual && h.expires > (now || Date.now()) && !(h.starts > (now || Date.now()));
+const huntState = (h, now) => { now = now || Date.now(); return !h ? 'gone' : h.expires <= now ? 'ended' : huntLive(h, now) ? 'live' : h.manual ? 'planned' : 'upcoming'; };
+const MANUAL_GAP = 1000;
+const dayMs = d => { const [y, m, dd] = String(d || todayISO()).split('-').map(Number); return new Date(y, m - 1, dd).getTime(); };
+const huntDay = h => h.day || todayISO();
+/* Sorteringsordning: dagen, och starttiden för jakter som startar vid en viss tid. */
+const huntSort = h => h.manual || !h.starts ? dayMs(huntDay(h)) : h.starts;
 const liveHunts = g => Object.entries(g.hunts || {}).filter(([hid, h]) => huntLive(h) && (g.kind === 'member' || (g.guest && g.guest.hid === hid))).map(([hid]) => hid);
 const anyLiveHunt = () => Object.values(cloud.groups).some(g => liveHunts(g).length);
 /* "Jag deltar": medlemmar svarar på jaktkortet. Den som gått med som gäst via jaktkod deltar alltid. */
-const accepted = (g, hid) => g.kind === 'member' ? !!((g.huntRsvp || {})[hid] || {})[myUid()] : !!(g.guest && g.guest.hid === hid);
+/* Svaret på en inbjudan: {name, t} = deltar, {name, t, no:true} = har avböjt, inget = har inte svarat. */
+const rsvpOf = (g, hid, u) => ((g.huntRsvp || {})[hid] || {})[u || myUid()] || null;
+const going = r => !!r && !r.no;
+const accepted = (g, hid) => g.kind === 'member' ? going(rsvpOf(g, hid)) : !!(g.guest && g.guest.hid === hid);
+const declined = (g, hid) => g.kind === 'member' && !!(rsvpOf(g, hid) || {}).no;
 const acceptedLive = () => Object.values(cloud.groups).flatMap(g => liveHunts(g).filter(hid => accepted(g, hid)).map(hid => g.id + '/' + hid));
 /* Delar positionen automatiskt när en jakt man deltar i startar, och slutar när den är slut.
    Stänger man av delningen själv under jakten startas den inte igen automatiskt för den jakten. */
@@ -551,16 +564,17 @@ function readHash(){
 }
 
 /* Jakt-fliken */
+const HUNT_TAG = {live:'Pågår', planned:'Planerad', upcoming:'Kommande', ended:'Avslutad', gone:''};
 function huntChips(hunt){ const ids = Object.keys(hunt.species || {}).filter(k => hunt.species[k]); return ids.length ? `<div class="chips">${ids.map(id => `<span class="chip">${esc((viltById(id) || {name:id}).name)}</span>`).join('')}</div>` : '<div class="small muted">Inget vilt valt.</div>'; }
 const fmtDay = d => d ? `${+d.slice(8)} ${MON[+d.slice(5,7) - 1]} ${d.slice(0,4)}` : '';
 const fmtTime = t => { const d = new Date(t); return `${fmtDay(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`)} kl. ${String(d.getHours()).padStart(2,'0')}.${String(d.getMinutes()).padStart(2,'0')}`; };
 function huntCard(g, hid, hunt, lead){
-  const now = Date.now(), live = hunt.expires > now, upcoming = live && hunt.starts > now;
+  const now = Date.now(), st = huntState(hunt, now), live = st !== 'ended', upcoming = st === 'planned' || st === 'upcoming';
   const guests = Object.entries(g.guests || {}).filter(([, v]) => v && v.hid === hid);
   const areas = Object.keys(hunt.areas || {}).map(a => (g.areas[a] || {}).name).filter(Boolean);
-  return `<div class="card${live ? '' : ' dim'}"><div class="card-h"><strong>${esc(hunt.name)}</strong><span class="tag${live && !upcoming ? ' on' : ''}">${upcoming ? 'Kommande' : live ? 'Pågår' : 'Avslutad'}</span></div>
+  return `<div class="card${live ? '' : ' dim'}" id="hc-${esc(g.id)}-${esc(hid)}"><div class="card-h"><strong>${esc(hunt.name)}</strong><span class="tag${st === 'live' ? ' on' : st === 'planned' ? ' plan' : ''}">${HUNT_TAG[st]}</span></div>
     ${!live ? `<div class="small muted">Tas bort automatiskt ${esc(fmtTime(hunt.expires + cloud.cleanAfter))}, och observationerna sparas till värmekartan.</div>` : ''}
-    <div class="small muted">${esc(fmtDay(hunt.day))}${hunt.lan ? ' · ' + esc(hunt.lan) : ''}${hunt.starts ? ` · startar ${esc(fmtTime(hunt.starts))}` : ''} · gäller till ${esc(fmtTime(hunt.expires))}</div>
+    <div class="small muted">${esc(fmtDay(hunt.day))}${hunt.lan ? ' · ' + esc(hunt.lan) : ''}${st === 'planned' ? ' · startas av jaktledaren' : st === 'upcoming' ? ` · startar automatiskt ${esc(fmtTime(hunt.starts))}` : hunt.starts && st === 'live' ? ` · startade ${esc(fmtTime(hunt.starts))}` : ''} · gäller till ${esc(fmtTime(hunt.expires))}</div>
     ${live ? sunHtml(hunt.day || todayISO(), huntPlace(g, hunt)) : ''}
     <div class="lbl">Jaktbart vilt</div>${huntChips(hunt)}
     ${live ? rsvpHtml(g, hid) : ''}
@@ -570,7 +584,7 @@ function huntCard(g, hid, hunt, lead){
     ${areas.length ? `<div class="lbl">Områden</div><div class="small">${areas.map(esc).join(', ')}</div>` : ''}
     ${lead && live ? `<div class="lbl">Tillfällig åtkomst för gäster</div><div class="codebox"><span>Jaktkod <b>${esc(hunt.code)}</b></span><button class="btn sm" type="button" data-j="hunt-link" data-g="${esc(g.id)}" data-h="${esc(hid)}">Kopiera länk</button></div>
       ${guests.length ? `<div class="small" style="margin-top:6px">${guests.map(([gu, v]) => `<span class="gst">${esc(v.name)}<button class="x" type="button" data-j="guest-del" data-g="${esc(g.id)}" data-u="${esc(gu)}" aria-label="Ta bort ${esc(v.name)}">×</button></span>`).join(' ')}</div>` : '<div class="small muted" style="margin-top:6px">Inga gäster har gått med.</div>'}` : ''}
-    ${lead ? `<div class="btnrow" style="margin-top:10px">${live ? `<button class="btn sm" type="button" data-j="hunt-edit" data-g="${esc(g.id)}" data-h="${esc(hid)}">Ändra jakt</button>` : ''}<button class="btn sm danger" type="button" data-j="hunt-end" data-g="${esc(g.id)}" data-h="${esc(hid)}">${live ? 'Avsluta jakten' : 'Ta bort'}</button></div>` : ''}</div>`;
+    ${lead ? `<div class="btnrow" style="margin-top:10px">${upcoming ? `<button class="btn sm primary" type="button" data-j="hunt-start" data-g="${esc(g.id)}" data-h="${esc(hid)}">Starta jakten</button>` : ''}${live ? `<button class="btn sm" type="button" data-j="hunt-edit" data-g="${esc(g.id)}" data-h="${esc(hid)}">Ändra jakt</button>` : ''}<button class="btn sm danger" type="button" data-j="hunt-end" data-g="${esc(g.id)}" data-h="${esc(hid)}">${st === 'live' ? 'Avsluta jakten' : upcoming ? 'Ta bort jakten' : 'Ta bort'}</button></div>` : ''}</div>`;
 }
 /* Vilka som deltar, och knappen Jag deltar. Gäster deltar alltid (de har gått med via jaktkoden). */
 /* Skjutljus för jakten: min position, annars mitten av jaktens första område med gräns, annars kartans mitt. */
@@ -582,12 +596,13 @@ function huntPlace(g, hunt){
 function rsvpHtml(g, hid){
   const auto = 'Din position delas automatiskt med jaktlaget medan jakten pågår och appen är öppen.';
   if(g.kind !== 'member') return `<p class="note">${auto}</p>`;
-  const names = Object.values((g.huntRsvp || {})[hid] || {}).filter(Boolean).map(v => v.name || 'Medlem')
+  const names = Object.values((g.huntRsvp || {})[hid] || {}).filter(going).map(v => v.name || 'Medlem')
     .concat(Object.values(g.guests || {}).filter(v => v && v.hid === hid).map(v => (v.name || 'Gäst') + ' (gäst)'))
     .sort((a, b) => a.localeCompare(b, 'sv'));
-  const me = accepted(g, hid);
-  return `<div class="lbl">Deltar${names.length ? ' (' + names.length + ')' : ''}</div><div class="small rsvp-list">${names.length ? names.map(esc).join(', ') : '<span class="muted">Ingen har svarat ännu.</span>'}</div>
-    <div class="btnrow" style="margin-top:6px">${me ? `<span class="tag on">Du deltar</span><button class="btn sm ghost" type="button" data-j="rsvp-no" data-g="${esc(g.id)}" data-h="${esc(hid)}">Avböj</button>` : `<button class="btn sm primary" type="button" data-j="rsvp" data-g="${esc(g.id)}" data-h="${esc(hid)}">Jag deltar</button>`}</div>
+  const me = accepted(g, hid), no = declined(g, hid);
+  const nos = Object.values((g.huntRsvp || {})[hid] || {}).filter(v => v && v.no).map(v => v.name || 'Medlem').sort((a, b) => a.localeCompare(b, 'sv'));
+  return `<div class="lbl">Deltar${names.length ? ' (' + names.length + ')' : ''}</div><div class="small rsvp-list">${names.length ? names.map(esc).join(', ') : '<span class="muted">Ingen deltar ännu.</span>'}${nos.length ? `<br><span class="muted">Avböjt: ${nos.map(esc).join(', ')}</span>` : ''}</div>
+    <div class="btnrow" style="margin-top:6px">${me ? `<span class="tag on">Du deltar</span><button class="btn sm ghost" type="button" data-j="rsvp-no" data-g="${esc(g.id)}" data-h="${esc(hid)}">Avböj</button>` : no ? `<span class="tag">Du har avböjt</span><button class="btn sm" type="button" data-j="rsvp" data-g="${esc(g.id)}" data-h="${esc(hid)}">Jag deltar ändå</button>` : `<button class="btn sm primary" type="button" data-j="rsvp" data-g="${esc(g.id)}" data-h="${esc(hid)}">Jag deltar</button><button class="btn sm ghost" type="button" data-j="rsvp-no" data-g="${esc(g.id)}" data-h="${esc(hid)}">Avböj</button>`}</div>
     <p class="note" style="margin-top:4px">${me ? auto : 'Deltar du delas din position automatiskt med jaktlaget medan jakten pågår.'}</p>`;
 }
 function renderJakt(){
@@ -621,7 +636,8 @@ function renderJakt(){
       <label class="bigtoggle" for="shareToggle" style="margin-top:10px"><span><strong>Dela min position</strong><br><span class="small muted">Syns bara för deltagarna i pågående jakter</span></span><input class="sw-toggle" type="checkbox" id="shareToggle" ${cloud.sharing ? 'checked' : ''} ${anyLiveHunt() ? '' : 'disabled'}></label>
       <p class="note" id="posCount">${posCountText()}</p>
       ${window.Notification && Notification.permission === 'default' ? '<div class="btnrow"><button class="btn sm" type="button" data-j="notif">Tillåt aviseringar om nödlarm</button></div><p class="note" style="margin-top:2px">Då kan ett nödlarm synas även när appen ligger i bakgrunden.</p>' : ''}
-      ${cloud.sharing ? '<p class="note">Positionen skickas bara medan appen är öppen och skärmen är på.</p>' : ''}`;
+      ${cloud.sharing ? '<p class="note">Positionen skickas bara medan appen är öppen och skärmen är på.</p>' : ''}
+      ${calAgendaHtml()}`;
     for(const g of gs){
       if(!g.meta) continue;
       if(g.kind === 'guest'){
@@ -631,7 +647,8 @@ function renderJakt(){
         continue;
       }
       const role = myRole(g), lead = canLeadGroup(g), adm = isAdminGroup(g);
-      const hunts = Object.entries(g.hunts || {}).filter(([, v]) => v).sort((a, b) => b[1].expires - a[1].expires);
+      const ord = {live:0, planned:1, upcoming:1, ended:2};
+      const hunts = Object.entries(g.hunts || {}).filter(([, v]) => v).sort((a, b) => (ord[huntState(a[1])] - ord[huntState(b[1])]) || (huntSort(a[1]) - huntSort(b[1])));
       const members = Object.entries(g.members || {}).filter(([, v]) => v).sort((a, b) => (a[1].name || '').localeCompare(b[1].name || '', 'sv'));
       const shared = state.areas.filter(a => a.gid === g.id);
       html += `<h3 class="sec">${esc(gname(g))} <span class="tag">${esc(ROLES[role] || '')}</span></h3>`;
@@ -650,6 +667,7 @@ function renderJakt(){
       ${u.isAnonymous ? '<p class="note">Som gäst kan du gå med i jakter. Logga in med Google för att bli medlem i ett jaktlag.</p>' : canCreate() ? '' : '<p class="note">Bara ägaren av den här Jaktkartan kan skapa jaktlag. Du går med i ett lag eller en jakt med en kod.</p>'}`;
   }
   pane.innerHTML = html;
+  calRefresh();
   // Stänger man av själv under en jakt man deltar i startar delningen inte automatiskt igen för den jakten.
   const stg = $('#shareToggle'); if(stg) stg.addEventListener('change', e => { if(e.target.checked){ cloud.autoOff = {}; startSharing(); } else { for(const k of acceptedLive()) cloud.autoOff[k] = true; stopSharing(); renderJakt(); } });
 }
@@ -661,27 +679,39 @@ function askText(title, label, value, okLabel, cb, max){
   });
 }
 const hmOf = t => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
-/* Ny jakt, eller ändra en befintlig (hid). En pågående jakt ändras utan att brytas: datum och start ligger fast,
-   resten går att ändra. Ändras sluttiden följer jaktkoden och gästernas åtkomst med. */
-function openHuntForm(g, hid){
+/* Ny jakt, eller ändra en befintlig (hid). En jakt planeras för ett datum, gärna långt i förväg, och startar antingen
+   för hand (jaktledaren trycker Starta jakten) eller automatiskt vid en vald tid.
+   En pågående jakt ändras utan att brytas: datum och start ligger fast, resten går att ändra.
+   Ändras sluttiden följer jaktkoden och gästernas åtkomst med. */
+function openHuntForm(g, hid, day){
   const areas = state.areas.filter(a => a.gid === g.id);
   const old = hid ? (g.hunts || {})[hid] : null;
   if(hid && !old){ toast('Jakten finns inte längre.'); return; }
   const live = !!old && huntLive(old);
   const sel = old ? Object.assign({}, old.species || {}) : {};
-  const day0 = old ? (old.day || todayISO()) : todayISO(), lan0 = old ? (old.lan || '') : state.settings.lan;
+  const day0 = old ? (old.day || todayISO()) : day && day >= todayISO() ? day : todayISO(), lan0 = old ? (old.lan || '') : state.settings.lan;
+  const auto0 = !!old && !old.manual && !!old.starts, start0 = old && old.starts && !old.manual ? hmOf(old.starts) : '07:00';
   const area0 = a => old ? !!(old.areas || {})[a.id] : true;
   openModal(`<h2>${old ? 'Ändra jakt' : 'Ny jakt'}</h2><form id="hfForm">
-    ${live ? '<p class="note" style="margin-top:0">Jakten pågår och fortsätter medan du ändrar. Datum och start ligger fast. Positioner, observationer, plan och gäster finns kvar.</p>' : ''}
-    <label class="field"><span>Namn</span><input class="input" id="hfName" maxlength="60" value="${esc(old ? old.name : 'Jakt ' + fmtDay(todayISO()))}"></label>
+    ${live ? '<p class="note" style="margin-top:0">Jakten pågår och fortsätter medan du ändrar. Datum och start ligger fast. Positioner, observationer, plan och gäster finns kvar.</p>' : old ? '' : '<p class="note" style="margin-top:0">Planera jakten i förväg. Den syns i lagets kalender, och medlemmarna kan svara om de deltar.</p>'}
+    <label class="field"><span>Namn</span><input class="input" id="hfName" maxlength="60" value="${esc(old ? old.name : 'Jakt ' + fmtDay(day0))}"></label>
     <div class="row2"><label class="field"><span>Datum</span><input class="input" type="date" id="hfDay" value="${esc(day0)}"${live ? ' disabled' : ''}></label>
-    <label class="field"><span>Startar kl.</span><input class="input" type="time" id="hfStart" value="${esc(old && old.starts ? hmOf(old.starts) : nowHM())}"${live ? ' disabled' : ''}></label></div>
-    <label class="field"><span>Slutar kl.</span><input class="input" type="time" id="hfEnd" value="${esc(old ? hmOf(old.expires) : '23:59')}"></label>
-    <p class="note" style="margin-top:0">Positioner kan bara delas och ses mellan start och slut. Gästernas åtkomst gäller till sluttiden.</p>
+    <label class="field"><span>Slutar kl.</span><input class="input" type="time" id="hfEnd" value="${esc(old ? hmOf(old.expires) : '23:59')}"></label></div>
+    <div class="field"><span>Start</span>
+      <label class="checkline"><input type="radio" name="hfMode" value="manual"${auto0 ? '' : ' checked'}${live ? ' disabled' : ''}><span>För hand<br><span class="small muted">Jaktledaren trycker Starta jakten när det är dags</span></span></label>
+      <label class="checkline"><input type="radio" name="hfMode" value="auto"${auto0 ? ' checked' : ''}${live ? ' disabled' : ''}><span>Automatiskt vid en tid</span></label>
+      <label class="field hf-start"><span>Startar kl.</span><input class="input" type="time" id="hfStart" value="${esc(start0)}"${live || !auto0 ? ' disabled' : ''}></label></div>
+    <p class="note" style="margin-top:0">Positioner kan bara delas och ses medan jakten pågår. Gästernas åtkomst gäller till sluttiden.</p>
     <label class="field"><span>Län</span><select class="input" id="hfLan"><option value="">Välj län</option>${LAN.map(l => `<option${l === lan0 ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
     <div class="field"><span>Områden som gästerna får se</span>${areas.length ? areas.map(a => `<label class="checkline"><input type="checkbox" data-area="${esc(a.id)}"${area0(a) ? ' checked' : ''}><span>${esc(a.name)}</span></label>`).join('') : '<span class="small muted">Laget har inga delade områden ännu. Gäster ser då bara varandras positioner.</span>'}</div>
     <div class="field"><span>Jaktbart vilt</span><div id="hfVilt"></div></div>
     <div class="actions">${old ? '<button class="btn primary grow" type="submit" id="hfOk">Spara ändringar</button>' : '<button class="btn primary grow" type="submit" id="hfPlan" data-plan="1">Skapa och planera</button><button class="btn" type="submit" id="hfOk">Skapa jakt</button>'}<button class="btn ghost" type="button" id="hfCancel">Avbryt</button></div></form>`, m => {
+    // Start: tiden går bara att välja när jakten ska starta automatiskt
+    const modeOf = () => (m.querySelector('input[name=hfMode]:checked') || {}).value || 'manual';
+    m.querySelectorAll('input[name=hfMode]').forEach(r => r.addEventListener('change', () => { m.querySelector('#hfStart').disabled = live || modeOf() !== 'auto'; }));
+    // Namnet följer datumet så länge man inte har skrivit ett eget
+    let autoName = old ? null : 'Jakt ' + fmtDay(day0);
+    m.querySelector('#hfDay').addEventListener('change', () => { const n = m.querySelector('#hfName'), d = m.querySelector('#hfDay').value; if(autoName !== null && n.value === autoName && d){ autoName = 'Jakt ' + fmtDay(d); n.value = autoName; } });
     const draw = () => {
       const lan = m.querySelector('#hfLan').value, md = (m.querySelector('#hfDay').value || todayISO()).slice(5);
       if(!lan){ m.querySelector('#hfVilt').innerHTML = '<span class="small muted">Välj län för att se vad som är lovligt den dagen.</span>'; return; }
@@ -702,10 +732,12 @@ function openHuntForm(g, hid){
       const plan = !!(e.submitter && e.submitter.dataset.plan);   // Skapa och planera: öppna planeringen direkt
       const name = m.querySelector('#hfName').value.trim() || 'Jakt', day = m.querySelector('#hfDay').value || todayISO(), end = m.querySelector('#hfEnd').value || '23:59', lan = m.querySelector('#hfLan').value;
       const [y, mo, d] = day.split('-').map(Number), [hh, mm] = end.split(':').map(Number), [sh, sm] = (m.querySelector('#hfStart').value || '00:00').split(':').map(Number);
-      const expires = new Date(y, mo - 1, d, hh, mm, 59).getTime(), starts = live ? old.starts : new Date(y, mo - 1, d, sh, sm, 0).getTime();
+      const expires = new Date(y, mo - 1, d, hh, mm, 59).getTime(), manual = !live && modeOf() !== 'auto';
+      const starts = live ? old.starts : manual ? expires - MANUAL_GAP : new Date(y, mo - 1, d, sh, sm, 0).getTime();
       if(expires < Date.now()){ toast('Sluttiden har redan passerat. Välj en senare tid.'); return; }
       if(starts >= expires){ toast('Starttiden måste vara före sluttiden.'); return; }
       const hunt = old ? Object.assign({}, old, {name, day:live ? old.day : day, starts, expires, lan, areas:{}, species:{}}) : {name, day, starts, expires, lan, code:newCode(8), by:myUid(), created:Date.now(), areas:{}, species:{}};
+      if(manual) hunt.manual = true; else delete hunt.manual;
       if(!hunt.starts) delete hunt.starts;
       $$('[data-area]', m).forEach(c => { if(c.checked) hunt.areas[c.dataset.area] = true; });
       for(const k of Object.keys(sel)) if(sel[k]) hunt.species[k] = true;
@@ -718,7 +750,7 @@ function openHuntForm(g, hid){
         }
         if(lan){ state.settings.lan = lan; save(); }
         closeModal();
-        fb.db.ref().update(up).then(() => toast(expires !== old.expires ? `Jakten är ändrad. Den slutar nu ${fmtTime(expires)}.` : 'Jakten är ändrad.')).catch(fail());
+        fb.db.ref().update(up).then(() => toast(live ? (expires !== old.expires ? `Jakten är ändrad. Den slutar nu ${fmtTime(expires)}.` : 'Jakten är ändrad.') : 'Jakten är ändrad. ' + plannedText(hunt))).catch(fail());
         return;
       }
       hid = uid(); const up = {};
@@ -726,11 +758,38 @@ function openHuntForm(g, hid){
       if(lan){ state.settings.lan = lan; save(); }
       closeModal();
       fb.db.ref().update(up).then(() => {
-        toast('Jakten är skapad. Dela jaktkoden med gästerna.');
+        toast(huntLive(hunt) ? 'Jakten är skapad och har startat. Dela jaktkoden med gästerna.' : 'Jakten är planerad. ' + plannedText(hunt), 6000);
         if(plan){ if(!g.hunts) g.hunts = {}; if(!g.hunts[hid]) g.hunts[hid] = hunt; openPlan(g, hid); }
       }).catch(fail());
     });
   });
+}
+/* Svar på en inbjudan: deltar (yes) eller avböjt. */
+function rsvpSet(g, hid, yes){
+  const h = (g.hunts || {})[hid]; if(!h){ toast('Jakten finns inte längre.'); return; }
+  if(yes){ delete cloud.autoOff[g.id + '/' + hid]; cloud.rsvpAt = Date.now(); }
+  fb.db.ref(`groups/${g.id}/huntRsvp/${hid}/${myUid()}`).set(yes ? {name:myName(), t:Date.now()} : {name:myName(), t:Date.now(), no:true})
+    .then(() => toast(!yes ? 'Du har avböjt jakten.' : huntLive(h) ? 'Du deltar. Din position delas med jaktlaget.' : 'Du deltar. Din position delas automatiskt när jakten startar.', 4500)).catch(fail());
+}
+const plannedText = h => h.manual ? `Den startar när du trycker Starta jakten (${fmtDay(huntDay(h))}).` : `Den startar automatiskt ${fmtTime(h.starts)}.`;
+/* Startar en planerad jakt nu. Är den planerad till en annan dag flyttas den till i dag, med samma sluttid på dagen.
+   Ändras sluttiden följer jaktkoden och gästernas åtkomst med. */
+function startHunt(g, hid){
+  const h = (g.hunts || {})[hid]; if(!h){ toast('Jakten finns inte längre.'); return; }
+  const now = Date.now(), today = todayISO();
+  let expires = h.expires, day = huntDay(h);
+  if(day !== today || expires <= now){
+    const e = new Date(h.expires), [y, mo, d] = today.split('-').map(Number);
+    expires = new Date(y, mo - 1, d, e.getHours(), e.getMinutes(), 59).getTime(); day = today;
+  }
+  if(expires <= now + 60000){ toast('Sluttiden har redan passerat i dag. Ändra jakten och välj en senare sluttid.', 5000); return; }
+  const hunt = Object.assign({}, h, {starts:now, day, expires}); delete hunt.manual;
+  const up = {[`groups/${g.id}/hunts/${hid}`]: hunt};
+  if(expires !== h.expires){
+    if(h.code) up[`huntCodes/${h.code}`] = {gid:g.id, hid, expires};
+    for(const [gu, v] of Object.entries(g.guests || {})) if(v && v.hid === hid) up[`groups/${g.id}/guests/${gu}/expires`] = expires;
+  }
+  fb.db.ref().update(up).then(() => toast(`Jakten har startat. Den pågår till ${fmtTime(expires)}.`, 5000)).catch(fail());
 }
 /* Avslutar en jakt: arkiverar viltobservationerna utan namn (för värmekartan) och raderar jakten med positioner,
    spår, observationer, plan, svar, meddelanden, kod, gäster och gästernas nycklar.
@@ -765,6 +824,7 @@ $('#paneJakt').addEventListener('click', e => {
   else if(act === 'notif'){ try { Notification.requestPermission().then(p => { toast(p === 'granted' ? 'Aviseringar om nödlarm är tillåtna.' : 'Aviseringar är inte tillåtna. Det går att ändra i webbläsarens inställningar.', 5000); renderJakt(); }); } catch(e){} }
   else if(act === 'group-new') askText('Skapa jaktlag', 'Namn på jaktlaget', '', 'Skapa', v => createGroup(v), 60);
   else if(act === 'join') askText('Gå med med kod', 'Inbjudningskod eller jaktkod', '', 'Gå med', v => joinByCode(v), 14);
+  else if(act === 'cal') openCal();
   else if(!g) return;
   else if(act === 'obs-go'){ const o = ((g.huntObs || {})[hid] || {})[b.dataset.o]; if(o){ map.setView([o.lat, o.lng], Math.max(map.getZoom(), 16)); if(!isDesktop()) setSheet('peek'); } }
   else if(act === 'hunt-new') openHuntForm(g);
@@ -774,8 +834,10 @@ $('#paneJakt').addEventListener('click', e => {
   else if(act === 'check-out') checkSet(g, hid, b.dataset.p, false, true);
   else if(act === 'msg-new') openMsgForm(g, hid);
   else if(act === 'msg-reply') openMsgForm(g, hid, u);
-  else if(act === 'rsvp'){ delete cloud.autoOff[g.id + '/' + hid]; cloud.rsvpAt = Date.now(); fb.db.ref(`groups/${g.id}/huntRsvp/${hid}/${myUid()}`).set({name:myName(), t:Date.now()}).then(() => toast(huntLive(g.hunts[hid]) ? 'Du deltar. Din position delas med jaktlaget.' : 'Du deltar. Din position delas automatiskt när jakten startar.', 4500)).catch(fail()); }
-  else if(act === 'rsvp-no') fb.db.ref(`groups/${g.id}/huntRsvp/${hid}/${myUid()}`).remove().catch(fail());
+  else if(act === 'rsvp') rsvpSet(g, hid, true);
+  else if(act === 'rsvp-no') rsvpSet(g, hid, false);
+  else if(act === 'cal-go') calGo(g.id, hid);
+  else if(act === 'hunt-start'){ const h = g.hunts[hid]; if(h && (h.day || todayISO()) !== todayISO()) confirmClick(b, 'Starta i dag?', () => startHunt(g, hid)); else startHunt(g, hid); }
   else if(act === 'plan-go') gotoPin(b.dataset.p);
   else if(act === 'hunt-link'){ const hunt = g.hunts[hid]; copyText(`${hunt.name}: gå med i jakten med kod ${hunt.code}\n${shareLink('j', hunt.code)}`, 'Länken är kopierad'); }
   else if(act === 'hunt-end') confirmClick(b, 'Bekräfta', () => endHunt(g, hid));

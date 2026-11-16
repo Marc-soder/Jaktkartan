@@ -168,6 +168,8 @@ const rules = { rules: {
           '.validate': `newData.hasChildren(['name','t'])`,
           name: {'.validate': 'newData.isString() && newData.val().length <= 60'},
           t: {'.validate': 'newData.isNumber() && newData.val() <= now + 60000'},
+          // Avböjt: {name, t, no:true}. Utan no betyder svaret att man deltar.
+          no: {'.validate': 'newData.isBoolean()'},
           '$other': {'.validate': false}
         }
       }

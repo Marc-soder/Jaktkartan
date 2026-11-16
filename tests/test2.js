@@ -171,7 +171,13 @@ const gids = () => Object.keys(data.groups || {});
   const hid = Object.keys(data.groups[gid].hunts || {})[0], hunt = hid && data.groups[gid].hunts[hid];
   check(hunt && hunt.species.radjur && hunt.species.vildsvin && hunt.areas[aid] === true && !hunt.areas[aid2] && data.huntCodes[hunt.code].hid === hid, 'Bob (jaktledare) skapade jakt med vilt, ett område och jaktkod');
   check(hunt.expires > Date.now() && new Date(hunt.expires).getHours() === 23, 'jakten gäller till kl. 23.59 i dag');
-  check(hunt.starts <= Date.now() && Date.now() - hunt.starts < 120000, 'jakten startar nu som standard');
+  check(hunt.manual === true && hunt.starts === hunt.expires - 1000, 'jakten är planerad och startas för hand som standard');
+  await W(A, 300);
+  { const at = await A.innerText('#paneJakt'); check(at.toUpperCase().includes('PLANERAD') && at.includes('Du har en inbjudan att svara på') && at.includes('Startas av jaktledaren'), 'Alice ser den planerade jakten som en inbjudan i kalendern'); }
+  check(await A.evaluate(([g, h]) => firebase.database().ref('groups/' + g + '/huntPos/' + h + '/alice').set({lat:1, lng:1, t:Date.now(), name:'A'}).then(() => 'ok', () => 'denied'), [gid, hid]) === 'denied', 'positioner kan inte delas innan jakten har startat');
+  check(await B.locator(`[data-j="hunt-start"][data-h="${hid}"]`).count() === 1 && await A.locator(`[data-j="hunt-start"]`).count() === 1, 'jaktledare och admin har knappen Starta jakten');
+  await B.click(`[data-j="hunt-start"][data-h="${hid}"]`); await W(B, 600);
+  { const h = data.groups[gid].hunts[hid]; check(!h.manual && h.starts <= Date.now() && Date.now() - h.starts < 60000 && h.expires === hunt.expires && (await B.innerText('#paneJakt')).toUpperCase().includes('PÅGÅR'), 'jaktledaren startar jakten: den pågår nu, med samma sluttid'); }
   check((await A.innerText('#paneJakt')).includes(hunt.code), 'Alice ser jakten och koden');
   // ---- Carl: gäst utan konto ----
   const C = await mkPage(browser, 'carl', '#j-' + hunt.code);
@@ -525,6 +531,52 @@ const gids = () => Object.keys(data.groups || {});
   await B.waitForTimeout(Math.max(0, t2 + 16000 + 3000 - Date.now()) + 2500);
   check(!data.groups[gid].hunts[h2] && !(data.groups[gid].huntRsvp || {})[h2] && !(data.groups[gid].huntPos || {})[h2] && !(data.huntCodes || {})['KVALL234'], 'kvällsjakten städas bort av sig själv efter sluttiden, med kod, svar och positioner');
   await B.evaluate(() => { __fk.cloud.cleanAfter = 3600000; });
+  // ---- Planera i förväg: kalender, inbjudan, avböj, automatisk start och start för hand ----
+  check(await A.evaluate(() => [[2026, 0, 1], [2027, 0, 1], [2026, 10, 16], [2026, 11, 28]].map(([y, m, d]) => __fk.isoWeek(new Date(y, m, d))).join()) === '1,53,47,53', 'kalendern räknar veckonummer rätt');
+  const futD = new Date(); futD.setDate(futD.getDate() + 40);
+  const futISO = `${futD.getFullYear()}-${String(futD.getMonth() + 1).padStart(2, '0')}-${String(futD.getDate()).padStart(2, '0')}`;
+  const MONS = ['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'];
+  await B.click('#tab-jakt'); await W(B, 200); await B.click(`[data-j="hunt-new"][data-g="${gid}"]`); await W(B, 200);
+  check(await B.isChecked('input[name=hfMode][value=manual]') && await B.isDisabled('#hfStart'), 'en ny jakt startas för hand som standard, utan starttid');
+  await B.fill('#hfDay', futISO); await B.dispatchEvent('#hfDay', 'change'); await B.fill('#hfEnd', '23:58');
+  check((await B.inputValue('#hfName')) === `Jakt ${futD.getDate()} ${MONS[futD.getMonth()]} ${futD.getFullYear()}`, `namnet följer det valda datumet: ${await B.inputValue('#hfName')}`);
+  await B.click('#hfOk'); await W(B, 700);
+  const h3 = Object.keys(data.groups[gid].hunts).find(k => data.groups[gid].hunts[k].day === futISO), H3 = () => data.groups[gid].hunts[h3];
+  check(h3 && H3().manual && H3().expires === new Date(futD.getFullYear(), futD.getMonth(), futD.getDate(), 23, 58, 59).getTime() && H3().starts === H3().expires - 1000 && data.huntCodes[H3().code].hid === h3, 'jakten planeras för ett datum långt fram, med jaktkod');
+  check(await A.evaluate(([g, h]) => firebase.database().ref('groups/' + g + '/huntPos/' + h + '/alice').set({lat:1, lng:1, t:Date.now(), name:'A'}).then(() => 'ok', () => 'denied'), [gid, h3]) === 'denied', 'den planerade jakten tar inte emot positioner');
+  await A.click('#tab-jakt'); await W(A, 300);
+  check((await A.innerText('#paneJakt')).includes('Du har en inbjudan att svara på') && await A.locator(`#paneJakt .cal-row.me-invite [data-j="cal-go"][data-h="${h3}"]`).count() >= 1, 'Alice ser inbjudan till den planerade jakten i Jakt-fliken');
+  await A.click('[data-j="cal"]'); await W(A, 300);
+  check(await A.isVisible('#calBox') && await A.locator('.cal-day.today').count() === 1 && await A.locator('.cal-grid .cal-wk').count() >= 5, 'kalendern öppnas med dagens datum markerat och veckonummer');
+  for(let i = 0; i < 3 && !(await A.locator(`.cal-day[data-d="${futISO}"]`).count()); i++){ await A.click('[data-c="next"]'); await W(A, 100); }
+  check(await A.locator(`.cal-day[data-d="${futISO}"] .cdot.invite`).count() === 1, 'dagen för den planerade jakten har en markering för inbjudan');
+  await A.click(`.cal-day[data-d="${futISO}"]`); await W(A, 200);
+  { const ct = await A.innerText('#calBox'); check(ct.includes(H3().name) && ct.includes('Startas av jaktledaren') && ct.toUpperCase().includes('INBJUDAN') && await A.locator('#calBox [data-c="plan"]').count() === 1, `dagen visar jakten, att den startas för hand och att Alice är inbjuden: ${ct.split('\n').slice(-8).join(' | ')}`); }
+  await A.click(`#calBox [data-c="rsvp-no"][data-h="${h3}"]`); await W(A, 600);
+  const rs3 = () => ((data.groups[gid].huntRsvp || {})[h3] || {}).alice;
+  check(rs3() && rs3().no === true && (await A.innerText('#calBox')).toUpperCase().includes('DU HAR AVBÖJT') && await A.locator(`.cal-day[data-d="${futISO}"] .cdot.no`).count() === 1, 'Alice avböjer i kalendern: svaret sparas och syns');
+  await W(B, 300);
+  check((await B.innerText(`#hc-${gid}-${h3}`)).includes('Avböjt: Alice Test'), 'jaktledaren ser vem som har avböjt');
+  await A.click(`#calBox [data-c="rsvp"][data-h="${h3}"]`); await W(A, 600);
+  check(rs3() && !rs3().no && (await A.innerText('#calBox')).toUpperCase().includes('DU DELTAR') && !(await A.isChecked('#shareToggle')), 'Alice ångrar sig och deltar, men inget delas innan jakten startar');
+  await A.click(`#calBox [data-c="go"][data-h="${h3}"]`); await W(A, 500);
+  check(!(await A.isVisible('#calBox')) && await A.isVisible(`#hc-${gid}-${h3}`), 'Visa jakten stänger kalendern och visar jaktkortet');
+  // automatisk start
+  await B.click(`[data-j="hunt-edit"][data-h="${h3}"]`); await W(B, 300);
+  check(await B.isChecked('input[name=hfMode][value=manual]') && !(await B.isDisabled('#hfDay')), 'en planerad jakt går att ändra, även datum och start');
+  await B.check('input[name=hfMode][value=auto]'); check(!(await B.isDisabled('#hfStart')), 'tiden går att välja när jakten ska starta automatiskt');
+  await B.fill('#hfStart', '08:30'); await B.click('#hfOk'); await W(B, 700);
+  check(!H3().manual && H3().starts === new Date(futD.getFullYear(), futD.getMonth(), futD.getDate(), 8, 30).getTime() && (await B.innerText(`#hc-${gid}-${h3}`)).includes('startar automatiskt') && (await B.innerText(`#hc-${gid}-${h3}`)).toUpperCase().includes('KOMMANDE'), 'jakten startar automatiskt kl. 08.30 den dagen');
+  await A.click(`[data-j="rsvp-no"][data-h="${h3}"]`); await W(A, 500);
+  // start för hand en annan dag: jakten flyttas till i dag
+  const exp0 = H3().expires;
+  await B.click(`[data-j="hunt-start"][data-h="${h3}"]`); await W(B, 100);
+  check((await B.innerText(`[data-j="hunt-start"][data-h="${h3}"]`)) === 'Starta i dag?' && H3().starts > Date.now(), 'en jakt planerad till en annan dag startas först efter en bekräftelse');
+  await B.click(`[data-j="hunt-start"][data-h="${h3}"]`); await W(B, 700);
+  { const n = new Date(), want = new Date(n.getFullYear(), n.getMonth(), n.getDate(), 23, 58, 59).getTime();
+    check(H3().day === `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}` && H3().expires === want && H3().starts <= Date.now() && data.huntCodes[H3().code].expires === want && exp0 !== want, 'jakten startar i dag, med samma sluttid på dagen, och jaktkoden följer med'); }
+  await B.click(`[data-j="hunt-end"][data-h="${h3}"]`); await B.click(`[data-j="hunt-end"][data-h="${h3}"]`); await W(B, 900);
+  check(!data.groups[gid].hunts[h3] && !(data.groups[gid].huntRsvp || {})[h3], 'den extra jakten är avslutad');
   // ---- Avsluta jakten ----
   await B.click('[data-j="hunt-end"]'); await B.click('[data-j="hunt-end"]'); await W(B, 900);
   check(!data.groups[gid].hunts && !data.huntCodes && !(data.groups[gid].guests || {})['anon-carl'], 'jakten, koden och gästposten är borta');
@@ -624,6 +676,7 @@ const gids = () => Object.keys(data.groups || {});
   check(bad.every(b => !D('a2').write('/groups/g/huntPlan/h2', b).allowed), 'regel: planen tar bara emot kända fält med rätt typ');
   check(D('e').write('/groups/g/huntRsvp/h2/e', {name:'E', t:t0}).allowed && D('gu').read('/groups/g/huntRsvp').allowed === false && D('v').read('/groups/g/huntRsvp').allowed, 'regel: medlemmar svarar Jag deltar, laget ser svaren, gäster ser dem inte');
   check(!D('e').write('/groups/g/huntRsvp/h2/v', {name:'V', t:t0}).allowed && !D('x').write('/groups/g/huntRsvp/h2/x', {name:'X', t:t0}).allowed && !D('e').write('/groups/g/huntRsvp/nojakt/e', {name:'E', t:t0}).allowed && !D('e').write('/groups/g/huntRsvp/h2/e', {name:'E', t:t0, extra:1}).allowed, 'regel: man svarar bara för sig själv, för en jakt som finns, utan extra fält');
+  check(D('e').write('/groups/g/huntRsvp/h2/e', {name:'E', t:t0, no:true}).allowed && !D('e').write('/groups/g/huntRsvp/h2/e', {name:'E', t:t0, no:'ja'}).allowed, 'regel: man kan avböja en jakt (no:true)');
   check(D('a2').write('/groups/g/huntRsvp/h2', null).allowed && !D('e').write('/groups/g/huntRsvp/h2', null).allowed, 'regel: bara jaktledare och admin raderar alla svar för en jakt');
   check(D('a2').write('/huntCodes/HUNTCODE', {gid:'g', hid:'h', expires:t0 + 5000}).allowed && !D('a2').write('/huntCodes/HUNTCODE', {gid:'g', hid:'h2', expires:t0 + 5000}).allowed && !D('a2').write('/huntCodes/HUNTCODE', {gid:'n2', hid:'h', expires:t0 + 5000}).allowed && !D('e').write('/huntCodes/HUNTCODE', {gid:'g', hid:'h', expires:t0 + 5000}).allowed, 'regel: jaktledaren kan ändra jaktkodens sluttid, men inte flytta den till en annan jakt, och en vanlig medlem kan inte ändra den');
   const K = (extra) => Object.assign({k:'A'.repeat(88), name:'N', t:t0}, extra || {});

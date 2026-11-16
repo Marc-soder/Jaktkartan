@@ -227,6 +227,9 @@
               "t": {
                 ".validate": "newData.isNumber() && newData.val() <= now + 60000"
               },
+              "no": {
+                ".validate": "newData.isBoolean()"
+              },
               "$other": {
                 ".validate": false
               }
