@@ -1,5 +1,6 @@
 /* Service worker för Jaktkartan: gör att appen startar och visar kartan utan täckning.
    - Appen (index.html, manifest, ikoner) sparas. Vid start hämtas den senaste versionen om det finns nät, annars används den sparade.
+     Den hämtas förbi webbläsarens cache (annars kan en gammal version ligga kvar i upp till tio minuter).
    - Firebase-skripten sparas första gången de hämtas (de har versionsnummer i adressen och ändras inte).
    - Kartrutor som man har tittat på sparas, högst TILE_MAX stycken, och visas när det inte finns nät.
      Inget laddas ned i förväg: OpenStreetMaps regler förbjuder det.
@@ -10,7 +11,7 @@ const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192
 const TILE_HOSTS = /(^|\.)tile\.openstreetmap\.org$|(^|\.)tile\.opentopomap\.org$|^server\.arcgisonline\.com$/;
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(APP).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(APP).then(c => c.addAll(SHELL.map(u => new Request(u, {cache:'reload'})))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('jk-app-') && k !== APP).map(k => caches.delete(k)))).then(() => self.clients.claim()));
@@ -20,7 +21,7 @@ self.addEventListener('activate', e => {
 async function appFirst(req){
   const cache = await caches.open(APP);
   try {
-    const res = await Promise.race([fetch(req), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000))]);
+    const res = await Promise.race([fetch(req.url, {cache:'no-cache', credentials:'same-origin'}), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000))]);
     if(res && res.ok) cache.put(req.mode === 'navigate' ? './index.html' : req, res.clone());
     return res;
   } catch(e){
