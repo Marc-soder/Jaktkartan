@@ -514,6 +514,87 @@ const gids = () => Object.keys(data.groups || {});
   check(!hp().alice && !Object.keys(tr()).length && await B.locator('.pos-icon').count() === 1, 'Alice slutar dela: hennes position och spår tas bort');
   await W(A, 600);
   check(!(await A.isChecked('#shareToggle')) && !hp().alice, 'stänger man av själv startas delningen inte igen automatiskt under samma jakt');
+  // ---- Såtar som minijakter: pass per såt, lotta pass, starta och bryta, återsamling ----
+  const PLN = () => (data.groups[gid].huntPlan || {})[hid] || {};
+  const dM = Object.keys(PLN().drives || {})[0];
+  await B.click('#tab-jakt'); await W(B, 200); await B.click(`[data-j="plan"][data-h="${hid}"]`); await W(B, 400);
+  check(await B.locator('#planBody [data-pl="easy"]').count() === 2 && await B.locator('#planBody .gear-row').count() >= 3, 'planeringen har passens egenskaper och deltagarnas utrustning');
+  await B.check(`#planBody [data-pl="easy"][data-p="${pA}"]`); await W(B, 700);
+  await B.selectOption(`#planBody [data-pl="ammo"][data-p="${pB}"]`, 'kula'); await W(B, 700);
+  check(data.groups[gid].pins[aid][pA].easy === true && data.groups[gid].pins[aid][pB].ammo === 'kula' && !data.groups[gid].pins[aid][pB].easy, 'lättillgängligt och kula sparas på passen i laget');
+  await B.selectOption('#planBody .gear-row[data-u="alice"] [data-pl="gun"]', 'hagel'); await W(B, 500);
+  await B.check('#planBody .gear-row[data-u="alice"] [data-pl="geasy"]'); await W(B, 600);
+  { const ga = (data.groups[gid].gear || {}).alice || {}; check(ga.name === 'Alice Test' && ga.gun === 'hagel' && ga.easy === true, 'jaktledaren för in att Alice har hagel och behöver ett lättillgängligt pass'); }
+  check(await C.evaluate(g => firebase.database().ref('groups/' + g + '/gear').get().then(() => 'ok', () => 'denied'), gid) === 'denied', 'gästen kan inte läsa deltagarnas utrustning');
+  // en till såt, och ordningen
+  await B.click('#planBody [data-pl="drive-draw"]:not([data-d])'); await W(B, 300);
+  await B.evaluate(() => [[58.7180, 14.6000], [58.7185, 14.6150], [58.7150, 14.6150], [58.7145, 14.6010]].forEach(p => __fk.map.fire('click', {latlng:L.latLng(p[0], p[1])}))); await W(B, 200);
+  await B.click('#drawOk'); await W(B, 700);
+  const d2 = Object.keys(PLN().drives).find(k => k !== dM), dNames = () => B.evaluate(([g, h]) => __fk.driveList(__fk.cloud.groups[g].huntPlan[h]).map(([, d]) => d.name).join(','), [gid, hid]);
+  const openBox = d => B.evaluate(d => { const x = document.querySelector(`details.drive-box[data-d="${d}"]`); if(x) x.open = true; }, d).then(() => W(B, 100));
+  check(d2 && PLN().drives[d2].name === 'Såt 2' && PLN().drives[d2].ord === PLN().drives[dM].ord + 1 && await dNames() === 'Mossen,Såt 2', `en ny såt hamnar sist: ${await dNames()} ${JSON.stringify(PLN().drives[d2] && {n:PLN().drives[d2].name, o:PLN().drives[d2].ord})}`);
+  await openBox(d2); await B.click(`#planBody [data-pl="up"][data-d="${d2}"]`); await W(B, 600);
+  check(await dNames() === 'Såt 2,Mossen', 'jaktledaren flyttar upp en såt');
+  await openBox(dM); await B.click(`#planBody [data-pl="up"][data-d="${dM}"]`); await W(B, 600);
+  check(await dNames() === 'Mossen,Såt 2' && PLN().drives[dM].ord === 0 && PLN().drives[d2].ord === 1, 'och tillbaka: ordningen sparas');
+  // pass i såten, med varning när passet inte passar
+  await B.evaluate(d => { const x = document.querySelector(`details.drive-box[data-d="${d}"]`); if(x) x.open = true; }, dM); await W(B, 100);
+  await B.selectOption(`#planBody [data-pl="dwho"][data-d="${dM}"][data-p="${pB}"]`, 'u:alice'); await W(B, 300);
+  { const wt = await B.innerText('.modal'); check(wt.includes('Alice Test behöver ett lättillgängligt pass') && wt.includes('har bara hagel') && await B.isVisible('#pwOk'), `varning när Alice placeras på ett kulpass som inte är lättillgängligt: ${wt.split('\n').slice(0, 3).join(' | ')}`); }
+  await B.click('#pwNo'); await W(B, 500);
+  check(!((PLN().drives[dM].pass || {})[pB]) && await B.isVisible('#planBody'), 'Avbryt: Alice placeras inte, och planeringen öppnas igen');
+  await B.evaluate(d => { const x = document.querySelector(`details.drive-box[data-d="${d}"]`); if(x) x.open = true; }, dM); await W(B, 100);
+  await B.selectOption(`#planBody [data-pl="dwho"][data-d="${dM}"][data-p="${pB}"]`, 'u:alice'); await W(B, 300); await B.click('#pwOk'); await W(B, 700);
+  { const x = PLN().drives[dM].pass[pB]; check(x && x.uid === 'alice' && x.ok === true && (await B.innerText('#planBody')).includes('Godkänd avvikelse'), 'Placera ändå: Alice står på passet, och avvikelsen syns som godkänd'); }
+  await B.selectOption(`#planBody [data-pl="dwho"][data-d="${dM}"][data-p="${pA}"]`, 'u:anon-carl'); await W(B, 700);
+  check(PLN().drives[dM].pass[pA].uid === 'anon-carl' && !(await B.isVisible('#pwOk')), 'Carl placeras utan varning (ingen utrustning angiven)');
+  // lotta pass i såt 2
+  check(JSON.stringify(await B.evaluate(() => { const g = {gear:{u1:{name:'U1', gun:'both', easy:true}, u2:{name:'U2', gun:'kula'}}}, ps = [{id:'p1', name:'P1'}, {id:'p2', name:'P2', easy:true}, {id:'p3', name:'P3', ammo:'hagel'}], us = [{uid:'u2', name:'U2'}, {uid:'u1', name:'U1'}, {uid:'u3', name:'U3'}];
+    const ok = []; for(let i = 0; i < 40; i++){ const r = __fk.lottery(g, ps, us).out; ok.push(r.p2.uid === 'u1' && r.p3.uid === 'u3' && r.p1.uid === 'u2'); } return [...new Set(ok)]; })) === '[true]', 'lottningen ger alltid den som behöver lättillgängligt pass ett sådant, och kula-skytten inte hagelpasset');
+  await B.evaluate(d => { const x = document.querySelector(`details.drive-box[data-d="${d}"]`); if(x) x.open = true; }, d2); await W(B, 100);
+  await B.click(`#planBody [data-pl="lot"][data-d="${d2}"]`); await W(B, 300);
+  const lotPeople = await B.evaluate(() => [...document.querySelectorAll('[data-lu]')].filter(c => c.checked).map(c => c.dataset.lu));
+  check(await B.locator('[data-lp]').count() === 2 && lotPeople.includes('alice') && lotPeople.includes('anon-carl'), `lottningen föreslår alla pass och de som deltar (${lotPeople})`);
+  await B.click('#lotOk'); await W(B, 800);
+  await openBox(d2); await B.evaluate(d => document.querySelector(`details.drive-box[data-d="${d}"]`).scrollIntoView(), d2); await B.screenshot({path:shot('b_plan_drives.png')});
+  { const ps = PLN().drives[d2].pass || {}; check(ps[pA] && ps[pA].uid === 'alice' && ps[pB] && lotPeople.includes(ps[pB].uid) && ps[pB].uid !== 'alice', `passen i såt 2 är lottade, och Alice fick det lättillgängliga passet (${JSON.stringify(ps)})`); }
+  await B.click('#plClose'); await W(B, 300);
+  // under jakten: Carl ser sitt pass i nästa såt, jaktledaren startar såten
+  await W(C, 400); await C.click('#tab-jakt'); await W(C, 200);
+  check((await C.innerText('#paneJakt')).includes('Ditt pass i nästa såt, Mossen: Pass 1 – bäcken'), 'Carl ser sitt pass i nästa såt');
+  check(await B.locator(`[data-j="drive-start"][data-h="${hid}"]`).count() === 1 && await C.locator('[data-j="drive-start"]').count() === 0, 'jaktledaren kan starta såten, gästen kan inte');
+  await B.click(`[data-j="drive-start"][data-h="${hid}"]`); await W(B, 1200); await W(C, 600);
+  check(PLN().cur && PLN().cur.did === dM && PLN().cur.on === true && (await C.innerText('#driveBar')).includes('Mossen har startat') && (await C.innerText('#driveBar')).includes('Ditt pass: Pass 1 – bäcken'), `Mossen startar: Carl får besked överst med sitt pass (${await C.innerText('#driveBar')})`);
+  check((await C.innerText('#paneJakt')).includes('Mossen har startat. Gå till era pass.'), 'starten skickas i chatten');
+  await C.screenshot({path:shot('c_drive_start.png')});
+  await B.click(`[data-j="drive-stop"][data-h="${hid}"]`); await W(B, 100); await B.click(`[data-j="drive-stop"][data-h="${hid}"]`); await W(B, 1200); await W(C, 600); await W(A, 400);
+  check(PLN().cur.on === false && PLN().drives[dM].done > 0 && (await C.innerText('#driveBar')).includes('Såten är bruten, patron ur.'), 'jaktledaren bryter såten efter en bekräftelse: alla får besked överst');
+  check((await C.innerText('#paneJakt')).includes('Såten är bruten, patron ur.') && (await A.innerText('#paneJakt')).includes('Såten är bruten, patron ur.'), 'Såten är bruten, patron ur. skickas i chatten till alla');
+  // samlingsplats och återsamling
+  await B.click(`[data-j="plan"][data-h="${hid}"]`); await W(B, 300);
+  await B.click('#planBody [data-pl="meet-add"]'); await W(B, 400);
+  check(await B.isVisible('#placebar') && (await B.innerText('#placeOk')) === 'Samlingsplats här', 'samlingsplatsen placeras med korset');
+  await B.click('#placeOk'); await W(B, 300); await B.fill('#mtName', 'boden'); await B.click('#mtForm button[type=submit]'); await W(B, 800);
+  const mid = Object.keys(PLN().meets || {})[0], meet = mid && PLN().meets[mid];
+  check(meet && meet.name === 'boden' && typeof meet.lat === 'number' && await B.isVisible('#planBody'), 'samlingsplatsen boden är sparad i planen');
+  await B.click('#plClose'); await W(B, 300);
+  await B.click(`[data-j="drive-call"][data-h="${hid}"][data-m="${mid}"]`); await W(B, 1200); await W(C, 600);
+  { const bar = await C.innerText('#driveBar'), href = await C.getAttribute('#driveNav', 'href');
+    check(PLN().call && PLN().call.name === 'boden' && bar.includes('Återsamling vid boden') && href.includes('google.com/maps/dir') && href.includes('destination=' + meet.lat.toFixed(6)), `återsamling vid boden: alla får en hänvisning att navigera dit (${bar})`); }
+  check((await C.innerText('#paneJakt')).includes('Återsamling vid boden.') && await C.locator('.meet-icon.on').count() === 1, 'återsamlingen skickas i chatten och syns på kartan');
+  await C.screenshot({path:shot('c_drive_call.png')});
+  await B.evaluate(([g, h]) => document.getElementById(`hc-${g}-${h}`).querySelector('.drive-list').scrollIntoView(), [gid, hid]); await B.screenshot({path:shot('b_drive_card.png')});
+  await C.click('#driveBar [data-db="x"]'); await W(C, 200);
+  check(await C.isHidden('#driveBar'), 'raden överst går att stänga');
+  // nästa såt: hundföraren och passkyttarna får det som gäller i såt 2
+  check((await B.innerText(`[data-j="drive-start"][data-h="${hid}"]`)).includes('Starta Såt 2'), 'nästa såt i ordningen är Såt 2');
+  await B.click(`[data-j="drive-start"][data-h="${hid}"]`); await W(B, 1200); await W(C, 600);
+  const carlPass2 = Object.entries(PLN().drives[d2].pass).find(([, x]) => x.uid === 'anon-carl');
+  check(PLN().cur.did === d2 && !PLN().call && (await C.isVisible('#driveBar')) && (carlPass2 ? (await C.innerText('#driveBar')).includes('Ditt pass: ' + data.groups[gid].pins[aid][carlPass2[0]].name) : true), 'Såt 2 startar: återsamlingen tas bort och Carl får sitt nya pass');
+  check(JSON.stringify(Object.keys(await C.evaluate(([g, h]) => __fk.planStands(__fk.cloud.groups[g].huntPlan[h]), [gid, hid])).sort()) === JSON.stringify(Object.keys(PLN().drives[d2].pass).concat(Object.keys(PLN().stands || {}).filter(k => PLN().stands[k].no)).filter((v, i, a) => a.indexOf(v) === i).sort()), 'passen som gäller är såt 2:s');
+  check(await C.evaluate(([g, h]) => firebase.database().ref(`groups/${g}/huntPlan/${h}/cur`).set({did:'x', on:true, t:Date.now()}).then(() => 'ok', () => 'denied'), [gid, hid]) === 'denied', 'gästen kan inte starta eller bryta en såt');
+  await B.click(`[data-j="drive-stop"][data-h="${hid}"]`); await W(B, 100); await B.click(`[data-j="drive-stop"][data-h="${hid}"]`); await W(B, 900);
+  check(PLN().drives[d2].done > 0 && !(await B.locator(`[data-j="drive-start"][data-h="${hid}"]`).count()), 'när alla såtar är brutna finns ingen nästa såt');
   // Kommande jakt: delningen startar själv när jakten startar och slutar när den är slut
   const h2 = 'h2kvall', t2 = Date.now();
   await B.evaluate(() => { __fk.cloud.cleanAfter = 3000; });   // i appen: en timme efter sluttiden
@@ -672,6 +753,12 @@ const gids = () => Object.keys(data.groups || {});
   check(!D('e').write('/groups/g/huntPlan/h2', PL).allowed && !D('v').write('/groups/g/huntPlan/h/stands/p', {who:'V'}).allowed && !D('gu').write('/groups/g/huntPlan/h/stands/p', {who:'G'}).allowed && !D('x').write('/groups/g/huntPlan/h2', PL).allowed, 'regel: medlemmar, gäster och utomstående kan inte ändra planen');
   check(D('v').read('/groups/g/huntPlan').allowed && D('gu').read('/groups/g/huntPlan/h').allowed && !D('gu').read('/groups/g/huntPlan/h2').allowed && !D('gu').read('/groups/g/huntPlan').allowed && !D('x').read('/groups/g/huntPlan/h').allowed && !D('gu', t0 + 2000).read('/groups/g/huntPlan/h').allowed, 'regel: lagets medlemmar och jaktens gäster läser planen, ingen annan');
   check(!D('a2').write('/groups/g/huntPlan/nojakt', PL).allowed && D('a2').write('/groups/g/huntPlan/nojakt', null).allowed, 'regel: plan kan bara finnas för en jakt som finns');
+  const PL2 = {drives:{d1:{name:'Såt 1', ring:'1,1;1,2;2,2', ord:0, done:t0, pass:{p:{who:'E', uid:'e', ok:true}}}}, routes:{r1:{kind:'hund', pts:'1,1;1,2', drive:'d1'}}, meets:{m1:{name:'Boden', lat:1, lng:2}}, cur:{did:'d1', on:false, t:t0}, call:{mid:'m1', name:'Boden', lat:1, lng:2, t:t0}, stands:{p:{who:'E', uid:'e', ok:true}}};
+  check(D('a2').write('/groups/g/huntPlan/h2', PL2).allowed, 'regel: såtar med ordning och pass, samlingsplatser, pågående såt och återsamling');
+  const bad2 = [{cur:{did:'d1', on:'ja', t:t0}}, {cur:{did:'d 1', on:true, t:t0}}, {call:{name:'B', lat:200, lng:1, t:t0}}, {meets:{m1:{name:'B', lat:1}}}, {drives:{d1:{name:'S', ring:'1,1', pass:{p:{who:'E', x:1}}}}}, {routes:{r:{kind:'hund', pts:'1,1;1,2', drive:'<b>'}}}, {cur:{did:'d1', on:true, t:t0 + 3600000}}];
+  check(bad2.every(b => !D('a2').write('/groups/g/huntPlan/h2', b).allowed), 'regel: såtar, samlingsplatser och återsamling tar bara emot rätt fält och typer');
+  check(D('a2').write('/groups/g/gear/e', {name:'E', gun:'both', easy:true}).allowed && !D('a2').write('/groups/g/gear/e', {name:'E', gun:'pil'}).allowed && !D('a2').write('/groups/g/gear/e', {name:'E', vikt:80}).allowed, 'regel: utrustning med hagel, kula eller båda och lättillgängligt pass');
+  check(!D('e').write('/groups/g/gear/e', {name:'E', gun:'kula'}).allowed && !D('e').read('/groups/g/gear').allowed && !D('gu').read('/groups/g/gear').allowed && D('a2').read('/groups/g/gear').allowed, 'regel: bara jaktledare och admin läser och skriver utrustningen');
   const bad = [{stands:{p:{who:'O', note:'x'}}}, {stands:{p:{no:70000}}}, {stands:{p:{no:1.5}}}, {stands:{p:{who:'x'.repeat(61)}}}, {routes:{r:{kind:'bil', pts:'1,1;1,2'}}}, {routes:{r:{kind:'hund'}}}, {drives:{d:{ring:'1,1;1,2;2,2'}}}, {drives:{d:{name:'S', ring:'1,1;1,2;2,2', by:'x'}}}, {foo:1}];
   check(bad.every(b => !D('a2').write('/groups/g/huntPlan/h2', b).allowed), 'regel: planen tar bara emot kända fält med rätt typ');
   check(D('e').write('/groups/g/huntRsvp/h2/e', {name:'E', t:t0}).allowed && D('gu').read('/groups/g/huntRsvp').allowed === false && D('v').read('/groups/g/huntRsvp').allowed, 'regel: medlemmar svarar Jag deltar, laget ser svaren, gäster ser dem inte');

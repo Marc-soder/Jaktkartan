@@ -100,12 +100,12 @@ function subGroup(gid, kind){
   on('msgKeys', v => { g.msgKeys = v || {}; msgPublish(g); scheduleRender(); });
   if(kind === 'member') on('sos', v => { const prev = g.sosLoaded ? g.sos : undefined; g.sos = v || {}; g.sosLoaded = true; sosOnData(g, prev); });
   if(kind === 'member'){
-    on('members', v => { g.members = v || {}; msgPublish(g); scheduleRender(); });
+    on('members', v => { g.members = v || {}; msgPublish(g); scheduleRender(); if(canLeadGroup(g) && !g.gearRef) g.gearRef = on('gear', (gv, err) => { if(err){ g.gearRef = null; return; } g.gear = gv || {}; scheduleRender(); }); });
     on('areas', v => { g.areas = v || {}; applyRemote(gid); });
     on('pins', v => { g.pins = v || {}; applyRemote(gid); });
     on('hunts', v => { g.hunts = v || {}; scheduleRender(); syncHuntPos(); });
     on('guests', v => { g.guests = v || {}; scheduleRender(); });
-    on('huntPlan', v => { g.huntPlan = v || {}; scheduleRender(); });
+    on('huntPlan', v => { const prev = g.planLoaded ? g.huntPlan : undefined; g.huntPlan = v || {}; g.planLoaded = true; planOnData(g, prev); scheduleRender(); });
     on('huntRsvp', v => { g.huntRsvp = v || {}; syncHuntPos(); });
   } else {
     on('guests/' + myUid(), v => {
@@ -114,7 +114,7 @@ function subGroup(gid, kind){
       msgPublish(g);
       if(g.huntRef) return;
       on('sos', sv => { const prev = g.sosLoaded ? g.sos : undefined; g.sos = sv || {}; g.sosLoaded = true; sosOnData(g, prev); });
-      on('huntPlan/' + v.hid, pv => { g.huntPlan = pv ? {[v.hid]: pv} : {}; scheduleRender(); });
+      on('huntPlan/' + v.hid, pv => { const prev = g.planLoaded ? g.huntPlan : undefined; g.huntPlan = pv ? {[v.hid]: pv} : {}; g.planLoaded = true; planOnData(g, prev); scheduleRender(); });
       // Nekas en läsning (t.ex. om den hinner före gästposten i databasen) försöker vi igen efter en stund,
       // annars skulle gästen sakna jaktens områden och nålar tills sidan laddas om.
       const alive = () => cloud.groups[gid] === g && g.guest && g.guest.hid === v.hid;
@@ -145,7 +145,12 @@ function applyRemote(gid){
     if(clash){ const nid = 'a-' + uid(); state.pins.forEach(p => { if(p.areaId === aid) p.areaId = nid; }); clash.id = nid; }
     { const na = {id:aid, name:a.name || 'Område', gid, visible:!hidden[aid], updated:a.updated || 0}; if(typeof a.border === 'string' && a.border) na.border = a.border; if(a.lines && typeof a.lines === 'object') na.lines = JSON.parse(JSON.stringify(a.lines)); state.areas.push(na); }
     for(const [pid, p] of Object.entries(g.pins[aid] || {})){
-      if(p && typeof p.lat === 'number' && typeof p.lng === 'number') state.pins.push({id:pid, areaId:aid, name:p.name || '', note:p.note || '', typeId:p.typeId, lat:p.lat, lng:p.lng, created:p.created || 0, updated:p.updated || 0, by:p.by || ''});
+      if(p && typeof p.lat === 'number' && typeof p.lng === 'number'){
+        const np = {id:pid, areaId:aid, name:p.name || '', note:p.note || '', typeId:p.typeId, lat:p.lat, lng:p.lng, created:p.created || 0, updated:p.updated || 0, by:p.by || ''};
+        if(p.easy === true) np.easy = true;
+        if(p.ammo === 'hagel' || p.ammo === 'kula') np.ammo = p.ammo;
+        state.pins.push(np);
+      }
     }
   }
   for(const [tid, t] of Object.entries(g.types)){
@@ -157,7 +162,9 @@ function applyRemote(gid){
   for(const p of state.pins){ if(!typeById(p.typeId)) state.types.push({id:p.typeId, name:'Okänd typ', color:'#475569', icon:'dot', text:'', svamp:false, visible:true, ghost:true, updated:0}); }
   scheduleRender();
 }
-const pinJson = p => ({name:p.name || '', note:p.note || '', typeId:p.typeId, lat:p.lat, lng:p.lng, created:p.created || 0, updated:p.updated || 0, by:p.by || myUid()});
+/* Ett pass kan vara lättillgängligt (easy) och ha hagel eller kula som förstahandsval (ammo). */
+const pinJson = p => Object.assign({name:p.name || '', note:p.note || '', typeId:p.typeId, lat:p.lat, lng:p.lng, created:p.created || 0, updated:p.updated || 0, by:p.by || myUid()},
+  p.easy === true ? {easy:true} : {}, p.ammo === 'hagel' || p.ammo === 'kula' ? {ammo:p.ammo} : {});
 const typeJson = t => ({name:t.name, color:t.color, icon:t.icon || 'dot', text:t.text || '', svamp:!!t.svamp, updated:t.updated || 0});
 /* Jämför det som visas med det som ligger i molnet och skriver skillnaden. Körs vid varje sparning. */
 function cloudSync(){
@@ -803,7 +810,7 @@ async function endHunt(g, hid, auto){
     up[`groups/${g.id}/obsArchive/${oid}`] = {sp:o.sp.slice(0, 40), n:Math.min(999, Math.round(o.n)), lat:o.lat, lng:o.lng, t:Math.min(o.t || Date.now(), Date.now()), hid:String(hid).slice(0, 40), kind:o.kind === 'kill' ? 'kill' : 'obs'}; na++;
   }
   up[`groups/${g.id}/hunts/${hid}`] = null; up[`groups/${g.id}/huntPos/${hid}`] = null; up[`groups/${g.id}/huntTrail/${hid}`] = null; up[`groups/${g.id}/huntObs/${hid}`] = null; up[`groups/${g.id}/huntPlan/${hid}`] = null; up[`groups/${g.id}/huntRsvp/${hid}`] = null; up[`groups/${g.id}/huntMsg/${hid}`] = null; up[`groups/${g.id}/huntCheck/${hid}`] = null;
-  for(const [gu, v] of Object.entries(g.guests || {})) if(v && v.hid === hid){ up[`groups/${g.id}/guests/${gu}`] = null; up[`groups/${g.id}/msgKeys/${gu}`] = null; }
+  for(const [gu, v] of Object.entries(g.guests || {})) if(v && v.hid === hid){ up[`groups/${g.id}/guests/${gu}`] = null; up[`groups/${g.id}/msgKeys/${gu}`] = null; if((g.gear || {})[gu]) up[`groups/${g.id}/gear/${gu}`] = null; }
   // Koden tas bara bort om den finns kvar och hör till jakten (annars nekas hela skrivningen och jakten blir aldrig städad)
   if(hunt && hunt.code){ try { const c = (await fb.db.ref(`huntCodes/${hunt.code}`).get()).val(); if(c && c.hid === hid && c.gid === g.id) up[`huntCodes/${hunt.code}`] = null; } catch(e){} }
   return fb.db.ref().update(up).then(() => {
@@ -839,6 +846,9 @@ $('#paneJakt').addEventListener('click', e => {
   else if(act === 'cal-go') calGo(g.id, hid);
   else if(act === 'hunt-start'){ const h = g.hunts[hid]; if(h && (h.day || todayISO()) !== todayISO()) confirmClick(b, 'Starta i dag?', () => startHunt(g, hid)); else startHunt(g, hid); }
   else if(act === 'plan-go') gotoPin(b.dataset.p);
+  else if(act === 'drive-start') driveStart(g, hid, b.dataset.d);
+  else if(act === 'drive-stop') confirmClick(b, 'Bekräfta: bryt såten', () => driveStop(g, hid));
+  else if(act === 'drive-call') driveCall(g, hid, b.dataset.m);
   else if(act === 'hunt-link'){ const hunt = g.hunts[hid]; copyText(`${hunt.name}: gå med i jakten med kod ${hunt.code}\n${shareLink('j', hunt.code)}`, 'Länken är kopierad'); }
   else if(act === 'hunt-end') confirmClick(b, 'Bekräfta', () => endHunt(g, hid));
   else if(act === 'guest-del') fb.db.ref(`groups/${g.id}/guests/${u}`).remove().catch(fail());
