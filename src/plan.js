@@ -36,8 +36,8 @@ function planPasses(g, hunt){
 /* Deltagare att välja bland: lagets medlemmar och jaktens gäster. */
 function planPeople(g, hid){
   const out = [];
-  const going = (g.huntRsvp || {})[hid] || {};
-  for(const [u, m] of Object.entries(g.members || {})) if(m) out.push({uid:u, name:m.name || 'Medlem', label:(going[u] ? '✓ ' : '') + (m.name || 'Medlem'), going:!!going[u]});
+  const rs = (g.huntRsvp || {})[hid] || {};
+  for(const [u, m] of Object.entries(g.members || {})) if(m) out.push({uid:u, name:m.name || 'Medlem', label:(going(rs[u]) ? '✓ ' : '') + (m.name || 'Medlem'), going:going(rs[u])});
   for(const [u, v] of Object.entries(g.guests || {})) if(v && v.hid === hid) out.push({uid:u, name:v.name || 'Gäst', label:'✓ ' + (v.name || 'Gäst') + ' (gäst)', going:true});
   // De som deltar först
   return out.sort((a, b) => (b.going - a.going) || a.name.localeCompare(b.name, 'sv'));

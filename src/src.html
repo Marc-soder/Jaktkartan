@@ -350,6 +350,32 @@ textarea.input{min-height:84px;resize:vertical}
 .card-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px}
 .card-h strong{font:700 18px/1.15 var(--font-display);letter-spacing:.02em;min-width:0;overflow-wrap:anywhere}
 .tag.on{background:var(--ok);color:#fff}
+.tag.plan{background:#dbeafe;color:#1e3a8a}
+.tag.me.invite{background:#fde68a;color:#78350f}.tag.me.going{background:var(--ok);color:#fff}.tag.me.no{background:var(--surface-2);color:var(--muted)}
+.card.flash{animation:cardflash 1.6s ease}
+@keyframes cardflash{0%,40%{box-shadow:0 0 0 3px var(--accent)}100%{box-shadow:none}}
+.cal-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.cal-head h2{margin:0}
+.cal-nav{display:flex;align-items:center;gap:6px;margin:6px 0 8px}.cal-nav b{flex:1;text-align:center;text-transform:capitalize;font:700 16px/1.2 var(--font-body)}
+.cal-grid{display:grid;grid-template-columns:24px repeat(7,1fr);gap:3px;align-items:stretch}
+.cal-wd,.cal-wk{font:600 11px/1 var(--font-body);color:var(--muted);text-align:center;padding:4px 0;align-self:center}
+.cal-day{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:44px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--fg);font:600 14px/1 var(--font-body);cursor:pointer;padding:4px 0}
+.cal-day.out{border:0;background:none;cursor:default}
+.cal-day.today{border-color:var(--accent);border-width:2px}
+.cal-day.sel{background:var(--accent);border-color:var(--accent);color:#fff}
+.cal-day .dots{display:flex;gap:2px;min-height:6px}
+.cdot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.cdot.invite{background:#d97706}.cdot.going,.cdot.guest{background:#2563eb}.cdot.live{background:var(--ok)}.cdot.no{background:#9ca3af}
+.cal-day.sel .cdot{box-shadow:0 0 0 1.5px #fff}
+.cal-legend{display:flex;flex-wrap:wrap;gap:4px 12px;margin:8px 0 0}.cal-legend span{display:inline-flex;align-items:center;gap:5px}
+.cal-list{display:grid;gap:8px;margin:4px 0 8px}
+.cal-row{display:flex;gap:10px;align-items:flex-start;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.cal-row.me-invite{border-color:#d97706}
+.cal-date{flex:none;display:grid;place-items:center;width:44px;padding:5px 0;border:0;border-radius:10px;background:var(--surface-2);color:var(--fg);cursor:pointer;font:400 11px/1.1 var(--font-body)}
+.cal-date b{font:800 18px/1 var(--font-body)}
+.cal-info{flex:1;min-width:0}
+.cal-name{display:block;border:0;background:none;padding:0;color:var(--fg);font:700 15px/1.3 var(--font-body);text-align:left;cursor:pointer}
+.cal-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.cal-btns{margin-top:6px}
 .lbl{font:700 12px/1.2 var(--font-body);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:12px 0 5px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{font-size:13px;font-weight:600;padding:4px 9px;border-radius:999px;background:var(--surface);border:1px solid var(--line)}
@@ -1780,7 +1806,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

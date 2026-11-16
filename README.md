@@ -34,6 +34,7 @@ Efter merge klistrar du in den nya filen i Firebase-konsolen under Realtime Data
 | `src/plan.js` | Jaktplan: vem som står på vilket pass, förbjudna skjutriktningar, såtar och vägar för hundförare och drevkarlar. |
 | `src/msg.js` | Krypterade meddelanden mellan jaktens deltagare. |
 | `src/sw.js`, `src/manifest.webmanifest`, `src/icons/` | Offline och installation på hemskärmen. Byggs till roten (`sw.js` får en version från `index.html`). Ändra inte i roten. |
+| `src/cal.js` | Kalendern: planerade jakter och inbjudningar för varje användare. |
 | `src/sos.js` | Nödlarm till jaktlaget, med navigering till den som larmar. |
 | `src/rules.js` | Säkerhetsreglerna för Firebase. |
 | `src/build.py` | Bygger `index.html` och `database.rules.json`. |
