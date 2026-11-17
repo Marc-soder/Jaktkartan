@@ -35,6 +35,7 @@ Efter merge klistrar du in den nya filen i Firebase-konsolen under Realtime Data
 | `src/msg.js` | Krypterade meddelanden mellan jaktens deltagare. |
 | `src/sw.js`, `src/manifest.webmanifest`, `src/icons/` | Offline och installation på hemskärmen. Byggs till roten (`sw.js` får en version från `index.html`). Ändra inte i roten. |
 | `src/cal.js` | Kalendern: planerade jakter och inbjudningar för varje användare. |
+| `src/docs.js` | Mina dokument: jaktkort, jägarexamensbevis och vapenlicenser, krypterade och sparade bara på enheten. |
 | `src/sos.js` | Nödlarm till jaktlaget, med navigering till den som larmar. |
 | `src/rules.js` | Säkerhetsreglerna för Firebase. |
 | `src/build.py` | Bygger `index.html` och `database.rules.json`. |
@@ -58,6 +59,7 @@ npm test         # kör alla tester
 
 Testerna går utan nätverk. Kartrutor, GBIF, OpenStreetMap och Firebase ersätts med låtsassvar.
 `tests/test5.py` startar en lokal webbserver och prövar offlineläget (service workern registreras bara på https, eller lokalt med `?sw=1`).
+`tests/test6.py` startar också en lokal webbserver och prövar Mina dokument: kryptering, låsning och att inget skickas till nätet.
 `tests/test2.js` prövar varje läsning och skrivning mot de riktiga säkerhetsreglerna.
 Skärmbilder hamnar i `tests/shots/`.
 Om du vill använda en befintlig Chrome i stället för Playwrights, sätt `CHROME_PATH` till sökvägen.
