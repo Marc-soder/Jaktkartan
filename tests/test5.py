@@ -13,8 +13,13 @@ def check(c, m):
     print(('PASS ' if c else 'FAIL ') + m)
     if not c: fails.append(m)
 
+SW_NEW = {'body': None}   # sätts för att låtsas att en ny version av appen har publicerats
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
+    def do_GET(self):
+        if SW_NEW['body'] is not None and self.path.split('?')[0] == '/sw.js':
+            b = SW_NEW['body']; self.send_response(200); self.send_header('Content-Type', 'text/javascript'); self.send_header('Content-Length', str(len(b))); self.end_headers(); self.wfile.write(b); return
+        return super().do_GET()
 srv = http.server.ThreadingHTTPServer(('127.0.0.1', 0), functools.partial(Quiet, directory=ROOT))
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 PORT = srv.server_address[1]
@@ -58,6 +63,26 @@ with sync_playwright() as p:
     check(pg.is_visible('#netBar') and 'Ingen täckning' in pg.inner_text('#netBar'), 'raden om att täckning saknas visas efter omstart')
     ctx.set_offline(False); pg.wait_for_timeout(500)
     check(pg.is_hidden('#netBar'), 'när täckningen kommer tillbaka försvinner raden')
+
+    # Ny version: appen på hemskärmen letar efter den när den kommer fram igen, och erbjuder Uppdatera
+    pg.reload(); pg.wait_for_timeout(1500)
+    v0 = pg.evaluate("caches.keys().then(ks => ks.filter(k => k.startsWith('jk-app-')))")
+    check(pg.is_hidden('#updBar'), 'ingen rad om uppdatering när appen är senaste versionen')
+    body = open(os.path.join(ROOT, 'sw.js'), 'rb').read(); i = body.index(b"const VERSION = '") + len(b"const VERSION = '")
+    SW_NEW['body'] = body[:i] + b'testny' + body[i + 10:]
+    pg.evaluate("(() => { __fk.swUpd.last = 0; document.dispatchEvent(new Event('visibilitychange')); })()")
+    for _ in range(30):
+        if pg.is_visible('#updBar'): break
+        pg.wait_for_timeout(200)
+    check(pg.is_visible('#updBar') and 'ny version' in pg.inner_text('#updBar'), 'när appen kommer fram igen hittas den nya versionen och raden Uppdatera visas')
+    for _ in range(20):   # den gamla cachen tas bort när den nya versionen har aktiverats klart
+        v1 = pg.evaluate("caches.keys().then(ks => ks.filter(k => k.startsWith('jk-app-')))")
+        if v1 == ['jk-app-testny']: break
+        pg.wait_for_timeout(200)
+    check(v1 == ['jk-app-testny'] and v0 != v1, f'den nya versionen har tagit över och den gamla cachen är borttagen ({v0} -> {v1})')
+    pg.click('#updBar [data-upd]'); pg.wait_for_timeout(1500)
+    check(pg.title() == 'Jaktkartan' and pg.is_hidden('#updBar') and pg.evaluate("!!navigator.serviceWorker.controller"), 'Uppdatera laddar om appen med den nya versionen')
+    SW_NEW['body'] = None
     check(not errs, f'inga JS-fel {errs[:2]}')
     br.close()
 srv.shutdown()

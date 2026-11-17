@@ -112,6 +112,19 @@ const rules = { rules: {
         }
       }
     },
+    // Deltagarnas utrustning för planeringen: vapen (hagel, kula eller båda) och om de behöver ett lättillgängligt pass.
+    // Bara jaktledare och admin läser och skriver.
+    gear: {
+      '.read': canLead,
+      '$uid': {
+        '.write': canLead,
+        '.validate': `${KEY('$uid')} && newData.hasChildren(['name'])`,
+        name: {'.validate': 'newData.isString() && newData.val().length <= 60'},
+        gun: {'.validate': "newData.val() === 'hagel' || newData.val() === 'kula' || newData.val() === 'both'"},
+        easy: {'.validate': 'newData.isBoolean()'},
+        '$other': {'.validate': false}
+      }
+    },
     // Arkiv med tidigare viltobservationer för värmekartan. Utan namn: bara art, antal, plats, tid och jakt.
     // Bara jaktledare och admin läser och skriver (arkiveringen sker när en jakt avslutas eller tas bort).
     obsArchive: {
@@ -133,17 +146,30 @@ const rules = { rules: {
       '$hid': {
         '.read': `${isGuest} && ${guest}.child('hid').val() === $hid`,
         '.write': `${canLead} && (${hunt}.exists() || !newData.exists())`,
+        // Pass för hela jakten (när jakten inte är uppdelad i såtar) och förbjudna skjutriktningar (gäller i alla såtar).
+        // ok: jaktledaren har godkänt placeringen trots en varning (lättillgängligt pass, hagel eller kula).
         stands: { '$pid': {
           '.validate': KEY('$pid'),
           who: {'.validate': 'newData.isString() && newData.val().length <= 60'},
           uid: {'.validate': 'newData.isString() && newData.val().length <= 128'},
           no: {'.validate': 'newData.isNumber() && newData.val() >= 0 && newData.val() <= 65535 && newData.val() % 1 === 0'},
+          ok: {'.validate': 'newData.isBoolean()'},
           '$other': {'.validate': false}
         } },
+        // Såtar: en i taget, i ordningen ord. Varje såt har egna pass. done = när såten bröts.
         drives: { '$did': {
           '.validate': `${KEY('$did')} && newData.hasChildren(['name','ring'])`,
           name: {'.validate': 'newData.isString() && newData.val().length <= 60'},
           ring: {'.validate': 'newData.isString() && newData.val().length <= 20000'},
+          ord: {'.validate': 'newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000'},
+          done: {'.validate': 'newData.isNumber() && newData.val() <= now + 60000'},
+          pass: { '$pid': {
+            '.validate': KEY('$pid'),
+            who: {'.validate': 'newData.isString() && newData.val().length <= 60'},
+            uid: {'.validate': 'newData.isString() && newData.val().length <= 128'},
+            ok: {'.validate': 'newData.isBoolean()'},
+            '$other': {'.validate': false}
+          } },
           '$other': {'.validate': false}
         } },
         routes: { '$rid': {
@@ -152,8 +178,35 @@ const rules = { rules: {
           who: {'.validate': 'newData.isString() && newData.val().length <= 60'},
           uid: {'.validate': 'newData.isString() && newData.val().length <= 128'},
           pts: {'.validate': 'newData.isString() && newData.val().length <= 20000'},
+          drive: {'.validate': KEY('newData.val()')},
           '$other': {'.validate': false}
         } },
+        // Samlingsplatser som jaktledaren kan kalla till
+        meets: { '$mid': {
+          '.validate': `${KEY('$mid')} && newData.hasChildren(['name','lat','lng'])`,
+          name: {'.validate': 'newData.isString() && newData.val().length <= 60'},
+          lat: {'.validate': 'newData.isNumber() && newData.val() >= -90 && newData.val() <= 90'},
+          lng: {'.validate': 'newData.isNumber() && newData.val() >= -180 && newData.val() <= 180'},
+          '$other': {'.validate': false}
+        } },
+        // Pågående eller senast brutna såt
+        cur: {
+          '.validate': "newData.hasChildren(['did','on','t'])",
+          did: {'.validate': KEY('newData.val()')},
+          on: {'.validate': 'newData.isBoolean()'},
+          t: {'.validate': 'newData.isNumber() && newData.val() <= now + 60000'},
+          '$other': {'.validate': false}
+        },
+        // Återsamling: en kopia av samlingsplatsen, så att den finns kvar även om platsen ändras
+        call: {
+          '.validate': "newData.hasChildren(['name','lat','lng','t'])",
+          mid: {'.validate': KEY('newData.val()')},
+          name: {'.validate': 'newData.isString() && newData.val().length <= 60'},
+          lat: {'.validate': 'newData.isNumber() && newData.val() >= -90 && newData.val() <= 90'},
+          lng: {'.validate': 'newData.isNumber() && newData.val() >= -180 && newData.val() <= 180'},
+          t: {'.validate': 'newData.isNumber() && newData.val() <= now + 60000'},
+          '$other': {'.validate': false}
+        },
         '$other': {'.validate': false}
       }
     },

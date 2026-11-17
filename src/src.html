@@ -126,6 +126,44 @@ a{color:var(--accent)}
 .rose-w.on text{fill:#fff}
 .rose-w:focus-visible{outline:none}.rose-w:focus-visible path{stroke:var(--accent);stroke-width:3}
 .rose-c{fill:var(--surface);stroke:var(--line)}
+.drivebar{position:fixed;z-index:1340;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top,0px));max-width:min(480px,calc(100vw - 32px));padding:8px 10px 8px 12px;border-radius:12px;background:#1e3a8a;color:#fff;font:500 14px/1.5 var(--font-body);box-shadow:var(--shadow);display:flex;gap:8px;align-items:center}
+.drivebar[hidden]{display:none}
+.drivebar.stop{background:#b45309}.drivebar.call{background:#14532d}
+.drivebar a{color:#fff;font-weight:700;display:inline-flex;gap:4px;align-items:center}.drivebar a svg{width:16px;height:16px}
+.drivebar button{border:1px solid #fff;background:none;color:#fff;border-radius:8px;padding:4px 8px;font:600 13px/1 var(--font-body);cursor:pointer}
+.drivebar button.x{border:0;font-size:18px;padding:0 4px;margin-left:auto;align-self:flex-start}
+.drivebar .db-t{flex:1;min-width:0}
+@media (max-width:520px){.drivebar{left:16px;right:76px;transform:none;max-width:none}}
+.plan-pass{padding:6px 0;border-bottom:1px solid var(--line)}
+.plan-pass .plan-row{border-bottom:0;padding:4px 0 0}
+.pp-h{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
+.pp-easy{display:inline-flex;gap:6px;align-items:center;font:400 13px/1.2 var(--font-body)}
+.pp-easy input{width:18px;height:18px}
+.input.pp-ammo{width:auto;min-height:34px;padding:4px 8px;font-size:13px}
+.pwarn{margin:2px 0 6px;padding:6px 8px;border-radius:8px;background:#fef3c7;color:#78350f;font:500 13px/1.35 var(--font-body)}
+.pwarn.ok{background:var(--surface-2);color:var(--muted)}
+.gear-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.gear-row .pp-easy{grid-column:1 / -1}
+.drive-box{border:1px solid var(--line);border-radius:12px;padding:0 10px;margin:8px 0;background:var(--surface)}
+.drive-box[open]{padding-bottom:8px}
+.drive-box.on{border-color:var(--ok);border-width:2px}.drive-box.next{border-color:var(--accent)}.drive-box.done{opacity:.75}
+.drive-box summary{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 0;cursor:pointer;list-style:none}
+.drive-box summary::-webkit-details-marker{display:none}
+.drive-box summary .tag{margin-left:auto}
+.dn{display:inline-grid;place-items:center;flex:none;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font:700 12px/1 var(--font-body)}
+.drive-name-row{display:flex;gap:6px;align-items:center;margin:4px 0}
+.drive-name-row .input{flex:1;min-width:0;min-height:40px}
+.drive-list{display:grid;gap:4px;margin:2px 0 6px}
+.drive-li{display:flex;gap:8px;align-items:center;font:500 14px/1.3 var(--font-body)}
+.drive-li .small{margin-left:auto}
+.drive-li.done{opacity:.6}.drive-li.done .dn{background:var(--muted)}
+.drive-li.on .dn{background:var(--ok)}.drive-li.on{font-weight:700}
+.drive-msg{margin:6px 0;padding:8px 10px;border-radius:10px;font:500 14px/1.4 var(--font-body);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.drive-msg.stop{background:#fef3c7;color:#78350f}.drive-msg.call{background:#dcfce7;color:#14532d}
+.meet-icon{background:none;border:0;overflow:visible}
+.meet-dot{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#14532d;color:#fff;font:700 15px/1 var(--font-body);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.meet-icon.on .meet-dot{background:#16a34a;box-shadow:0 0 0 6px rgba(22,163,74,.35)}
+.meet-name{position:absolute;left:50%;top:31px;transform:translateX(-50%);white-space:nowrap;background:#14532d;color:#fff;font:700 11px/1.3 var(--font-body);padding:1px 6px;border-radius:6px}
 .rose-me{fill:var(--fg)}
 .rose-nb{pointer-events:none}
 .rose-nb line{stroke:var(--fg);stroke-width:1.5;stroke-dasharray:3 3;opacity:.7}
@@ -194,7 +232,10 @@ a{color:var(--accent)}
 .sos-name{position:absolute;left:50%;top:44px;transform:translateX(-50%);white-space:nowrap;background:#b91c1c;color:#fff;font:700 11px/1.3 var(--font-body);padding:1px 6px;border-radius:6px}
 .netbar{position:fixed;z-index:1300;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top,0px));max-width:min(420px,calc(100vw - 200px));padding:6px 12px;border-radius:12px;background:#7c2d12;color:#fff;font:600 12px/1.35 var(--font-body);box-shadow:var(--shadow);text-align:center}
 .netbar[hidden]{display:none}
+.updbar{background:#14532d;display:flex;align-items:center;gap:8px;z-index:1310}
+.updbar button{border:1px solid #fff;background:none;color:#fff;border-radius:8px;padding:4px 10px;font:700 12px/1 var(--font-body);cursor:pointer}
 @media (max-width:520px){.netbar{top:auto;bottom:calc(var(--sheet-h) + 70px);max-width:calc(100vw - 32px)}}
+@media (max-width:520px){.updbar{top:calc(10px + env(safe-area-inset-top,0px));bottom:auto;left:16px;transform:none;max-width:calc(100vw - 92px)}}
 .check-row{margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .check-ok{color:#15803d;font-weight:600}
 .check-out{color:var(--muted)}
@@ -515,6 +556,8 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
 <div class="obs-menu" id="obsMenu" role="menu" hidden><button type="button" role="menuitem" data-obs-kind="obs"><span class="obs-dot sm">👁</span>Viltobservation</button><button type="button" role="menuitem" data-obs-kind="kill"><span class="obs-dot sm kill">✕</span>Fällt vilt</button></div>
 <button class="powerchip" id="powerChip" type="button" hidden>Sparläge</button>
 <div class="sosbar" id="sosBar" role="status" hidden><b>Nödlarm skickat.</b> Jaktlaget ser din position. <a href="tel:112">Ring 112</a> <button type="button" data-sos="ok">Jag är OK</button></div>
+<div class="drivebar" id="driveBar" role="status" aria-live="assertive" hidden></div>
+<div class="netbar updbar" id="updBar" role="status" hidden>En ny version av Jaktkartan finns. <button type="button" data-upd>Uppdatera</button></div>
 <div class="netbar" id="netBar" role="status" hidden>Ingen täckning. Kartan visas från det som sparats. Ändringar skickas när täckningen kommer tillbaka.</div>
 <button class="compass" id="compassBtn" type="button" hidden aria-label="Kompass: tryck för att starta"><svg class="cmp-dial" id="compassDial" viewBox="-50 -50 100 100" aria-hidden="true"><circle r="47" class="cmp-ring"/><g id="cmpNo" class="cmp-no"></g><g class="cmp-ticks"><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(0.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(22.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(45.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(67.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(90.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(112.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(135.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(157.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(180.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(202.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(225.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(247.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(270.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(292.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(315.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(337.5)"/></g><path d="M0 -21 L5 0 L0 -3 L-5 0 Z" class="cmp-n"/><path d="M0 21 L5 0 L0 3 L-5 0 Z" class="cmp-s"/><text x="0" y="-32" class="cmp-l n">N</text><text x="32" y="0" class="cmp-l">O</text><text x="0" y="32" class="cmp-l">S</text><text x="-32" y="0" class="cmp-l">V</text></svg><span class="cmp-idx" aria-hidden="true"></span><span class="cmp-txt" id="compassTxt">Kompass</span></button>
 <div class="placebar" id="measurebar" hidden>
@@ -1505,8 +1548,8 @@ function startPlacing(opts){
   if(!crossEl){ crossEl = h(`<div class="crosshair" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="24" cy="24" r="9"/><path d="M24 3v11M24 34v11M3 24h11M34 24h11"/></svg></div>`); map.getContainer().appendChild(crossEl); }
   crossEl.hidden = false;
   $('#placebar').hidden = false; $('#btnAdd').hidden = true;
-  $('#placeText').textContent = opts.mode === 'move' ? 'Flytta kartan så att korset hamnar på den nya platsen.' : opts.mode === 'obs' ? 'Flytta kartan så att korset hamnar där viltet sågs.' : opts.mode === 'kill' ? 'Flytta kartan så att korset hamnar där viltet fälldes.' : 'Flytta kartan så att korset hamnar där nålen ska sitta.';
-  $('#placeOk').textContent = opts.mode === 'move' ? 'Flytta hit' : opts.mode === 'obs' ? 'Viltet sågs här' : opts.mode === 'kill' ? 'Viltet fälldes här' : 'Lägg nålen här';
+  $('#placeText').textContent = opts.text ? opts.text : opts.mode === 'move' ? 'Flytta kartan så att korset hamnar på den nya platsen.' : opts.mode === 'obs' ? 'Flytta kartan så att korset hamnar där viltet sågs.' : opts.mode === 'kill' ? 'Flytta kartan så att korset hamnar där viltet fälldes.' : 'Flytta kartan så att korset hamnar där nålen ska sitta.';
+  $('#placeOk').textContent = opts.ok ? opts.ok : opts.mode === 'move' ? 'Flytta hit' : opts.mode === 'obs' ? 'Viltet sågs här' : opts.mode === 'kill' ? 'Viltet fälldes här' : 'Lägg nålen här';
   if(!isDesktop()) setSheet('min');
   if(opts.mode === 'move'){ const p = pinById(opts.id); map.setView([p.lat,p.lng], Math.max(map.getZoom(), 16), {animate:false}); }
   syncCross(); if(opts.mode === 'move'){ const p = pinById(opts.id); panToCross([p.lat, p.lng]); }
@@ -1520,11 +1563,12 @@ map.on('move', updatePlaceCoords);
 map.on('click', e => { if(placing && !drawing) panToCross(e.latlng, true); });
 $('#placeOk').addEventListener('click', () => {
   const c = crossLatLng(); const opts = placing; endPlacing();
+  if(opts.done){ opts.done({lat:c.lat, lng:c.lng}); return; }   // t.ex. en samlingsplats i jaktplanen
   if(opts.mode === 'move'){ const p = pinById(opts.id); if(!p) return; p.lat = c.lat; p.lng = c.lng; p.updated = Date.now(); save(); renderAll(); toast('Nålen flyttades'); setTimeout(() => { const m = findMarker(p.id); if(m) m.openPopup(); }, 200); }
   else if(opts.mode === 'obs' || opts.mode === 'kill') openObsForm({lat:c.lat, lng:c.lng}, opts.mode);
   else openPinForm({lat:c.lat, lng:c.lng});
 });
-$('#placeCancel').addEventListener('click', endPlacing);
+$('#placeCancel').addEventListener('click', () => { const o = placing; endPlacing(); if(o && o.cancel) o.cancel(); });
 $('#placeGps').addEventListener('click', () => locate(true));
 $('#btnAdd').addEventListener('click', () => { if(!drawing) startPlacing({mode:'new'}); });
 // Nya nålar skapas bara med +. Ett långt tryck eller högerklick i kartan gör ingenting.
@@ -1776,10 +1820,23 @@ function toast(msg, ms){ const t = $('#toast'); t.textContent = msg; t.hidden = 
 
 /* ---------- Offline ----------
    Service workern sparar appen och de kartrutor man har tittat på, så att appen startar och visar kartan utan täckning.
-   Den registreras på webbadressen (https), och lokalt bara med ?sw=1 (för testerna). */
-if('serviceWorker' in navigator && (location.protocol === 'https:' || new URLSearchParams(location.search).has('sw'))){
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+   Den registreras på webbadressen (https), och lokalt bara med ?sw=1 (för testerna).
+   Uppdateringar: en app på hemskärmen laddas inte om när man öppnar den, den fortsätter där den var. Därför letar sidan
+   efter en ny version när appen kommer fram igen och varje halvtimme. Finns en ny version visas en rad med knappen Uppdatera. */
+const swUpd = {reg:null, last:0, had:false};
+function swCheck(){
+  if(!swUpd.reg || !navigator.onLine || Date.now() - swUpd.last < 60000) return;
+  swUpd.last = Date.now(); swUpd.reg.update().catch(() => {});
 }
+if('serviceWorker' in navigator && (location.protocol === 'https:' || new URLSearchParams(location.search).has('sw'))){
+  swUpd.had = !!navigator.serviceWorker.controller;
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', {updateViaCache:'none'}).then(r => { swUpd.reg = r; swUpd.last = Date.now(); }).catch(() => {}));
+  document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') swCheck(); });
+  setInterval(swCheck, 30 * 60000);
+  // En ny version har tagit över (första installationen räknas inte)
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if(!swUpd.had){ swUpd.had = true; return; } $('#updBar').hidden = false; });
+}
+$('#updBar').addEventListener('click', e => { if(e.target.closest('[data-upd]')) location.reload(); });
 function renderNet(){ const b = $('#netBar'); if(b) b.hidden = navigator.onLine; }
 window.addEventListener('online', () => { renderNet(); toast('Täckningen är tillbaka. Ändringar skickas nu.'); });
 window.addEventListener('offline', renderNet);
@@ -1806,7 +1863,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>
