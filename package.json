@@ -15,6 +15,7 @@
   },
   "devDependencies": {
     "leaflet": "1.9.4",
+    "pdfjs-dist": "6.5.438",
     "playwright": "1.56.1",
     "targaryen": "3.1.0"
   }

@@ -8,8 +8,12 @@
    - Bara giltighetsdatumet ligger okrypterat (valid), så att appen kan påminna innan ett dokument går ut utan att låsas upp.
    - Nyckeln finns bara i minnet medan dokumenten är upplåsta. De låses när appen läggs undan och efter DOCS_IDLE utan
      aktivitet. Glömmer man dokumentlösen går dokumenten inte att öppna: de kan bara raderas.
+   - Bilder (JPG, PNG) och PDF:er går att lägga till. En PDF läses med pdf.js (Mozilla), som ligger i appen själv
+     (pdfjs/, byggt från node_modules) och laddas först när man väljer en PDF. Varje sida blir en bild som krypteras
+     och sparas som de andra bilderna, så att den kan visas utan nät och utan PDF-läsare. Filen skickas inte någonstans.
    - Tömmer man appens data i telefonen, eller avinstallerar appen, försvinner dokumenten. */
 const DOCS_DB = 'jk-docs', DOCS_ITER = 600000, DOCS_IDLE = 5 * 60000, DOCS_CHECK = 'jaktkartan-docs-v1', DOCS_MIN = 8;
+const DOCS_MAX_IMGS = 10, PDFJS_VER = '6.5.438';
 const DOC_KIND = {jaktkort:'Jaktkort', examen:'Jägarexamensbevis', licens:'Vapenlicens', annat:'Annat'};
 const docs = {key:null, list:[], last:0, picking:0};   // picking: kameran eller bildväljaren är öppen
 
@@ -96,6 +100,31 @@ function docsImage(file){
     img.src = url;
   });
 }
+/* PDF: varje sida (högst room stycken) ritas som en bild. {pages: [data-URL], total: antal sidor} */
+let pdfjsP = null;
+const pdfBase = () => new URL('pdfjs/', location.href).href;
+function pdfLib(){
+  if(!pdfjsP) pdfjsP = import(pdfBase() + 'pdf.min.js?v=' + PDFJS_VER).then(m => { m.GlobalWorkerOptions.workerSrc = pdfBase() + 'pdf.worker.min.js?v=' + PDFJS_VER; return m; })
+    .catch(e => { pdfjsP = null; throw e; });
+  return pdfjsP;
+}
+async function docsPdf(file, room){
+  const lib = await pdfLib();
+  const task = lib.getDocument({data:new Uint8Array(await file.arrayBuffer()), enableXfa:false, wasmUrl:pdfBase() + 'wasm/', standardFontDataUrl:pdfBase() + 'standard_fonts/'});
+  const pdf = await task.promise;
+  const pages = [], total = pdf.numPages;
+  try {
+    for(let i = 1; i <= Math.min(total, room); i++){
+      const page = await pdf.getPage(i), v1 = page.getViewport({scale:1}), vp = page.getViewport({scale:Math.min(4, 1800 / Math.max(v1.width, v1.height))});
+      const c = document.createElement('canvas'); c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+      const ctx = c.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
+      await page.render({canvasContext:ctx, canvas:c, viewport:vp}).promise;
+      pages.push(c.toDataURL('image/jpeg', 0.88)); page.cleanup();
+    }
+  } finally { await task.destroy(); }
+  return {pages, total};
+}
+const isPdf = f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '');
 const daysTo = iso => Math.round((dayMs(iso) - dayMs(todayISO())) / 864e5);
 function validText(iso){
   if(!iso) return '';
@@ -191,7 +220,7 @@ function docsView(d){
   openModal(`<div class="cal-head"><h2>${esc(d.title || DOC_KIND[d.kind])}</h2><button class="iconbtn" type="button" id="dvClose" aria-label="Stäng">×</button></div><div id="docsBox">
     <div class="small muted">${esc(DOC_KIND[d.kind] || 'Dokument')}${d.num ? ' · nummer ' + esc(d.num) : ''}</div>${validText(d.valid)}
     ${d.note ? `<p>${esc(d.note)}</p>` : ''}
-    ${(d.imgs || []).map((src, i) => `<img class="doc-img" src="${esc(src)}" alt="${i ? 'Baksida' : 'Framsida'}">`).join('') || '<p class="note">Ingen bild.</p>'}
+    ${(d.imgs || []).map((src, i) => `<img class="doc-img" src="${esc(src)}" alt="Bild ${i + 1} av ${d.imgs.length}">`).join('') || '<p class="note">Ingen bild.</p>'}
     <div class="actions"><button class="btn grow" type="button" id="dvBack">Tillbaka</button></div></div>`, m => {
     m.querySelector('#dvClose').addEventListener('click', docsListView);
     m.querySelector('#dvBack').addEventListener('click', docsListView);
@@ -206,13 +235,25 @@ function docsForm(d){
     <div class="row2"><label class="field"><span>Nummer (valfritt)</span><input class="input" id="dfNum" maxlength="40" value="${esc(d ? d.num || '' : '')}" autocomplete="off"></label>
     <label class="field"><span>Giltig till (valfritt)</span><input class="input" type="date" id="dfValid" value="${esc(d ? d.valid || '' : '')}"></label></div>
     <label class="field"><span>Anteckning (valfri)</span><textarea class="input" id="dfNote" maxlength="500" rows="2">${esc(d ? d.note || '' : '')}</textarea></label>
-    <div class="field"><span>Bilder (fram- och baksida)</span><div id="dfImgs" class="doc-imgs"></div>
-      <div class="btnrow"><label class="btn sm">Ta bild<input type="file" accept="image/*" capture="environment" id="dfCam" hidden></label><label class="btn sm ghost">Välj bild<input type="file" accept="image/*" id="dfFile" hidden></label></div>
-      <p class="note" style="margin-top:4px">Ta bild sparar bilden bara här, inte i telefonens bildgalleri. Väljer du en bild från galleriet ligger den kvar där.</p></div>
+    <div class="field"><span>Bilder och sidor (högst ${DOCS_MAX_IMGS})</span><div id="dfImgs" class="doc-imgs"></div>
+      <div class="btnrow"><label class="btn sm">Ta bild<input type="file" accept="image/*" capture="environment" id="dfCam" hidden></label><label class="btn sm ghost">Välj fil (JPG, PNG eller PDF)<input type="file" accept="image/*,application/pdf,.pdf,.jpg,.jpeg,.png" id="dfFile" hidden></label></div>
+      <p class="note" style="margin-top:4px">Ta bild sparar bilden bara här, inte i telefonens bildgalleri. En PDF sparas som en bild per sida. Väljer du en fil som redan finns i telefonen ligger den kvar där.</p></div>
     <div class="actions"><button class="btn primary grow" type="submit" id="dfSave">Spara</button>${d ? '<button class="btn danger" type="button" id="dfDel">Ta bort</button>' : ''}<button class="btn ghost" type="button" id="dfNo">Avbryt</button></div></div></form>`, m => {
-    const draw = () => { m.querySelector('#dfImgs').innerHTML = imgs.map((src, i) => `<span class="doc-imgw"><img src="${esc(src)}" alt=""><button class="x" type="button" data-rm="${i}" aria-label="Ta bort bilden">×</button></span>`).join('') || '<span class="small muted">Ingen bild ännu.</span>'; };
-    const add = async inp => { const f = inp.files && inp.files[0]; inp.value = ''; if(!f) return; if(imgs.length >= 2){ toast('Högst två bilder: fram- och baksida.'); return; }
-      try { imgs.push(await docsImage(f)); draw(); } catch(e){ toast('Bilden kunde inte läsas.'); } };
+    const draw = () => { m.querySelector('#dfImgs').innerHTML = imgs.map((src, i) => `<span class="doc-imgw"><img src="${esc(src)}" alt=""><button class="x" type="button" data-rm="${i}" aria-label="Ta bort bild ${i + 1}">×</button></span>`).join('') || '<span class="small muted">Ingen bild ännu.</span>'; };
+    const add = async inp => {
+      const f = inp.files && inp.files[0]; inp.value = ''; if(!f) return;
+      const room = DOCS_MAX_IMGS - imgs.length; if(room <= 0){ toast(`Högst ${DOCS_MAX_IMGS} bilder och sidor per dokument.`); return; }
+      const save = m.querySelector('#dfSave'); save.disabled = true;
+      try {
+        if(isPdf(f)){
+          toast('Läser PDF:en …', 3000);
+          const r = await docsPdf(f, room); imgs.push(...r.pages); draw();
+          toast(r.total > r.pages.length ? `PDF:en har ${r.total} sidor. De första ${r.pages.length} sparas.` : `PDF:en är inläst: ${r.pages.length} ${r.pages.length === 1 ? 'sida' : 'sidor'}.`, 4000);
+        } else if(/^image\//.test(f.type) || /\.(jpe?g|png|webp|gif)$/i.test(f.name || '')){ imgs.push(await docsImage(f)); draw(); }
+        else toast('Filen stöds inte. Välj en bild (JPG eller PNG) eller en PDF.', 5000);
+      } catch(e){ toast(isPdf(f) ? 'PDF:en kunde inte läsas. Är den skyddad med lösenord?' : 'Bilden kunde inte läsas. Spara den som JPG eller PNG och försök igen.', 5000); }
+      finally { save.disabled = false; }
+    };
     // Kameran lägger appen i bakgrunden en stund: lås inte då, annars försvinner bilden
     m.querySelectorAll('#dfCam, #dfFile').forEach(i => { i.closest('label').addEventListener('click', () => { docs.picking = Date.now(); }); i.addEventListener('change', e => { docs.picking = 0; docs.last = Date.now(); add(e.target); }); });
     m.querySelector('#dfImgs').addEventListener('click', e => { const b = e.target.closest('[data-rm]'); if(b){ imgs.splice(+b.dataset.rm, 1); draw(); } });
