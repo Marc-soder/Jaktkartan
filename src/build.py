@@ -42,6 +42,16 @@ def outputs():
     out['manifest.webmanifest'] = open(os.path.join(SRC, 'manifest.webmanifest'), 'rb').read()
     for name in sorted(os.listdir(os.path.join(SRC, 'icons'))):
         out['icons/' + name] = open(os.path.join(SRC, 'icons', name), 'rb').read()
+    # PDF-läsaren (pdf.js från Mozilla, Apache-2.0) för Mina dokument. Laddas bara när man väljer en PDF.
+    # Filerna heter .js (inte .mjs) så att alla webbservrar skickar dem som JavaScript.
+    pdf = os.path.join(ROOT, 'node_modules', 'pdfjs-dist')
+    out['pdfjs/pdf.min.js'] = open(os.path.join(pdf, 'legacy', 'build', 'pdf.min.mjs'), 'rb').read()
+    out['pdfjs/pdf.worker.min.js'] = open(os.path.join(pdf, 'legacy', 'build', 'pdf.worker.min.mjs'), 'rb').read()
+    out['pdfjs/LICENSE'] = open(os.path.join(pdf, 'LICENSE'), 'rb').read()
+    for name in ('jbig2.wasm', 'openjpeg.wasm', 'qcms_bg.wasm', 'LICENSE_JBIG2', 'LICENSE_OPENJPEG', 'LICENSE_PDFJS_JBIG2', 'LICENSE_PDFJS_OPENJPEG', 'LICENSE_PDFJS_QCMS'):
+        out['pdfjs/wasm/' + name] = open(os.path.join(pdf, 'wasm', name), 'rb').read()
+    for name in sorted(os.listdir(os.path.join(pdf, 'standard_fonts'))):
+        out['pdfjs/standard_fonts/' + name] = open(os.path.join(pdf, 'standard_fonts', name), 'rb').read()
     return out
 
 

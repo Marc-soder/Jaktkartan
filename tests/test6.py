@@ -21,8 +21,30 @@ PORT = srv.server_address[1]
 APP = f'http://localhost:{PORT}/index.html'
 PASS, PASS2 = 'Älgjakt i Tiveden 2026', 'Ett annat långt lösen'
 
+def make_pdf(pages):
+    """En liten PDF med en rad stor svart text per sida (Helvetica, som inte bäddas in: pdf.js hämtar ett standardtypsnitt)."""
+    objs = ['<< /Type /Catalog /Pages 2 0 R >>', None, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>']
+    kids = []
+    for text in pages:
+        stream = f'BT /F1 48 Tf 40 300 Td ({text}) Tj ET 0 0 0 rg 40 100 300 120 re f'.encode()
+        objs.append(f'<< /Length {len(stream)} >>\nstream\n'.encode() + stream + b'\nendstream')
+        objs.append(f'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 420] /Resources << /Font << /F1 3 0 R >> >> /Contents {len(objs)} 0 R >>')
+        kids.append(f'{len(objs)} 0 R')
+    objs[1] = f'<< /Type /Pages /Kids [{" ".join(kids)}] /Count {len(kids)} >>'
+    out, offs = bytearray(b'%PDF-1.4\n'), []
+    for i, o in enumerate(objs, 1):
+        offs.append(len(out)); out += f'{i} 0 obj\n'.encode() + (o if isinstance(o, bytes) else o.encode()) + b'\nendobj\n'
+    x = len(out)
+    out += f'xref\n0 {len(objs) + 1}\n0000000000 65535 f \n'.encode() + b''.join(f'{o:010d} 00000 n \n'.encode() for o in offs)
+    out += f'trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{x}\n%%EOF\n'.encode()
+    return bytes(out)
+# Andel mörka punkter i en bild (data-URL): visar att PDF-sidan verkligen ritades, inte bara en vit yta
+DARK = """src => new Promise(res => { const i = new Image(); i.onload = () => { const c = document.createElement('canvas'); c.width = i.naturalWidth; c.height = i.naturalHeight;
+  const x = c.getContext('2d'); x.drawImage(i, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; let n = 0; for(let k = 0; k < d.length; k += 4) if(d[k] < 80 && d[k+1] < 80 && d[k+2] < 80) n++;
+  res({w:c.width, h:c.height, dark:n / (d.length / 4)}); }; i.src = src; })"""
+
 net = []   # allt som sidan försöker skicka utanför den lokala servern: (metod, adress, innehåll)
-SECRETS = ('älgstudsaren', 'LIC-4711', 'vapenskåpet', 'Älgjakt i Tiveden', 'annat långt lösen', 'data:image')
+SECRETS = ('älgstudsaren', 'LIC-4711', 'vapenskåpet', 'Älgjakt i Tiveden', 'annat långt lösen', 'data:image', 'VAPENLICENS')
 def route(r):
     u = r.request.url
     if u.startswith(f'http://127.0.0.1:{PORT}/') or u.startswith(f'http://localhost:{PORT}/'): return r.continue_()
@@ -66,6 +88,22 @@ with sync_playwright() as p:
     pg.fill('#dfValid', soon); pg.fill('#dfNote', 'Förvaras i vapenskåpet')
     pg.set_input_files('#dfFile', IMG); pg.wait_for_timeout(600)
     check(pg.locator('#dfImgs img').count() == 1, 'bilden är vald')
+    # PDF med två sidor, och en JPG
+    pg.set_input_files('#dfFile', files=[{'name':'licens.pdf', 'mimeType':'application/pdf', 'buffer':make_pdf(['VAPENLICENS 4711', 'Sida 2'])}])
+    for _ in range(40):
+        if pg.locator('#dfImgs img').count() >= 3: break
+        pg.wait_for_timeout(250)
+    check(pg.locator('#dfImgs img').count() == 3 and 'inläst: 2 sidor' in pg.inner_text('#toast'), f'en PDF med två sidor blir två bilder ({pg.inner_text("#toast")!r})')
+    pages = [pg.evaluate(DARK, pg.get_attribute(f'#dfImgs .doc-imgw:nth-child({i}) img', 'src')) for i in (2, 3)]
+    check(all(x['w'] > 1000 and 0.01 < x['dark'] < 0.5 for x in pages), f'PDF-sidorna är ritade med text och ruta, i god upplösning: {pages}')
+    jpg = __import__('base64').b64decode(pg.evaluate("(() => { const c = document.createElement('canvas'); c.width = 400; c.height = 250; const x = c.getContext('2d'); x.fillStyle = '#2a5'; x.fillRect(0, 0, 400, 250); return c.toDataURL('image/jpeg', 0.9).split(',')[1]; })()"))
+    pg.set_input_files('#dfFile', files=[{'name':'jaktkort.jpg', 'mimeType':'image/jpeg', 'buffer':jpg}]); pg.wait_for_timeout(600)
+    check(pg.locator('#dfImgs img').count() == 4, 'en JPG-fil går att välja')
+    pg.set_input_files('#dfFile', files=[{'name':'anteckning.txt', 'mimeType':'text/plain', 'buffer':b'hej'}]); pg.wait_for_timeout(400)
+    check(pg.locator('#dfImgs img').count() == 4 and 'stöds inte' in pg.inner_text('#toast'), 'en fil som inte är bild eller PDF nekas')
+    check(pg.get_attribute('#dfFile', 'accept').count('pdf') >= 1, 'Välj fil tar emot PDF')
+    pg.click('#dfImgs [data-rm="3"]'); pg.click('#dfImgs [data-rm="2"]'); pg.wait_for_timeout(100)
+    check(pg.locator('#dfImgs img').count() == 2, 'bilder och sidor går att ta bort före sparning')
     pg.click('#dfSave'); pg.wait_for_timeout(800)
     txt = pg.inner_text('#docsBox')
     check('Licens för älgstudsaren' in txt and 'Vapenlicens · LIC-4711' in txt and 'om 10 dagar' in txt and pg.locator('.doc-thumb img').count() == 1, f'dokumentet syns i listan, med att det snart går ut: {txt[:120]!r}')
@@ -75,7 +113,7 @@ with sync_playwright() as p:
 
     # Visa
     pg.click('.doc-row [data-dc="view"] >> nth=1'); pg.wait_for_timeout(300)
-    check(pg.locator('.doc-img').count() == 1 and pg.get_attribute('.doc-img', 'src').startswith('data:image/jpeg') and 'Förvaras i vapenskåpet' in pg.inner_text('.modal'), 'Visa öppnar dokumentet med bilden')
+    check(pg.locator('.doc-img').count() == 2 and pg.get_attribute('.doc-img', 'src').startswith('data:image/jpeg') and 'Förvaras i vapenskåpet' in pg.inner_text('.modal'), 'Visa öppnar dokumentet med bilden')
     pg.click('#dvBack'); pg.wait_for_timeout(200)
 
     # Lås, fel lösen, rätt lösen

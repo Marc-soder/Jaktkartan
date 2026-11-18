@@ -28,6 +28,12 @@ async function appFirst(req){
     return (await cache.match(req, {ignoreSearch:true})) || (await cache.match('./index.html')) || Response.error();
   }
 }
+/* PDF-läsaren (bara när man lägger till en PDF): nätet först, utan tidsgräns (filerna är stora), annars den sparade. */
+async function netFirst(req){
+  const cache = await caches.open(APP);
+  try { const res = await fetch(req); if(res && res.ok) cache.put(req, res.clone()); return res; }
+  catch(e){ return (await cache.match(req)) || Response.error(); }
+}
 /* Bibliotek med versionsnummer i adressen: det sparade först. */
 async function libFirst(req){
   const cache = await caches.open(LIBS), hit = await cache.match(req);
@@ -58,7 +64,11 @@ async function trim(cache){
 self.addEventListener('fetch', e => {
   const req = e.request; if(req.method !== 'GET') return;
   const url = new URL(req.url);
-  if(url.origin === self.location.origin){ if(req.mode === 'navigate' || SHELL.some(s => url.pathname.endsWith(s.slice(1)) && s !== './')) e.respondWith(appFirst(req)); return; }
+  if(url.origin === self.location.origin){
+    if(req.mode === 'navigate' || SHELL.some(s => url.pathname.endsWith(s.slice(1)) && s !== './')) e.respondWith(appFirst(req));
+    else if(url.pathname.includes('/pdfjs/')) e.respondWith(netFirst(req));
+    return;
+  }
   if(url.hostname === 'www.gstatic.com' && url.pathname.startsWith('/firebasejs/')){ e.respondWith(libFirst(req)); return; }
   if(TILE_HOSTS.test(url.hostname)){ e.respondWith(tile(req)); return; }
   // Allt annat (Firebase-databasen, vind, fynd) går direkt till nätet.
