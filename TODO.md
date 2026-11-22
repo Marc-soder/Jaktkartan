@@ -330,3 +330,75 @@ geolocation till insticksprogrammet när appen körs i skalet. Webbsidan finns k
 - **Meshtastic-radio med GPS:** radion sänder själv sin position med jämna mellanrum, utan telefon och utan täckning.
   Se avsnittet om Meshtastic ovan.
 - **Tills vidare:** sparläget, mörkt läge och låg ljusstyrka på telefonen.
+
+## Rapportera fällt vilt till Viltrapport (väntar)
+
+Målet: när någon registrerar **Fällt vilt: kronhjort** i Jaktkartan skickas rapporten direkt till Viltrapport, och laget ser
+hur mycket av tilldelningen som är kvar. Viltrapport ägs av **WeHunt** (WeHunt Nordic AB), inte av Jägareförbundet.
+Rapporter i Viltrapport förs vidare till Viltdata. Slutrapporten för kronhjort görs alltid i länsstyrelsens Älgdata.
+
+### Varför det inte görs nu
+
+- Det finns inget öppet API för Viltrapport (inga utvecklarsidor eller villkor hittades). Utan API skulle appen behöva logga in
+  med någons konto och läsa av sidor. Det bryter troligen mot villkoren, kräver att lösenord sparas och går sönder lätt. Gör inte så.
+- Jaktkartan har ingen egen server. En API-nyckel får aldrig ligga i appen eller i repot (repot är publikt).
+
+### Innan arbetet börjar
+
+- [ ] **Fråga WeHunts support:**
+  - Finns ett API för att rapportera fällt vilt, och för att läsa tilldelning och kvarvarande kvot för ett kronhjortsskötselområde?
+  - Hur loggar man in? OAuth för varje jägare, eller en API-nyckel för laget eller skötselområdet?
+  - Tillåter API:et anrop från en webbapp (CORS) från `https://marc-soder.github.io`?
+  - Finns en testmiljö?
+  - Vilka fält är obligatoriska? Till exempel art, kategori (hjort, hind, kalv), kön, ålder, vikt, datum och tid,
+    plats (koordinat, i SWEREF 99 TM eller WGS 84), jaktområde eller skötselområde, och skytt.
+  - Vilka villkor gäller, och krävs WeHunt Pro?
+- [ ] **Kontrollera med skötselområdet och länsstyrelsen** att ert område rapporterar kronhjort i Viltrapport.
+  Ett jaktområde får bara använda **ett** rapporteringssystem per jaktår (det som det första djuret rapporterades i),
+  annars blir djur dubbelregistrerade. Rapporterar laget via Jaktkartan får ingen rapportera samma djur för hand.
+- [ ] Spara API-dokumentationen utanför repot om den inte är offentlig, och lägg aldrig in nycklar eller testkonton i repot.
+
+### Två sätt att bygga det, beroende på API:et
+
+**A. Inloggning för varje jägare (OAuth), utan server.** Bäst om API:et stöder det.
+- [ ] Varje jägare kopplar sitt Viltrapport-konto en gång under **Mitt konto** (OAuth med PKCE, inloggningen sker hos WeHunt).
+- [ ] Token sparas bara på enheten (som Mina dokument), aldrig i Firebase. Rapporten skickas i jägarens eget namn direkt från telefonen.
+- [ ] Kräver att API:et tillåter anrop från Jaktkartans adress (CORS). Ingen kostnad.
+
+**B. En gemensam API-nyckel för laget eller skötselområdet, med en liten server.**
+- [ ] Nyckeln läggs som hemlighet i en Firebase-funktion (Cloud Functions). Appen anropar funktionen, funktionen anropar Viltrapport.
+- [ ] Funktionen kontrollerar att den som anropar är inloggad och medlem i laget (och gäst i jakten), och att rapporten gäller en pågående jakt.
+- [ ] Kräver Firebase betalplan (Blaze) med betalkort kopplat. Kostnaden för den här mängden anrop är troligen noll eller några kronor i månaden.
+- [ ] Funktionen och nyckeln ligger utanför den publika koden, eller så läser koden nyckeln från Firebase hemligheter (aldrig från repot).
+
+### Det som behöver byggas i appen
+
+- [ ] **Formuläret för fällt vilt** (`openObsForm` i `src/cloud.js`) får de fält Viltrapport kräver som saknas i dag.
+  I dag finns art, antal, kön, ålder, skytt, plats och tid. Troligen behövs kategori enligt tilldelningen (hjort, hind, kalv),
+  och kanske vikt och jaktområde.
+- [ ] **Skicka till Viltrapport:** efter registreringen visar appen en sammanfattning och knappen **Skicka till Viltrapport**.
+  Ett avsiktligt tryck, så att en felregistrering inte skickas av misstag.
+- [ ] **Kvittens:** observationen får en markering att den är rapporterad, till exempel `huntObs/<jakt>/<id>/vr = {id, t, by}`,
+  så att samma djur inte rapporteras två gånger och laget ser vad som är rapporterat. Regeländring i `src/rules.js`
+  och regeltester i `tests/test2.js`. Kvittensen behöver också följa med till arkivet (`obsArchive`) när jakten avslutas.
+- [ ] **Utan täckning:** rapporten läggs i kö på enheten och skickas när nätet kommer tillbaka. Appen visar tydligt
+  "Väntar på täckning" tills den är mottagen.
+- [ ] **Fel:** visa felet från Viltrapport tydligt och låt rapporten ligga kvar så att den kan skickas igen.
+- [ ] **Kvarvarande tilldelning:** om API:et kan visa den, hämta den och visa den i jaktlagets flik Jakt
+  (till exempel "Kvar: hjort 1, hind 2, kalv 3"). Varna när någon registrerar ett djur i en kategori som är slut.
+- [ ] **Tester:** låtsassvar för Viltrapport i `tests/offline.py` (testerna ska gå utan nätverk): mottagen rapport, fel, ingen täckning,
+  dubbelrapport som stoppas, och att ingen nyckel finns i `index.html`.
+
+### Utan API (enklare, går att bygga när som helst)
+
+- [ ] Knappen **Rapportera i Viltrapport** vid ett fällt vilt: kopierar uppgifterna (art, kön, ålder, datum, plats, skytt)
+  och öppnar Viltrapport, så att man klistrar in i stället för att skriva av. Ingen nyckel, inget avtal.
+- [ ] Jaktledaren kan föra in tilldelningen och vad som är kvar enligt Viltrapport. Appen räknar ned när laget registrerar
+  fällt vilt, men vet inte vad andra jaktlag i skötselområdet har skjutit. Stäm av mot Viltrapport före varje jakt.
+
+### Andra vägar som undersökts
+
+- **Direkt till länsstyrelsen (Älgdata, Kronhjortsdata):** inget API för rapportering hittades, och inloggningen sker med BankID,
+  som Jaktkartan inte kan använda åt någon. Rapporter i Viltdata och Jaktrapport förs automatiskt över till Älgdata.
+  Fråga Älgdata (algdata.se) om ett API finns eller planeras. Byte av rapporteringssystem bestäms av skötselområdet,
+  inför ett nytt jaktår.
