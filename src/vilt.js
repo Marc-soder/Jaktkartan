@@ -114,12 +114,17 @@ function sunHtml(day, place){
     <div><span class="sun-i" aria-hidden="true">🎯</span> Skjutljus <b>${hm(s.rise - 3600000)}–${hm(s.set + 3600000)}</b> <span class="muted">(en timme före och efter)</span></div>
     <div class="small muted">Gäller enligt jaktförordningen för bl.a. älg, hjort, rådjur, rovdjur och vissa gäss och änder. För flera arter får timmen efter solnedgången bara användas till smyg- eller vaktjakt. Kontrollera alltid gällande lydelse. Beräknat för ${p.mine ? 'din position' : 'kartans mitt'}.</div></div>`;
 }
+/* Viltrapport (WeHunt) öppnas i webbläsaren, som håller inloggningen och kan spara lösenordet.
+   Jaktkartan sparar inga inloggningsuppgifter till Viltrapport. */
+const VR_URL = 'https://viltrapport.se/';
+const vrBtn = () => `<a class="btn sm" data-vr href="${VR_URL}" target="_blank" rel="noopener">Öppna Viltrapport</a>`;
 function renderVilt(){
   const pane = $('#paneVilt'); if(!pane) return;
   const lan = state.settings.lan || '', day = viltDay || todayISO(), md = day.slice(5);
   let html = `<div class="row2"><label class="field"><span>Län</span><select class="input" id="viltLan"><option value="">Välj län</option>${LAN.map(l => `<option${l === lan ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
     <label class="field"><span>Datum</span><input class="input" type="date" id="viltDay" value="${esc(day)}"></label></div>`;
   html += sunHtml(day);
+  html += `<div class="btnrow" style="margin-top:8px">${vrBtn()}</div><p class="note" style="margin-top:4px">Rapportera fällt vilt i Viltrapport. Logga in en gång i webbläsaren och låt den spara lösenordet, så är du oftast redan inloggad nästa gång. Jaktkartan sparar inga inloggningsuppgifter.</p>`;
   if(!lan){ html += `<div class="empty">Välj län för att se vad som är lovligt.</div>`; }
   else {
     const row = r => `<div class="vrow"><span class="vper">${fmtPer(r.per)}</span>${rowLabel(r) ? `<span class="vcls">${esc(rowLabel(r))}</span>` : ''}${r.note ? `<span class="vnote">${esc(r.note)}</span>` : ''}</div>`;

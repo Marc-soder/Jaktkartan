@@ -391,8 +391,11 @@ Rapporter i Viltrapport förs vidare till Viltdata. Slutrapporten för kronhjort
 
 ### Utan API (enklare, går att bygga när som helst)
 
-- [ ] Knappen **Rapportera i Viltrapport** vid ett fällt vilt: kopierar uppgifterna (art, kön, ålder, datum, plats, skytt)
-  och öppnar Viltrapport, så att man klistrar in i stället för att skriva av. Ingen nyckel, inget avtal.
+- [x] Knappen **Öppna Viltrapport** under Vilt, i jaktkortets lista över fällt vilt och i rutan för ett fällt vilt på kartan.
+  Den öppnar Viltrapport i webbläsaren, som håller inloggningen och kan spara lösenordet. Jaktkartan sparar inga
+  inloggningsuppgifter (appen kan inte logga in på en annan webbplats åt användaren utan att hantera lösenordet själv).
+- [ ] Knappen kopierar också uppgifterna om det fällda viltet (art, kön, ålder, datum, plats, skytt),
+  så att man klistrar in i stället för att skriva av. Ingen nyckel, inget avtal.
 - [ ] Jaktledaren kan föra in tilldelningen och vad som är kvar enligt Viltrapport. Appen räknar ned när laget registrerar
   fällt vilt, men vet inte vad andra jaktlag i skötselområdet har skjutit. Stäm av mot Viltrapport före varje jakt.
 
