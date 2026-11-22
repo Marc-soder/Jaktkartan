@@ -11,6 +11,11 @@ tile = {k: open(os.path.join(B, f'tile_{k}.png'), 'rb').read() for k in ('osm', 
 calls = {'match': 0, 'occ': [], 'density': 0}
 fails = []
 
+
+def nav(pg, tab):
+    """Sidomenyn: öppna menyn och välj en sida."""
+    pg.click('#btnMenu'); pg.wait_for_timeout(100); pg.click(f'#tab-{tab}'); pg.wait_for_timeout(100)
+
 def check(cond, msg):
     print(('PASS ' if cond else 'FAIL ') + msg)
     if not cond: fails.append(msg)
@@ -79,7 +84,7 @@ with sync_playwright() as p:
     check('Tornet vid mossen' in lab(), 'och slås på igen')
 
     # Områdesfilter
-    pg.click('#tab-filter')
+    nav(pg, 'filter')
     pg.click('label[for="ar-a-ex-svamp"]', force=True) if False else pg.locator('#paneFilter .frow:nth-child(2) input[data-act="area-toggle"]').click()
     pg.wait_for_timeout(200)
     check(pg.locator('.pin-icon').count() == 5, f'släcka Svampskogen ger 5 nålar (fick {pg.locator(".pin-icon").count()})')
@@ -153,7 +158,7 @@ with sync_playwright() as p:
     check(p2['name'] == 'Saltsten omdöpt' and p2['typeId'] == ft['id'], 'redigerad nål fick nytt namn och typ')
 
     # Lista: klick på rad öppnar popup, navigeringslänk rätt
-    pg.click('#tab-list'); pg.wait_for_timeout(150)
+    nav(pg, 'list'); pg.wait_for_timeout(150)
     href = pg.locator('.pin-row .navbtn').first.get_attribute('href')
     check(href.startswith('https://www.google.com/maps/dir/?api=1&destination='), f'navigeringslänk: {href}')
     pg.locator('.pin-row .main').first.click(); pg.wait_for_timeout(800)
@@ -186,7 +191,7 @@ with sync_playwright() as p:
     pg.check('input[name=base][value=osm]'); pg.keyboard.press('Escape'); pg.wait_for_timeout(200)
 
     # Svampkarta
-    pg.click('#tab-svamp'); pg.locator('#svampToggle').check(force=True); pg.wait_for_timeout(500)
+    nav(pg, 'svamp'); pg.locator('#svampToggle').check(force=True); pg.wait_for_timeout(500)
     st = pg.evaluate('__fk.state()')
     svids = {t['id'] for t in st['types'] if t['svamp']}
     exp = sum(1 for x in st['pins'] if x['typeId'] in svids)
@@ -223,7 +228,7 @@ with sync_playwright() as p:
     check(len(ext) == 1 and ext[0]['points'][0]['name'] == 'Kantarell kompis' and ext[0]['points'][0]['note'] == 'Bra ställe', 'KML importerad med namn och rensad beskrivning')
     # GPX som egna nålar
     with pg.expect_file_chooser() as fc:
-        pg.click('#tab-data'); pg.click('[data-act="import"]')
+        nav(pg, 'data'); pg.click('[data-act="import"]')
     fc.value.set_files(os.path.join(B, 'fixtures/test.gpx')); pg.wait_for_timeout(300)
     pg.check('input[name=im][value=pins]'); pg.select_option('#imType', label='Saltsten'); pg.select_option('#imArea', '__new'); pg.fill('#imAreaNew', 'Saltstenar')
     pg.click('#imOk'); pg.wait_for_timeout(300)
@@ -264,7 +269,7 @@ with sync_playwright() as p:
     check(len(pg.evaluate('__fk.state().pins')) == left and pg.evaluate('__fk.state().settings.svampMode') is True, 'data och svampläge kvar efter omladdning')
     # Återställ från backup (ersätt)
     with pg.expect_file_chooser() as fc:
-        pg.click('#tab-data'); pg.click('[data-act="import"]')
+        nav(pg, 'data'); pg.click('[data-act="import"]')
     fc.value.set_files(bpath); pg.wait_for_timeout(300)
     pg.check('input[name=bm][value=replace]'); pg.click('#biOk'); pg.wait_for_timeout(300)
     check(len(pg.evaluate('__fk.state().pins')) == len(backup['pins']), 'säkerhetskopia återställd')
@@ -283,7 +288,7 @@ with sync_playwright() as p:
       P('rn4', '3. Bäcken', 'a-rn', 58.71, 14.58); P('rn5', 'Tornet', 'a-rn', 58.68, 14.60, 't-torn');
       P('rn6', 'Pass 1', 'a-rn2', 58.75, 14.60); P('rn7', 'Pass 2', 'a-rn2', 58.74, 14.60);
       s.settings.svampMode = false; __fk.renderAll(); })()""")
-    pg.click('#tab-list'); pg.wait_for_timeout(200)
+    nav(pg, 'list'); pg.wait_for_timeout(200)
     check(pg.is_visible('#btnRenumber'), 'knappen Numrera om passen finns under Nålar')
     pg.click('#btnRenumber'); pg.wait_for_timeout(200)
     pg.select_option('#rnArea', 'a-rn'); pg.select_option('#rnDir', 'sn'); pg.wait_for_timeout(100)
@@ -316,7 +321,7 @@ with sync_playwright() as p:
     st1, st2 = sv('2026-06-21', 59.3293, 18.0686), sv('2026-12-21', 59.3293, 18.0686)
     check(abs(mins(st1[0]) - mins('03:30')) <= 2 and abs(mins(st1[1]) - mins('22:08')) <= 2 and abs(mins(st2[0]) - mins('08:43')) <= 2 and abs(mins(st2[1]) - mins('14:48')) <= 2, f'soluppgång och solnedgång i Stockholm stämmer (midsommar {st1}, vintersolstånd {st2})')
     check(sv('2026-06-21', 67.8558, 20.2253) == 'day' and sv('2026-12-21', 67.8558, 20.2253) == 'night', 'midnattssol och mörkertid i Kiruna')
-    pg.click('#tab-vilt'); pg.wait_for_timeout(200)
+    nav(pg, 'vilt'); pg.wait_for_timeout(200)
     vt = pg.inner_text('#paneVilt')
     check('Sol upp' in vt and 'Skjutljus' in vt and 'en timme före och efter' in vt, 'Vilt-fliken visar sol och skjutljus')
     # En öppen nålruta ska inte stängas när annat ritas om (t.ex. vid ändringar i molnet)
@@ -330,10 +335,31 @@ with sync_playwright() as p:
       s.pins.push({id:bad, name:'Elak nål', typeId:'t-pass', areaId:bad, lat:58.72, lng:14.6, note:'', created:1, updated:1});
       s.types.push({id:bad, name:'Elak typ', color:'#123456', icon:'dot', text:'', visible:true});
       __fk.renderAll(); })()""")
-    pg.click('#tab-list'); pg.wait_for_timeout(150); pg.click('#tab-filter'); pg.wait_for_timeout(150)
+    nav(pg, 'list'); pg.wait_for_timeout(150); nav(pg, 'filter'); pg.wait_for_timeout(150)
     pg.evaluate("document.querySelectorAll('*').forEach(e => e.dispatchEvent(new MouseEvent('mouseover', {bubbles:true})))")
     check(pg.evaluate("document.querySelectorAll('[onmouseover]').length") == 0 and not pg.evaluate("window.__pwn"), 'id:n med citattecken escapas och blir inte kod i sidan')
     pg.evaluate("(() => { const s = __fk.state(), bad = s.pins.find(p => p.name === 'Elak nål').id; s.pins = s.pins.filter(p => p.id !== bad); s.areas = s.areas.filter(a => a.id !== bad); s.types = s.types.filter(t => t.id !== bad); __fk.renderAll(); })()")
+    # Typfilter per område: en typ kan döljas i ett område men synas i ett annat
+    pg.evaluate("""(() => { const s = __fk.state(), a = s.areas.find(x => x.name === 'Exempel: Svampskogen');
+      s.pins.push({id:'p-extra-pass', name:'Pass i svampskogen', typeId:'t-pass', areaId:a.id, lat:58.716, lng:14.602, note:'', created:1, updated:1}); __fk.renderAll(); })()""")
+    pg.wait_for_timeout(200)
+    n_all = pg.locator('.pin-icon').count()
+    jm = pg.evaluate("__fk.state().areas.find(x => x.name === 'Exempel: Jaktmarken').id")
+    nav(pg, 'filter'); pg.click(f'#paneFilter [data-act="area-edit"][data-id="{jm}"]'); pg.wait_for_timeout(300)
+    check(pg.locator('#paneArea [data-act="area-type-toggle"]').count() == 5 and 'bara det här området' in pg.inner_text('#paneArea'), 'områdets vy har ett typfilter som bara gäller området')
+    pg.uncheck(f'#paneArea [data-act="area-type-toggle"][data-id="t-pass"]', force=True); pg.wait_for_timeout(300)
+    vis = pg.evaluate("__fk.state().pins.filter(p => p.typeId === 't-pass').map(p => [p.name, p.areaId, __fk.pinVisible(p)])")
+    in_jm = [v for n, ar, v in vis if ar == jm]
+    check(in_jm and not any(in_jm) and ['Pass i svampskogen', True] in [[n, v] for n, ar, v in vis] and pg.locator('.pin-icon').count() == n_all - len(in_jm), f'Pass döljs i Jaktmarken men syns i Svampskogen: {vis}')
+    check(pg.evaluate("__fk.state().types.find(t => t.id === 't-pass').visible") is not False and pg.evaluate("__fk.state().settings.areaTypes")[jm].get('t-pass') is True, 'typen är inte dold på hela kartan, bara i området')
+    pg.click('#pBack'); pg.wait_for_timeout(200)
+    check('1 typ dold här' in pg.inner_text('#paneFilter'), 'Filter visar att området har en dold typ')
+    pg.reload(); pg.wait_for_timeout(1200)
+    check(pg.locator('.pin-icon').count() == n_all - 1, 'typfiltret per område finns kvar efter omladdning')
+    nav(pg, 'filter'); pg.click(f'#paneFilter [data-act="area-edit"][data-id="{jm}"]'); pg.wait_for_timeout(300)
+    pg.click('#paneArea [data-act="area-types-all"]'); pg.wait_for_timeout(300)
+    check(pg.locator('.pin-icon').count() == n_all and not pg.evaluate("(__fk.state().settings.areaTypes || {})['" + jm + "']"), 'Visa alla typer i området tar bort filtret')
+    pg.evaluate("(() => { const s = __fk.state(); s.pins = s.pins.filter(p => p.id !== 'p-extra-pass'); __fk.renderAll(); })()")
     check(not errors, f'inga JS-fel på dator: {errors[:3]}')
     ctx.close()
 
@@ -347,13 +373,13 @@ with sync_playwright() as p:
         sh = pg.evaluate('getComputedStyle(document.documentElement).getPropertyValue("--sheet-h")')
         check(pg.locator('.pin-icon').count() == 8, f'mobil {scheme}: 8 nålar, låda {sh}')
         pg.screenshot(path=f'{SHOTS}/m_{scheme}_peek.png')
-        pg.click('#tab-list'); pg.wait_for_timeout(400)
+        nav(pg, 'list'); pg.wait_for_timeout(400)
         pg.screenshot(path=f'{SHOTS}/m_{scheme}_list.png')
         sw = pg.evaluate('document.documentElement.scrollWidth')
         check(sw <= 390, f'mobil {scheme}: ingen horisontell scroll ({sw})')
         if scheme == 'light':
-            pg.click('#tab-svamp'); pg.wait_for_timeout(300); pg.screenshot(path=f'{SHOTS}/m_svamp.png')
-            pg.click('#tab-filter'); pg.wait_for_timeout(300); pg.screenshot(path=f'{SHOTS}/m_filter.png')
+            nav(pg, 'svamp'); pg.wait_for_timeout(300); pg.screenshot(path=f'{SHOTS}/m_svamp.png')
+            nav(pg, 'filter'); pg.wait_for_timeout(300); pg.screenshot(path=f'{SHOTS}/m_filter.png')
             pg.click('#btnAdd'); pg.wait_for_timeout(400); pg.screenshot(path=f'{SHOTS}/m_place.png')
             pg.click('#placeOk'); pg.wait_for_timeout(300); pg.screenshot(path=f'{SHOTS}/m_form.png')
             pg.keyboard.press('Escape')

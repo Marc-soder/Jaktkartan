@@ -9,6 +9,11 @@ B = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(B)
 CHROME = os.environ.get('CHROME_PATH') or None
 IMG = os.path.join(B, 'tile_osm.png')
 fails = []
+
+def nav(pg, tab):
+    """Sidomenyn: öppna menyn och välj en sida."""
+    pg.click('#btnMenu'); pg.wait_for_timeout(100); pg.click(f'#tab-{tab}'); pg.wait_for_timeout(100)
+
 def check(c, m):
     print(('PASS ' if c else 'FAIL ') + m)
     if not c: fails.append(m)
@@ -69,8 +74,8 @@ with sync_playwright() as p:
         if not (req.url.startswith(f'http://localhost:{PORT}/') or req.url.startswith('data:') or req.url.startswith('blob:')): net.append((req.method, req.url, req.post_data or ''))
     pg.on('request', watch)
 
-    pg.click('#tab-jakt'); pg.wait_for_timeout(200)
-    check(pg.is_visible('#docsOpenBtn') and 'bara på den här enheten' in pg.inner_text('#paneJakt'), 'Jakt-fliken har Mina dokument, även utan inloggning')
+    nav(pg, 'konto'); pg.wait_for_timeout(200)
+    check(pg.is_visible('#docsOpenBtn') and 'bara på den här enheten' in pg.inner_text('#paneKonto'), 'Mitt konto har Mina dokument, även utan inloggning')
     pg.click('#docsOpenBtn'); pg.wait_for_timeout(300)
     check(pg.is_visible('#dsPass') and 'Glömmer du dokumentlösen' in pg.inner_text('.modal'), 'första gången väljer man en dokumentlösen, med varning om att den inte går att få tillbaka')
     pg.fill('#dsPass', 'kort'); pg.fill('#dsPass2', 'kort'); pg.click('#dsOk'); pg.wait_for_timeout(300)
@@ -157,7 +162,7 @@ with sync_playwright() as p:
     check(pg.evaluate('__fk.docs.key') is None, 'efter omstart är dokumenten låsta')
 
     # Ta bort, och glömt lösen
-    pg.click('#tab-jakt'); pg.click('#docsOpenBtn'); pg.wait_for_timeout(300); pg.fill('#duPass', PASS2); pg.click('#duOk'); pg.wait_for_timeout(2500)
+    nav(pg, 'konto'); pg.click('#docsOpenBtn'); pg.wait_for_timeout(300); pg.fill('#duPass', PASS2); pg.click('#duOk'); pg.wait_for_timeout(2500)
     pg.click('.doc-row [data-dc="edit"]'); pg.wait_for_timeout(200); pg.click('#dfDel'); pg.click('#dfDel'); pg.wait_for_timeout(600)
     check('Inga dokument ännu' in pg.inner_text('#docsBox') and pg.evaluate("new Promise(r => { const o = indexedDB.open('jk-docs'); o.onsuccess = () => { const q = o.result.transaction('docs').objectStore('docs').count(); q.onsuccess = () => { r(q.result); o.result.close(); }; }; })") == 0, 'dokumentet går att ta bort')
     pg.click('[data-dc="lock"]'); pg.wait_for_timeout(200); pg.click('#docsOpenBtn'); pg.wait_for_timeout(300)

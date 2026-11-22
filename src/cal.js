@@ -67,22 +67,28 @@ function calAgendaHtml(){
   h += `<div class="btnrow"><button class="btn sm" type="button" data-j="cal">Visa kalendern</button></div>`;
   return h;
 }
-/* Visar jaktkortet i Jakt-fliken. */
+/* Visar jaktkortet i jaktlagets vy: pågående jakter under Jakt, kommande under Planera. */
 function calGo(gid, hid){
-  closeModal(); setTab('jakt'); if(!isDesktop() && sheet !== 'full') setSheet('full');
+  const g = cloud.groups[gid], h = g && (g.hunts || {})[hid], st = h ? huntState(h) : 'live';
+  closeModal(); openTeam(gid, g && g.kind === 'member' && (st === 'planned' || st === 'upcoming') ? 'plan' : 'jakt'); if(!isDesktop() && sheet !== 'full') setSheet('full');
   setTimeout(() => { const el = document.getElementById(`hc-${gid}-${hid}`); if(!el) return; el.scrollIntoView({block:'start', behavior:'smooth'}); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1600); }, 80);
 }
-function openCal(iso){
+/* Kalendern i panelen. Väljer dagen i dag, eller nästa dag med en jakt. */
+function calPick(iso){
   const hs = calHunts(), today = todayISO();
   const first = hs.find(x => x.st !== 'ended' && x.day >= today);
   calUi.sel = iso || (hs.some(x => x.day === today) ? today : first ? first.day : today);
   calUi.month = calUi.sel.slice(0, 7);
-  openModal(`<div class="cal-head"><h2>Kalender</h2><button class="iconbtn" type="button" id="calClose" aria-label="Stäng">×</button></div><div id="calBox"></div>`, m => {
-    m.querySelector('#calClose').addEventListener('click', closeModal);
-    m.querySelector('#calBox').addEventListener('click', calClick);
-    calRender();
-  });
 }
+function openCal(iso){ calPick(iso); setTab('kalender'); }
+function renderKalender(){
+  if(!calUi.sel) calPick();
+  const inv = document.getElementById('calInv'), n = cloud.status === 'in' ? calInvites().length : 0;
+  if(inv) inv.innerHTML = cloud.status !== 'in' ? '<p class="note" style="margin-top:0">Logga in under Mitt konto för att se jakterna i dina jaktlag.</p>'
+    : n ? `<div class="banner cal-inv"><span>Du har ${n === 1 ? 'en inbjudan' : n + ' inbjudningar'} att svara på.</span></div>` : '';
+  calRender();
+}
+$('#paneKalender').addEventListener('click', e => { if(e.target.closest('#calBox')) calClick(e); });
 function calRender(){
   const box = document.getElementById('calBox'); if(!box) return;
   const [y, mo] = calUi.month.split('-').map(Number), first = new Date(y, mo - 1, 1), days = new Date(y, mo, 0).getDate();
@@ -107,8 +113,8 @@ function calRender(){
     ${sel.length ? `<div class="cal-list">${sel.map(x => calRow(x, true)).join('')}</div>` : '<p class="note" style="margin-top:0">Ingen jakt den här dagen.</p>'}
     ${lead.length && calUi.sel >= today ? `<div class="btnrow">${lead.map(g => `<button class="btn sm primary" type="button" data-c="new" data-g="${esc(g.id)}">Planera jakt ${esc(dayLabel(calUi.sel))}${lead.length > 1 ? ' i ' + esc(gname(g)) : ''}</button>`).join('')}</div>` : ''}`;
 }
-/* Ritar om kalendern när något ändras i molnet, om den är öppen. */
-function calRefresh(){ if(document.getElementById('calBox')) calRender(); }
+/* Ritar om kalendern när något ändras i molnet. */
+function calRefresh(){ if(document.getElementById('calBox') && calUi.sel) renderKalender(); }
 function calClick(e){
   const b = e.target.closest('[data-c]'); if(!b) return;
   const c = b.dataset.c, g = cloud.groups[b.dataset.g], hid = b.dataset.h;
@@ -119,7 +125,7 @@ function calClick(e){
   if(c === 'go' || c === 'cal-go') calGo(g.id, hid);
   else if(c === 'rsvp') rsvpSet(g, hid, true);
   else if(c === 'rsvp-no') rsvpSet(g, hid, false);
-  else if(c === 'plan'){ closeModal(); openPlan(g, hid); }
+  else if(c === 'plan') openPlan(g, hid);
   else if(c === 'start'){ const h = (g.hunts || {})[hid]; if(h && huntDay(h) !== todayISO()) confirmClick(b, 'Starta i dag?', () => startHunt(g, hid)); else startHunt(g, hid); }
-  else if(c === 'new'){ closeModal(); openHuntForm(g, null, calUi.sel); }
+  else if(c === 'new') openHuntForm(g, null, calUi.sel);
 }

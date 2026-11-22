@@ -305,7 +305,7 @@ function docsRemind(){
     if(!soon.length || lsGet('jk.docsRemind') === todayISO()) return;
     lsSet('jk.docsRemind', todayISO());
     const n = daysTo(soon[0]);
-    toast(n < 0 ? 'Ett av dina sparade dokument har gått ut. Öppna Mina dokument under Jakt.' : `Ett av dina sparade dokument går ut ${fmtDay(soon[0])}. Öppna Mina dokument under Jakt.`, 7000);
+    toast(n < 0 ? 'Ett av dina sparade dokument har gått ut. Öppna Mina dokument under Mitt konto.' : `Ett av dina sparade dokument går ut ${fmtDay(soon[0])}. Öppna Mina dokument under Mitt konto.`, 7000);
   }).catch(() => {});
 }
 setTimeout(docsRemind, 2500);

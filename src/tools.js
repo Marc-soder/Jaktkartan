@@ -475,11 +475,12 @@ function renumberAreas(){
   return Object.entries(counts).map(([id, n]) => ({id, n, name:id ? ((areaById(id) || {}).name || 'Okänt område') : 'Utan område'}))
     .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, 'sv'));
 }
-function openRenumber(){
+/* areaId: börja med det området (från områdets vy) */
+function openRenumber(areaId){
   const areas = renumberAreas();
   if(!passPins().length){ toast('Det finns inga pass som du kan ändra.'); return; }
   const set = state.settings.renumber || {};
-  let areaKey = areas.some(a => a.id === set.area) ? set.area : areas[0].id, dir = RENUM_DIRS[set.dir] ? set.dir : 'sn', start = 1;
+  let areaKey = areaId && areas.some(a => a.id === areaId) ? areaId : areas.some(a => a.id === set.area) ? set.area : areas[0].id, dir = RENUM_DIRS[set.dir] ? set.dir : 'sn', start = 1;
   openModal(`<h2>Numrera om passen</h2>
     <p class="note" style="margin-top:0">Passen får nummer i ordning efter var de ligger. Varje jaktmark numreras för sig. Text efter numret behålls.</p>
     <div class="row2">
@@ -510,7 +511,7 @@ function openRenumber(){
       state.settings.renumber = {area:areaKey, dir};
       renumberUndo = changed ? undo : null;
       save(); closeModal(); renderAll();
-      toast(changed ? `${changed} pass har numrerats om. Ångra under Nålar.` : 'Passen var redan i ordning.', 4500);
+      toast(changed ? `${changed} pass har numrerats om. Ångra under Nålar eller i områdets vy.` : 'Passen var redan i ordning.', 4500);
     });
     preview();
   });

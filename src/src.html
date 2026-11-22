@@ -309,13 +309,42 @@ a{color:var(--accent)}
 #panel.peek:not(.dragging) .p-body{visibility:hidden}
 .handle{flex:none;height:22px;display:grid;place-items:center;touch-action:none;cursor:grab;border:0;background:none;width:100%;padding:0}
 .handle span{width:42px;height:5px;border-radius:3px;background:var(--line)}
-.p-head{flex:none;display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:0 max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px));touch-action:none}
+.p-head{flex:none;display:flex;align-items:center;gap:4px;padding:0 max(10px,env(safe-area-inset-right,0px)) 4px max(6px,env(safe-area-inset-left,0px));touch-action:none;min-height:48px}
+.p-title{flex:1;min-width:0;margin:0;font:700 21px/1.15 var(--font-display);letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p-head .iconbtn{flex:none;width:44px;height:44px;border-radius:12px}
+.p-head .iconbtn svg{width:24px;height:24px}
+.p-menu.has-news{position:relative}.p-menu.has-news::after{content:'';position:absolute;top:8px;right:8px;width:9px;height:9px;border-radius:50%;background:var(--accent)}
 .brand{font:700 22px/1.1 var(--font-display);letter-spacing:.02em;margin:0;color:var(--spruce)}
 .brand b{color:var(--accent)}
 .p-stat{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
-.tabs{flex:none;display:flex;gap:2px;padding:6px max(10px,env(safe-area-inset-right,0px)) 0 max(10px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--line)}
-.tab{flex:1;border:0;background:none;padding:10px 2px 9px;font:600 14px/1 var(--font-display);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-1px}
-.tab[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+.tabs{flex:none;display:flex;gap:2px;padding:0 max(10px,env(safe-area-inset-right,0px)) 0 max(10px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--line)}
+.tabs[hidden]{display:none}
+.stab{flex:1;border:0;background:none;padding:10px 2px 9px;font:600 13px/1 var(--font-display);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-1px;cursor:pointer;white-space:nowrap}
+.stab[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+/* Sidomenyn */
+.drawer-back{position:fixed;inset:0;z-index:1480;background:var(--scrim)}
+.drawer-back[hidden],.drawer[hidden]{display:none}
+.drawer{position:fixed;z-index:1490;top:0;bottom:0;left:0;width:min(300px,84vw);background:var(--surface);box-shadow:var(--shadow);display:flex;flex-direction:column;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);overflow:auto;animation:drawerin .18s ease-out}
+@keyframes drawerin{from{transform:translateX(-100%)}to{transform:none}}
+.dr-head{display:flex;align-items:center;justify-content:space-between;padding:14px 10px 10px 18px;border-bottom:1px solid var(--line)}
+.dr-head .iconbtn{font-size:24px;width:44px;height:44px}
+.dr-list{display:flex;flex-direction:column;padding:8px 0}
+.tab.dr-item{display:block;width:100%;text-align:left;border:0;border-left:4px solid transparent;background:none;padding:14px 18px;font:600 16px/1.2 var(--font-body);color:var(--fg);cursor:pointer}
+.tab.dr-item:hover{background:var(--surface-2)}
+.tab.dr-item[aria-selected="true"]{border-left-color:var(--accent);background:var(--accent-soft)}
+.dr-teams{display:flex;flex-direction:column}
+.dr-team{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:0;background:none;padding:11px 18px 11px 38px;font:500 15px/1.25 var(--font-body);color:var(--fg);cursor:pointer}
+.dr-team span:first-child{flex:1;min-width:0;overflow-wrap:anywhere}
+.dr-team:hover{background:var(--surface-2)}.dr-team.on{color:var(--accent);font-weight:700}
+.team-list{display:grid;gap:8px}
+.team-row{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:14px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);font:600 16px/1.25 var(--font-body);cursor:pointer}
+.team-row .tr-name{flex:1;min-width:0;overflow-wrap:anywhere}.team-row .tr-go{font-size:22px;color:var(--muted)}
+.hunt-row{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}
+.hunt-row > span{min-width:0;overflow-wrap:anywhere}
+.ar-sec{margin-top:18px}
+.ar-pins{display:grid;gap:2px}
+.ar-pin{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;padding:8px 2px;color:var(--fg);font:400 15px/1.3 var(--font-body);cursor:pointer}
+.ar-pin .fname{flex:1;min-width:0}
 .p-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:14px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px))}
 @media (min-width:860px){
   #panel{top:0;right:auto;width:var(--panel-w);height:auto;border-radius:0;box-shadow:none;border-right:1px solid var(--line);padding-top:env(safe-area-inset-top,0px)}
@@ -603,27 +632,41 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
   </div>
 </div>
 
+<div class="drawer-back" id="drawerBack" hidden></div>
+<nav class="drawer" id="drawer" aria-label="Meny" hidden>
+  <div class="dr-head"><span class="brand">Jakt<b>kartan</b></span><button class="iconbtn" id="drawerClose" type="button" aria-label="Stäng menyn">×</button></div>
+  <div class="dr-list">
+    <button class="tab dr-item" type="button" data-tab="konto" aria-selected="false" id="tab-konto">Mitt konto</button>
+    <button class="tab dr-item" type="button" data-tab="list" aria-selected="true" id="tab-list">Nålar</button>
+    <button class="tab dr-item" type="button" data-tab="filter" aria-selected="false" id="tab-filter">Filter</button>
+    <button class="tab dr-item" type="button" data-tab="svamp" aria-selected="false" id="tab-svamp">Svamp</button>
+    <button class="tab dr-item" type="button" data-tab="data" aria-selected="false" id="tab-data">Data</button>
+    <button class="tab dr-item" type="button" data-tab="jakt" aria-selected="false" id="tab-jakt">Jakt</button>
+    <div class="dr-teams" id="drTeams"></div>
+    <button class="tab dr-item" type="button" data-tab="kalender" aria-selected="false" id="tab-kalender">Kalender</button>
+    <button class="tab dr-item" type="button" data-tab="vilt" aria-selected="false" id="tab-vilt">Vilt</button>
+  </div>
+</nav>
+
 <aside id="panel" aria-label="Kartnålar och inställningar">
   <button class="handle" id="handle" type="button" aria-label="Dra upp eller ned panelen"><span></span></button>
   <div class="p-head" id="pHead">
-    <h1 class="brand">Jakt<b>kartan</b></h1>
+    <button class="iconbtn p-menu" id="btnMenu" type="button" aria-label="Meny" aria-controls="drawer" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <button class="iconbtn p-back" id="pBack" type="button" aria-label="Tillbaka" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <h1 class="p-title" id="pTitle">Nålar</h1>
     <span class="p-stat" id="pStat"></span>
   </div>
-  <div class="tabs" role="tablist">
-    <button class="tab" role="tab" data-tab="list" aria-selected="true" id="tab-list">Nålar</button>
-    <button class="tab" role="tab" data-tab="filter" aria-selected="false" id="tab-filter">Filter</button>
-    <button class="tab" role="tab" data-tab="jakt" aria-selected="false" id="tab-jakt">Jakt</button>
-    <button class="tab" role="tab" data-tab="vilt" aria-selected="false" id="tab-vilt">Vilt</button>
-    <button class="tab" role="tab" data-tab="svamp" aria-selected="false" id="tab-svamp">Svamp</button>
-    <button class="tab" role="tab" data-tab="data" aria-selected="false" id="tab-data">Data</button>
-  </div>
+  <div class="tabs" id="subTabs" role="tablist" aria-label="Jaktlaget" hidden></div>
   <div class="p-body" id="pBody">
     <section data-pane="list" id="paneList"></section>
+    <section data-pane="konto" id="paneKonto" hidden></section>
     <section data-pane="filter" id="paneFilter" hidden></section>
     <section data-pane="jakt" id="paneJakt" hidden></section>
+    <section data-pane="kalender" id="paneKalender" hidden><div id="calInv"></div><div id="calBox"></div></section>
     <section data-pane="vilt" id="paneVilt" hidden></section>
     <section data-pane="svamp" id="paneSvamp" hidden></section>
     <section data-pane="data" id="paneData" hidden></section>
+    <section data-pane="area" id="paneArea" hidden></section>
   </div>
 </aside>
 
@@ -822,10 +865,15 @@ const typeById = id => state.types.find(t => t.id === id);
 const areaById = id => state.areas.find(a => a.id === id);
 const pinById = id => state.pins.find(p => p.id === id);
 
+/* Typer som är dolda i ett visst område: state.settings.areaTypes = {område: {typ: true}}.
+   Sparas bara på den här enheten (som övriga filter) och delas inte med jaktlaget. */
+const areaTypeHidden = (aid, tid) => !!(aid && ((state.settings.areaTypes || {})[aid] || {})[tid]);
+const areaHiddenCount = aid => Object.values((state.settings.areaTypes || {})[aid] || {}).filter(Boolean).length;
 function pinVisible(p){
   const t = typeById(p.typeId); if(!t) return false;
   const areaOn = p.areaId && areaById(p.areaId) ? areaById(p.areaId).visible !== false : state.settings.noAreaVisible !== false;
   if(!areaOn) return false;
+  if(p.areaId && areaById(p.areaId) && areaTypeHidden(p.areaId, p.typeId)) return false;
   if(state.settings.svampMode) return !!t.svamp;
   return t.visible !== false;
 }
@@ -1068,7 +1116,7 @@ function setSvampMode(on){
 
 /* ---------- Panel / bottenlåda ---------- */
 let sheet = 'peek';
-function peekH(){ return $('#handle').offsetHeight + $('#pHead').offsetHeight + $('.tabs').offsetHeight; }
+function peekH(){ return $('#handle').offsetHeight + $('#pHead').offsetHeight + $('#subTabs').offsetHeight; }
 function sheetHeight(s){
   const vh = window.innerHeight;
   if(s === 'full') return Math.round(vh - 64);
@@ -1096,7 +1144,7 @@ function sheetRestore(){ if(sheet === 'min' && !placing && !drawing && !(typeof 
 function bottomPad(){ return isDesktop() ? 0 : (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-h')) || 0); }
 (function sheetDrag(){
   const panel = $('#panel'); let startY = 0, startH = 0, moved = false, active = false;
-  const down = e => { if(isDesktop()) return; active = true; moved = false; startY = e.clientY; startH = panel.getBoundingClientRect().height; panel.classList.add('dragging'); e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId); };
+  const down = e => { if(isDesktop() || (e.currentTarget.id === 'pHead' && e.target.closest('button'))) return; active = true; moved = false; startY = e.clientY; startH = panel.getBoundingClientRect().height; panel.classList.add('dragging'); e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId); };
   const move = e => { if(!active) return; const dy = startY - e.clientY; if(Math.abs(dy) > 6) moved = true; if(!moved) return;
     const hpx = Math.max(minH(), Math.min(window.innerHeight - 40, startH + dy)); panel.style.height = hpx + 'px'; document.documentElement.style.setProperty('--sheet-h', hpx + 'px'); syncCross(); if(typeof renderCompass === 'function') renderCompass(); };
   const up = e => { if(!active) return; active = false; panel.classList.remove('dragging');
@@ -1109,13 +1157,60 @@ function bottomPad(){ return isDesktop() ? 0 : (parseFloat(getComputedStyle(docu
     el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
   }
 })();
-function setTab(tab){
+/* ---------- Navigering: sidomenyn och panelen ----------
+   Sidomenyn väljer vad panelen visar (Mitt konto, Nålar, Filter, Svamp, Data, Jakt, Kalender, Vilt).
+   Under Jakt finns en rad per jaktlag: jaktlagets egen vy har flikarna Jakt, Planera, Områden och Medlemmar.
+   Pennan vid ett område öppnar områdets vy. Tillbaka-pilen går ett steg tillbaka. */
+const nav = {tab:'list', team:null, sub:'jakt', area:null, from:null};
+const NAV_TITLE = {list:'Nålar', konto:'Mitt konto', filter:'Filter', jakt:'Jakt', kalender:'Kalender', vilt:'Vilt', svamp:'Svamp', data:'Data', area:'Område'};
+function showPane(tab){
   $$('.tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
   $$('[data-pane]').forEach(p => { p.hidden = p.dataset.pane !== tab; });
   $('#pBody').scrollTop = 0;
-  if(sheet === 'peek' && !isDesktop()) setSheet('half');
+  if(!isDesktop() && (sheet === 'peek' || sheet === 'min')) setSheet('half');
 }
-$$('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+function setTab(tab){
+  nav.tab = tab; nav.team = null; nav.area = null; nav.from = null;
+  showPane(tab);
+  if(tab === 'jakt' || tab === 'konto') renderJakt();
+  if(tab === 'kalender' && typeof renderKalender === 'function') renderKalender();
+  renderNav();
+}
+function openTeam(gid, sub){
+  nav.tab = 'jakt'; nav.team = gid; nav.area = null; nav.from = null;
+  if(sub) nav.sub = sub;
+  showPane('jakt'); renderJakt(); renderNav();
+}
+function navBack(){
+  if(nav.tab === 'area' && nav.from){ const f = nav.from; nav.from = null; nav.area = null; if(f.team) openTeam(f.team, f.sub); else setTab(f.tab); return; }
+  if(nav.tab === 'area'){ setTab('filter'); return; }
+  if(nav.tab === 'jakt' && nav.team){ setTab('jakt'); return; }
+}
+function renderNav(){
+  const g = nav.team && typeof cloud !== 'undefined' ? cloud.groups[nav.team] : null, a = nav.area ? areaById(nav.area) : null;
+  $('#pTitle').textContent = nav.tab === 'jakt' && g ? gname(g) : nav.tab === 'area' ? (a ? a.name : 'Område') : NAV_TITLE[nav.tab] || '';
+  $('#pBack').hidden = !((nav.tab === 'jakt' && g) || nav.tab === 'area');
+  const st = $('#subTabs'), tabs = !!(nav.tab === 'jakt' && g && g.kind === 'member');
+  if(tabs) st.innerHTML = Object.entries(TEAM_TABS).map(([k, l]) => `<button class="stab" type="button" role="tab" data-sub="${k}" aria-selected="${nav.sub === k}" id="sub-${k}">${l}</button>`).join('');
+  if(st.hidden === tabs){ st.hidden = !tabs; if(!isDesktop()) setSheet(sheet, true); }   // höjden i nedfällt läge ändras
+  if(typeof renderDrawerTeams === 'function') renderDrawerTeams();
+}
+$('#subTabs').addEventListener('click', e => { const b = e.target.closest('[data-sub]'); if(!b) return; nav.sub = b.dataset.sub; renderJakt(); renderNav(); $('#pBody').scrollTop = 0; if(!isDesktop() && (sheet === 'peek' || sheet === 'min')) setSheet('half'); });
+$('#pBack').addEventListener('click', navBack);
+/* Sidomenyn */
+function drawerOpen(open){
+  const d = $('#drawer'), back = $('#drawerBack');
+  d.hidden = !open; back.hidden = !open; $('#btnMenu').setAttribute('aria-expanded', String(open));
+  if(open){ $('#btnMenu').classList.remove('has-news'); if(typeof renderDrawerTeams === 'function') renderDrawerTeams(); const cur = d.querySelector('.dr-item[aria-selected="true"]') || d.querySelector('.dr-item'); if(cur) cur.focus(); }
+}
+$('#btnMenu').addEventListener('click', () => drawerOpen($('#drawer').hidden));
+$('#drawerClose').addEventListener('click', () => drawerOpen(false));
+$('#drawerBack').addEventListener('click', () => drawerOpen(false));
+$('#drawer').addEventListener('click', e => {
+  const t = e.target.closest('[data-team]'), b = e.target.closest('.dr-item');
+  if(t){ drawerOpen(false); openTeam(t.dataset.team); }
+  else if(b){ drawerOpen(false); setTab(b.dataset.tab); }
+});
 
 /* ---------- Nållista ---------- */
 let listQuery = '';
@@ -1191,7 +1286,7 @@ function renderFilter(){
   let html = `<h3 class="sec">Områden <span><button class="linkbtn" type="button" data-act="areas-all">Visa alla</button> · <button class="linkbtn" type="button" data-act="areas-none">Dölj alla</button></span></h3><div>`;
   for(const a of state.areas){
     html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ar-${esc(a.id)}" data-act="area-toggle" data-id="${esc(a.id)}" ${a.visible !== false ? 'checked' : ''} aria-label="Visa ${esc(a.name)}">
-      <label class="fname" for="ar-${esc(a.id)}">${esc(a.name)}</label>${a.gid ? `<span class="tag" title="Delas med ${esc(gname(cloud.groups[a.gid]))}">Delat</span>` : ''}<span class="fcount">${cnt(p => p.areaId === a.id)}</span>
+      <label class="fname" for="ar-${esc(a.id)}">${esc(a.name)}${areaHiddenCount(a.id) ? `<br><span class="small muted">${areaHiddenCount(a.id)} ${areaHiddenCount(a.id) === 1 ? 'typ dold' : 'typer dolda'} här</span>` : ''}</label>${a.gid ? `<span class="tag" title="Delas med ${esc(gname(cloud.groups[a.gid]))}">Delat</span>` : ''}<span class="fcount">${cnt(p => p.areaId === a.id)}</span>
       <button class="iconbtn" type="button" data-act="area-zoom" data-id="${esc(a.id)}" aria-label="Zooma till ${esc(a.name)}" title="Zooma till området">${ICON_ZOOM}</button>
       ${canEditArea(a) ? `<button class="iconbtn" type="button" data-act="area-edit" data-id="${esc(a.id)}" aria-label="Ändra ${esc(a.name)}">${ICON_EDIT}</button>` : '<span style="width:36px"></span>'}
       ${!a.gid || (cloud.groups[a.gid] && isAdminGroup(cloud.groups[a.gid])) ? `<button class="iconbtn" type="button" data-act="area-del" data-id="${esc(a.id)}" aria-label="Ta bort ${esc(a.name)}">${ICON_TRASH}</button>` : '<span style="width:36px"></span>'}</div>`;
@@ -1287,7 +1382,7 @@ function renderLayerPop(){
   renderTrailControls(); renderShotList(); renderWindNote(); heatSync();
 }
 function renderAll(){
-  renderMarkers(); renderExternal(); renderList(); renderFilter(); renderSvampPane(); renderData(); renderStatus(); renderLayerPop(); renderJakt(); renderVilt(); renderBorders(); renderPlan(); planBodyRender(); renderSos();
+  renderMarkers(); renderExternal(); renderList(); renderFilter(); renderSvampPane(); renderData(); renderStatus(); renderLayerPop(); renderJakt(); renderVilt(); renderBorders(); renderPlan(); planBodyRender(); renderSos(); renderAreaView(); if(typeof renderKalender === 'function' && nav.tab === 'kalender') renderKalender(); renderNav();
 }
 
 /* ---------- Händelser i panelen ---------- */
@@ -1307,11 +1402,12 @@ $('#panel').addEventListener('click', e => {
   else if(act === 'group'){ const k = b.dataset.key; state.settings.closedGroups[k] = !state.settings.closedGroups[k]; save(); b.parentElement.classList.toggle('closed'); b.setAttribute('aria-expanded', String(!state.settings.closedGroups[k])); }
   else if(act === 'clear-ex'){ clearExamples(); }
   else if(act === 'renumber') openRenumber();
+  else if(act === 'area-types-all'){ if(state.settings.areaTypes) delete state.settings.areaTypes[id]; save(); renderAll(); }
   else if(act === 'renumber-undo') undoRenumber();
   else if(act === 'areas-all' || act === 'areas-none'){ const v = act === 'areas-all'; state.areas.forEach(a => a.visible = v); state.settings.noAreaVisible = v; save(); renderAll(); }
   else if(act === 'area-edit') openAreaForm(id);
   else if(act === 'area-zoom') zoomToArea(id);
-  else if(act === 'area-del'){ const a = areaById(id); confirmClick(b, 'Bekräfta', () => { state.pins.forEach(p => { if(p.areaId === id) p.areaId = null; }); state.areas = state.areas.filter(x => x.id !== id); save(); renderAll(); toast(a.gid ? `”${a.name}” togs bort för hela laget. Nålarna ligger nu privat hos dig under Utan område.` : `”${a.name}” togs bort. Nålarna ligger nu under Utan område.`, 5000); }); }
+  else if(act === 'area-del'){ const a = areaById(id); confirmClick(b, 'Bekräfta', () => { state.pins.forEach(p => { if(p.areaId === id) p.areaId = null; }); state.areas = state.areas.filter(x => x.id !== id); save(); if(nav.tab === 'area' && nav.area === id) navBack(); renderAll(); toast(a.gid ? `”${a.name}” togs bort för hela laget. Nålarna ligger nu privat hos dig under Utan område.` : `”${a.name}” togs bort. Nålarna ligger nu under Utan område.`, 5000); }); }
   else if(act === 'type-new') openTypeForm(null);
   else if(act === 'type-edit') openTypeForm(id);
   else if(act === 'import-ext'){ importTarget = 'ext'; $('#fileImport').click(); }
@@ -1328,6 +1424,7 @@ $('#panel').addEventListener('change', e => {
   if(act === 'area-toggle'){ areaById(id).visible = b.checked; }
   else if(act === 'noarea-toggle'){ state.settings.noAreaVisible = b.checked; }
   else if(act === 'type-toggle'){ typeById(id).visible = b.checked; }
+  else if(act === 'area-type-toggle'){ const at = state.settings.areaTypes || (state.settings.areaTypes = {}), m = at[b.dataset.area] || (at[b.dataset.area] = {}); if(b.checked) delete m[id]; else m[id] = true; if(!Object.keys(m).length) delete at[b.dataset.area]; save(); renderAll(); return; }
   else if(act === 'ext-toggle'){ const s = state.external.find(x => x.id === id); s.visible = b.checked; save(); renderExternal(); return; }
   else if(act === 'sp'){ const g = state.settings.gbif; g.species = b.checked ? Array.from(new Set(g.species.concat(id))) : g.species.filter(x => x !== id); save(); renderGbif(); renderDensity(); return; }
   else return;
@@ -1354,7 +1451,7 @@ function openModal(html, onReady){
   if(f && isDesktop()) f.focus();
 }
 function closeModal(){ if(modalEl){ modalEl.remove(); modalEl = null; if(lastFocus && lastFocus.focus) try{ lastFocus.focus(); }catch(e){} } }
-document.addEventListener('keydown', e => { if(e.key === 'Escape'){ if(modalEl) closeModal(); else if(!$('#layerPop').hidden) toggleLayerPop(false); else if(placing) endPlacing(); } });
+document.addEventListener('keydown', e => { if(e.key === 'Escape'){ if(!$('#drawer').hidden){ drawerOpen(false); return; } if(modalEl) closeModal(); else if(!$('#layerPop').hidden) toggleLayerPop(false); else if(placing) endPlacing(); } });
 
 function areaOptions(sel){
   return `<option value="">Utan område (privat)</option>${state.areas.filter(canEditArea).map(a => `<option value="${esc(a.id)}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.gid ? ' · delat' : ''}</option>`).join('')}<option value="__new">+ Nytt område …</option>`;
@@ -1435,48 +1532,85 @@ function openPinForm(opts){
   });
 }
 
+/* ---------- Områdets vy ----------
+   Pennan vid ett område (under Filter eller i jaktlagets Områden) öppnar allt för marken nerifrån:
+   namn och delning, gräns, vägar, stigar och bäckar, nålarna i området, omnumrering av passen,
+   vilka typer som syns, flytta innehåll och ta bort. */
 function openAreaForm(id){
-  const a = areaById(id); if(!a) return;
-  const mine = Object.values(cloud.groups).filter(g => g.kind === 'member' && canEditGroup(g));
+  if(!areaById(id)) return;
+  closeModal();
+  if(nav.tab !== 'area') nav.from = {tab:nav.tab, team:nav.team, sub:nav.sub};
+  nav.tab = 'area'; nav.area = id; nav.team = null;
+  showPane('area'); renderAreaView(true); renderNav();
+}
+function renderAreaView(force){
+  const pane = $('#paneArea'); if(!pane || nav.tab !== 'area') return;
+  // Rita inte om medan man skriver (en uppdatering från molnet skulle annars ta bort det man skrivit)
+  if(!force && pane.contains(document.activeElement) && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName) && document.activeElement.type !== 'checkbox') return;
+  const id = nav.area, a = areaById(id);
+  if(!a){ pane.innerHTML = '<div class="empty">Området finns inte längre.</div>'; return; }
+  const edit = canEditArea(a), mine = Object.values(cloud.groups).filter(g => g.kind === 'member' && canEditGroup(g));
   const canMove = !a.gid || (cloud.groups[a.gid] && isAdminGroup(cloud.groups[a.gid]));
-  const n = state.pins.filter(p => p.areaId === id).length, rings = areaRings(a);
-  openModal(`<h2>Ändra område</h2><form id="afForm"><label class="field"><span>Namn</span><input class="input" id="afName" maxlength="60" value="${esc(a.name)}"></label>
-    ${mine.length || a.gid ? `<label class="field"><span>Delas med</span><select class="input" id="afShare" ${canMove ? '' : 'disabled'}><option value="">Bara jag (privat)</option>${mine.map(g => `<option value="${esc(g.id)}"${a.gid === g.id ? ' selected' : ''}>${esc(gname(g))}</option>`).join('')}</select></label>
-    <p class="note" style="margin:-4px 0 0">${canMove ? `Delar du området ser alla i jaktlaget dess ${n} ${n === 1 ? 'nål' : 'nålar'}, och medlemmar kan ändra dem.` : 'Bara en admin kan sluta dela området.'}</p>` : '<p class="note" style="margin:-4px 0 0">Logga in under Jakt och skapa ett jaktlag för att kunna dela området.</p>'}
-    <div class="field" style="margin-top:14px"><span>Gräns</span>${rings.length ? rings.map((r, k) => `<div class="frow"><span class="fname">${rings.length > 1 ? `Del ${k + 1}` : 'Gränsen'}<br><span class="small muted">${r.length} punkter · ${fmtHa(areaHa(r))}</span></span><button class="btn sm" type="button" data-ring-edit="${k}">Ändra</button><button class="btn sm danger" type="button" data-ring-del="${k}">Ta bort</button></div>`).join('') + (rings.length > 1 ? `<div class="small" style="margin-top:4px">Totalt ${fmtHa(ringsHa(rings))} i ${rings.length} delar.</div>` : '') : '<div class="small">Ingen gräns är ritad.</div>'}
-      <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afDraw">${rings.length ? 'Rita en till del' : 'Rita gräns'}</button><button class="btn sm" type="button" id="afImport">Importera från fil</button><button class="btn sm" type="button" id="afShot">Från skärmdump</button></div>
-      ${rings.length ? '<p class="note" style="margin:6px 0 0">Består marken av flera skiften? Rita en del för varje. Alla delar hör till samma område och delas med samma jaktlag.</p>' : ''}</div>
-    <div class="field" style="margin-top:14px"><span>Egna vägar, stigar och bäckar</span>${areaLines(a).length ? areaLines(a).map(([lid, l]) => `<div class="frow"><span class="fname">${esc(l.n || LINE_KIND[l.k])}<br><span class="small muted">${LINE_KIND[l.k]} · ${fmtDist(lineLen(parseBorder(l.p)))}</span></span><button class="btn sm" type="button" data-line-edit="${lid}">Ändra</button></div>`).join('') : '<div class="small">Inga egna vägar, stigar eller bäckar.</div>'}
-      <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afLine">Rita väg, stig eller bäck</button></div></div>
-    ${moveTargets(a).length && (a.border || areaLines(a).length || n) ? `<details class="field" style="margin-top:14px" id="afMoveBox"><summary><span>Flytta till ett annat område</span></summary>
+  const pins = state.pins.filter(p => p.areaId === id).sort((x, y) => (x.name || '').localeCompare(y.name || '', 'sv', {numeric:true}));
+  const n = pins.length, rings = areaRings(a), passes = pins.filter(p => isPassType(typeById(p.typeId)) && canEditPin(p));
+  const used = state.types.filter(t => pins.some(p => p.typeId === t.id)), sm = state.settings.svampMode;
+  let h = `<form id="afForm"><label class="field"><span>Namn</span><input class="input" id="afName" maxlength="60" value="${esc(a.name)}"${edit ? '' : ' disabled'}></label>
+    ${mine.length || a.gid ? `<label class="field"><span>Delas med</span><select class="input" id="afShare" ${canMove && edit ? '' : 'disabled'}><option value="">Bara jag (privat)</option>${mine.map(g => `<option value="${esc(g.id)}"${a.gid === g.id ? ' selected' : ''}>${esc(gname(g))}</option>`).join('')}${a.gid && !mine.some(g => g.id === a.gid) ? `<option value="${esc(a.gid)}" selected>${esc(gname(cloud.groups[a.gid]))}</option>` : ''}</select></label>
+    <p class="note" style="margin:-4px 0 0">${canMove ? `Delar du området ser alla i jaktlaget dess ${n} ${n === 1 ? 'nål' : 'nålar'}, och medlemmar kan ändra dem.` : 'Bara en admin kan sluta dela området.'}</p>` : '<p class="note" style="margin:-4px 0 0">Logga in under Mitt konto och skapa ett jaktlag för att kunna dela området.</p>'}
+    <div class="btnrow">${edit ? '<button class="btn primary sm" type="submit">Spara</button>' : ''}<button class="btn sm" type="button" data-act="area-zoom" data-id="${esc(id)}">Visa på kartan</button></div></form>`;
+  // Gräns
+  h += `<div class="ar-sec"><div class="lbl">Gräns</div>${rings.length ? rings.map((r, k) => `<div class="frow"><span class="fname">${rings.length > 1 ? `Del ${k + 1}` : 'Gränsen'}<br><span class="small muted">${r.length} punkter · ${fmtHa(areaHa(r))}</span></span>${edit ? `<button class="btn sm" type="button" data-ring-edit="${k}">Ändra</button><button class="iconbtn" type="button" data-ring-del="${k}" aria-label="Ta bort ${rings.length > 1 ? 'del ' + (k + 1) : 'gränsen'}">${ICON_TRASH}</button>` : ''}</div>`).join('') : '<div class="small muted">Ingen gräns ritad.</div>'}
+    ${rings.length > 1 ? `<div class="small" style="margin-top:4px">Totalt ${fmtHa(ringsHa(rings))} i ${rings.length} delar.</div>` : ''}
+    ${edit ? `<div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afDraw">${rings.length ? 'Rita en till del' : 'Rita gräns'}</button><button class="btn sm" type="button" id="afImport">Importera från fil</button><button class="btn sm" type="button" id="afShot">Från skärmdump</button></div>
+    ${rings.length ? '<p class="note" style="margin:6px 0 0">Består marken av flera skiften? Rita en del för varje. Alla delar hör till samma område och delas med samma jaktlag.</p>' : ''}` : ''}</div>`;
+  // Vägar, stigar och bäckar
+  h += `<div class="ar-sec"><div class="lbl">Vägar, stigar och bäckar</div>${areaLines(a).length ? areaLines(a).map(([lid, l]) => `<div class="frow"><span class="fname">${esc(l.n || LINE_KIND[l.k])}<br><span class="small muted">${LINE_KIND[l.k]} · ${fmtDist(lineLen(parseBorder(l.p)))}</span></span>${edit ? `<button class="btn sm" type="button" data-line-edit="${esc(lid)}">Ändra</button>` : ''}</div>`).join('') : '<div class="small muted">Inga egna vägar, stigar eller bäckar.</div>'}
+    ${edit ? '<div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afLine">Rita väg, stig eller bäck</button></div>' : ''}</div>`;
+  // Nålar i området
+  h += `<div class="ar-sec"><div class="lbl">Nålar i området (${n})</div>${n ? `<div class="ar-pins">${pins.map(p => { const t = typeById(p.typeId) || {};
+    return `<button class="ar-pin" type="button" data-act="goto" data-id="${esc(p.id)}">${swatch(t)}<span class="fname">${esc(p.name || t.name || 'Nål')}<br><span class="small muted">${esc(t.name || '')}</span></span></button>`; }).join('')}</div>` : '<div class="small muted">Inga nålar i området.</div>'}</div>`;
+  // Passen
+  if(passes.length) h += `<div class="ar-sec"><div class="lbl">Pass</div><p class="note" style="margin-top:0">${passes.length} ${passes.length === 1 ? 'pass' : 'pass'} i området.</p>
+    <div class="btnrow">${passes.length >= 2 ? '<button class="btn sm" type="button" id="afRenumber">Numrera om passen</button>' : ''}${renumberUndo ? '<button class="btn sm ghost" type="button" data-act="renumber-undo">Ångra omnumreringen</button>' : ''}</div></div>`;
+  // Typer som syns
+  if(used.length) h += `<div class="ar-sec"><div class="lbl">Typer som syns i området</div><p class="note" style="margin:0 0 6px">Gäller bara det här området och bara på den här enheten.${sm ? ' Svampkartan är på: bara svamptyper visas.' : ''}</p>${used.map(t => { const off = sm ? !t.svamp : t.visible === false;
+    return `<div class="frow"><input class="sw-toggle" type="checkbox" id="aty-${esc(t.id)}" data-act="area-type-toggle" data-area="${esc(id)}" data-id="${esc(t.id)}" ${areaTypeHidden(id, t.id) ? '' : 'checked'} aria-label="Visa ${esc(t.name)} i ${esc(a.name)}">${swatch(t)}<label class="fname" for="aty-${esc(t.id)}">${esc(t.name)}${off ? `<br><span class="small muted">${sm ? 'Döljs av svampkartan' : 'Dold på hela kartan under Filter'}</span>` : ''}</label><span class="fcount">${pins.filter(p => p.typeId === t.id).length}</span></div>`; }).join('')}
+    ${areaHiddenCount(id) ? `<div class="btnrow"><button class="btn sm ghost" type="button" data-act="area-types-all" data-id="${esc(id)}">Visa alla typer i området</button></div>` : ''}</div>`;
+  // Flytta och ta bort
+  if(edit && moveTargets(a).length && (a.border || areaLines(a).length || n)) h += `<details class="field ar-sec" id="afMoveBox"><summary><span>Flytta till ett annat område</span></summary>
       <label class="field" style="margin-top:8px"><span>Till</span><select class="input" id="afMoveTo">${moveTargets(a).map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('')}</select></label>
       ${rings.length ? `<label class="checkline"><input type="checkbox" id="afMvBorder" checked><span>${rings.length > 1 ? `Gränsen (${rings.length} delar)` : 'Gränsen'}</span></label>` : ''}
       ${areaLines(a).length ? `<label class="checkline"><input type="checkbox" id="afMvLines" checked><span>Vägar, stigar och bäckar (${areaLines(a).length})</span></label>` : ''}
       ${n ? `<label class="checkline"><input type="checkbox" id="afMvPins" checked><span>Nålar och pass (${n})</span></label>` : ''}
-      <div class="btnrow"><button class="btn sm" type="button" id="afMove">Flytta</button></div></details>` : ''}
-    <div class="actions"><button class="btn primary grow" type="submit">Spara</button><button class="btn ghost" type="button" id="afCancel">Avbryt</button></div></form>`, m => {
-    m.querySelector('#afCancel').addEventListener('click', closeModal);
-    m.querySelector('#afDraw').addEventListener('click', () => startDrawing(id));
-    m.querySelector('#afImport').addEventListener('click', () => { borderTarget = id; $('#fileBorder').click(); });
-    m.querySelector('#afShot').addEventListener('click', () => startShotAdd(id));
-    m.querySelector('#afLine').addEventListener('click', () => openLineForm({areaId:id}));
-    const mv = m.querySelector('#afMove');
-    if(mv) mv.addEventListener('click', () => {
-      const to = areaById(m.querySelector('#afMoveTo').value), chk = s => { const c = m.querySelector(s); return !!(c && c.checked); };
-      const what = {border:chk('#afMvBorder'), lines:chk('#afMvLines'), pins:chk('#afMvPins')};
-      if(!to || !(what.border || what.lines || what.pins)){ toast('Välj vad som ska flyttas.'); return; }
-      closeModal(); toast(moveAreaContent(id, to.id, what));
-    });
-    m.querySelectorAll('[data-line-edit]').forEach(b => b.addEventListener('click', () => openLineForm({areaId:id, lid:b.dataset.lineEdit})));
-    m.querySelectorAll('[data-ring-edit]').forEach(b => b.addEventListener('click', () => startDrawing(id, +b.dataset.ringEdit)));
-    m.querySelectorAll('[data-ring-del]').forEach(b => b.addEventListener('click', () => confirmClick(b, 'Bekräfta', () => {
-      const cur = areaById(id); if(cur){ const r = areaRings(cur); r.splice(+b.dataset.ringDel, 1); setRings(cur, r); cur.updated = Date.now(); save(); }
-      closeModal(); renderAll(); toast(rings.length > 1 ? 'Gränsdelen är borttagen' : 'Gränsen är borttagen'); })));
-    m.querySelector('#afForm').addEventListener('submit', e => { e.preventDefault(); const v = m.querySelector('#afName').value.trim(); if(!v) return; const cur = areaById(id); if(!cur){ closeModal(); return; }
-      cur.name = v; cur.updated = Date.now(); delete cur.example;
-      const sh = m.querySelector('#afShare');
-      if(sh && !sh.disabled){ const was = cur.gid || ''; if(sh.value !== was){ if(sh.value) cur.gid = sh.value; else delete cur.gid; toast(sh.value ? `Området delas nu med ${gname(cloud.groups[sh.value])}` : 'Området är privat igen'); } }
-      save(); closeModal(); renderAll(); });
+      <div class="btnrow"><button class="btn sm" type="button" id="afMove">Flytta</button></div></details>`;
+  if(!a.gid || (cloud.groups[a.gid] && isAdminGroup(cloud.groups[a.gid]))) h += `<div class="btnrow ar-sec"><button class="btn sm danger" type="button" data-act="area-del" data-id="${esc(id)}">Ta bort området</button></div>`;
+  pane.innerHTML = h;
+  const on = (sel, fn) => { const el = pane.querySelector(sel); if(el) el.addEventListener('click', fn); };
+  on('#afDraw', () => startDrawing(id));
+  on('#afImport', () => { borderTarget = id; $('#fileBorder').click(); });
+  on('#afShot', () => startShotAdd(id));
+  on('#afLine', () => openLineForm({areaId:id}));
+  on('#afRenumber', () => openRenumber(id));
+  on('#afMove', () => {
+    const to = areaById(pane.querySelector('#afMoveTo').value), chk = s => { const c = pane.querySelector(s); return !!(c && c.checked); };
+    const what = {border:chk('#afMvBorder'), lines:chk('#afMvLines'), pins:chk('#afMvPins')};
+    if(!to || !(what.border || what.lines || what.pins)){ toast('Välj vad som ska flyttas.'); return; }
+    toast(moveAreaContent(id, to.id, what)); renderAreaView(true);
+  });
+  pane.querySelectorAll('[data-line-edit]').forEach(b => b.addEventListener('click', () => openLineForm({areaId:id, lid:b.dataset.lineEdit})));
+  pane.querySelectorAll('[data-ring-edit]').forEach(b => b.addEventListener('click', () => startDrawing(id, +b.dataset.ringEdit)));
+  pane.querySelectorAll('[data-ring-del]').forEach(b => b.addEventListener('click', () => confirmClick(b, 'Bekräfta', () => {
+    const cur = areaById(id); if(cur){ const r = areaRings(cur); r.splice(+b.dataset.ringDel, 1); setRings(cur, r); cur.updated = Date.now(); save(); }
+    renderAll(); renderAreaView(true); toast(rings.length > 1 ? 'Gränsdelen är borttagen' : 'Gränsen är borttagen'); })));
+  pane.querySelector('#afForm').addEventListener('submit', e => {
+    e.preventDefault(); if(!edit) return;
+    const v = pane.querySelector('#afName').value.trim(); if(!v) return; const cur = areaById(id); if(!cur) return;
+    cur.name = v; cur.updated = Date.now(); delete cur.example;
+    const sh = pane.querySelector('#afShare');
+    if(sh && !sh.disabled){ const was = cur.gid || ''; if(sh.value !== was){ if(sh.value) cur.gid = sh.value; else delete cur.gid; toast(sh.value ? `Området delas nu med ${gname(cloud.groups[sh.value])}` : 'Området är privat igen'); } else toast('Området är sparat.'); }
+    else toast('Området är sparat.');
+    if(document.activeElement && pane.contains(document.activeElement)) document.activeElement.blur();
+    save(); renderAll(); renderAreaView(true); renderNav();
   });
 }
 
@@ -1862,7 +1996,7 @@ setBase(state.settings.base);
 setSheet('peek', true);
 readHash();
 renderAll(); roadsUpdate(); renderGbif(); renderDensity();
-if(cloud.pending) setTab('jakt');
+if(cloud.pending) setTab('konto');
 cloudInit();
 if(!v && state.pins.length) setTimeout(fitAll, 50);
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(() => setSheet(sheet, true));
@@ -1874,7 +2008,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

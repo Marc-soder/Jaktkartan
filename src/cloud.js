@@ -612,8 +612,10 @@ function rsvpHtml(g, hid){
     <div class="btnrow" style="margin-top:6px">${me ? `<span class="tag on">Du deltar</span><button class="btn sm ghost" type="button" data-j="rsvp-no" data-g="${esc(g.id)}" data-h="${esc(hid)}">Avböj</button>` : no ? `<span class="tag">Du har avböjt</span><button class="btn sm" type="button" data-j="rsvp" data-g="${esc(g.id)}" data-h="${esc(hid)}">Jag deltar ändå</button>` : `<button class="btn sm primary" type="button" data-j="rsvp" data-g="${esc(g.id)}" data-h="${esc(hid)}">Jag deltar</button><button class="btn sm ghost" type="button" data-j="rsvp-no" data-g="${esc(g.id)}" data-h="${esc(hid)}">Avböj</button>`}</div>
     <p class="note" style="margin-top:4px">${me ? auto : 'Deltar du delas din position automatiskt med jaktlaget medan jakten pågår.'}</p>`;
 }
-function renderJakt(){
-  const pane = $('#paneJakt'); if(!pane) return;
+/* ---------- Mitt konto ----------
+   Inloggning (Google eller gäst med jaktkod), namn, logga ut, aviseringar och Mina dokument. */
+function renderKonto(){
+  const pane = $('#paneKonto'); if(!pane) return;
   let html = '';
   const st = cloud.status;
   if(st === 'off' || st === 'error'){
@@ -638,46 +640,105 @@ function renderJakt(){
       <div class="btnrow"><button class="btn" type="button" data-j="login-guest">Gå med som gäst</button></div>
       ${BAKED_CFG ? '' : '<p class="note"><button class="linkbtn" type="button" data-j="cfg-reset">Byt Firebase-projekt</button></p>'}`;
   } else {
-    const u = cloud.user, gs = Object.values(cloud.groups);
-    html += `<div class="userrow"><span class="pos-dot">${esc(initials(myName()))}</span><span class="grow"><strong>${esc(myName())}</strong><br><span class="small muted">${u.isAnonymous ? 'Gäst' : esc(u.email || 'Inloggad')}</span></span><button class="btn sm" type="button" data-j="name">Byt namn</button><button class="btn sm ghost" type="button" data-j="logout">Logga ut</button></div>
-      <label class="bigtoggle" for="shareToggle" style="margin-top:10px"><span><strong>Dela min position</strong><br><span class="small muted">Syns bara för deltagarna i pågående jakter</span></span><input class="sw-toggle" type="checkbox" id="shareToggle" ${cloud.sharing ? 'checked' : ''} ${anyLiveHunt() ? '' : 'disabled'}></label>
-      <p class="note" id="posCount">${posCountText()}</p>
-      ${window.Notification && Notification.permission === 'default' ? '<div class="btnrow"><button class="btn sm" type="button" data-j="notif">Tillåt aviseringar om nödlarm</button></div><p class="note" style="margin-top:2px">Då kan ett nödlarm synas även när appen ligger i bakgrunden.</p>' : ''}
-      ${cloud.sharing ? '<p class="note">Positionen skickas bara medan appen är öppen och skärmen är på.</p>' : ''}
-      ${calAgendaHtml()}`;
-    for(const g of gs){
-      if(!g.meta) continue;
-      if(g.kind === 'guest'){
-        const hid = g.guest && g.guest.hid, hunt = hid && g.hunts[hid];
-        html += `<h3 class="sec">${esc(gname(g))} <span class="tag">Gäst</span></h3>${hunt ? huntCard(g, hid, hunt, false) : '<div class="empty">Jakten laddas eller är avslutad.</div>'}
-          <div class="btnrow"><button class="btn sm" type="button" data-j="guest-leave" data-g="${esc(g.id)}">Lämna jakten</button></div>`;
-        continue;
-      }
-      const role = myRole(g), lead = canLeadGroup(g), adm = isAdminGroup(g);
-      const ord = {live:0, planned:1, upcoming:1, ended:2};
-      const hunts = Object.entries(g.hunts || {}).filter(([, v]) => v).sort((a, b) => (ord[huntState(a[1])] - ord[huntState(b[1])]) || (huntSort(a[1]) - huntSort(b[1])));
-      const members = Object.entries(g.members || {}).filter(([, v]) => v).sort((a, b) => (a[1].name || '').localeCompare(b[1].name || '', 'sv'));
-      const shared = state.areas.filter(a => a.gid === g.id);
-      html += `<h3 class="sec">${esc(gname(g))} <span class="tag">${esc(ROLES[role] || '')}</span></h3>`;
-      html += hunts.length ? hunts.map(([hid, hunt]) => huntCard(g, hid, hunt, lead)).join('') : '<p class="note" style="margin-top:0">Ingen jakt är skapad.</p>';
-      if(lead) html += `<div class="btnrow"><button class="btn primary sm" type="button" data-j="hunt-new" data-g="${esc(g.id)}">Ny jakt</button></div>`;
-      html += `<div class="lbl">Delade områden</div><div class="small">${shared.length ? shared.map(a => esc(a.name)).join(', ') : '<span class="muted">Inga ännu. Öppna Filter, tryck på pennan vid ett område och välj att dela det med laget.</span>'}</div>`;
-      html += `<div class="lbl">Medlemmar och rättigheter</div>`;
-      for(const [mu, m] of members){
-        const isOwner = g.meta.owner === mu;
-        html += `<div class="frow"><span class="fname">${esc(m.name || 'Medlem')}${mu === u.uid ? ' <span class="muted">(du)</span>' : ''}</span>${adm && !isOwner ? `<select class="input rolesel" data-j="role" data-g="${esc(g.id)}" data-u="${esc(mu)}" aria-label="Rättighet för ${esc(m.name)}">${Object.entries(ROLES).map(([k, l]) => `<option value="${esc(k)}"${m.role === k ? ' selected' : ''}>${l}</option>`).join('')}</select><button class="iconbtn" type="button" data-j="member-del" data-g="${esc(g.id)}" data-u="${esc(mu)}" aria-label="Ta bort ${esc(m.name)}">${ICON_TRASH}</button>` : `<span class="tag">${isOwner ? 'Ägare' : esc(ROLES[m.role] || '')}</span>`}</div>`;
-      }
-      if(adm) html += `<p class="note">${Object.entries(ROLES).map(([k, l]) => `<b>${l}</b>: ${ROLE_HELP[k].toLowerCase()}`).join(' · ')}.</p><div class="btnrow"><button class="btn sm" type="button" data-j="invite" data-g="${esc(g.id)}">Bjud in medlem</button></div>`;
-      html += `<div class="btnrow" style="margin-top:8px">${g.meta.owner === u.uid ? `<button class="btn sm danger" type="button" data-j="group-del" data-g="${esc(g.id)}">Ta bort jaktlaget</button>` : `<button class="btn sm" type="button" data-j="group-leave" data-g="${esc(g.id)}">Lämna jaktlaget</button>`}</div>`;
-    }
-    html += `<h3 class="sec">Fler jaktlag</h3><div class="btnrow">${canCreate() ? '<button class="btn sm" type="button" data-j="group-new">Skapa jaktlag</button>' : ''}<button class="btn sm" type="button" data-j="join">Gå med med kod</button></div>
-      ${u.isAnonymous ? '<p class="note">Som gäst kan du gå med i jakter. Logga in med Google för att bli medlem i ett jaktlag.</p>' : canCreate() ? '' : '<p class="note">Bara ägaren av den här Jaktkartan kan skapa jaktlag. Du går med i ett lag eller en jakt med en kod.</p>'}`;
+    const u = cloud.user;
+    html += `<div class="userrow"><span class="pos-dot">${esc(initials(myName()))}</span><span class="grow"><strong>${esc(myName())}</strong><br><span class="small muted">${u.isAnonymous ? 'Gäst' : esc(u.email || 'Inloggad')}</span></span></div>
+      <div class="btnrow" style="margin-top:8px"><button class="btn sm" type="button" data-j="name">Byt namn</button><button class="btn sm ghost" type="button" data-j="logout">Logga ut</button></div>
+      ${window.Notification && Notification.permission === 'default' ? '<div class="btnrow"><button class="btn sm" type="button" data-j="notif">Tillåt aviseringar om nödlarm</button></div><p class="note" style="margin-top:2px">Då kan ett nödlarm synas även när appen ligger i bakgrunden.</p>' : ''}`;
   }
   html += docsCardHtml();
   pane.innerHTML = html;
+}
+
+/* ---------- Jakt ----------
+   Utan valt jaktlag: kommande jakter och inbjudningar, en rad per jaktlag, och skapa eller gå med i ett lag.
+   Med valt jaktlag (nav.team): lagets egen vy med flikarna Jakt, Planera, Områden och Medlemmar.
+   Alla ser flikarna. Knappar för att ändra syns bara för den som har rättighet. */
+const TEAM_TABS = {jakt:'Jakt', plan:'Planera', omr:'Områden', med:'Medlemmar'};
+const teamGroups = () => Object.values(cloud.groups).filter(g => g.meta).sort((a, b) => gname(a).localeCompare(gname(b), 'sv'));
+const teamLive = g => liveHunts(g).length > 0;
+function teamRowHtml(g){
+  const role = g.kind === 'guest' ? 'Gäst' : ROLES[myRole(g)] || '';
+  return `<button class="team-row" type="button" data-j="team" data-g="${esc(g.id)}"><span class="tr-name">${esc(gname(g))}</span>${teamLive(g) ? '<span class="tag on">Pågår</span>' : ''}<span class="tag">${esc(role)}</span><span class="tr-go" aria-hidden="true">›</span></button>`;
+}
+function renderJakt(){
+  renderKonto();
+  const pane = $('#paneJakt'); if(!pane) return;
+  const st = cloud.status;
+  if(nav.team && !(cloud.groups[nav.team] && cloud.groups[nav.team].meta)) nav.team = null;
+  let html = '';
+  if(st !== 'in'){
+    html += st === 'loading' ? '<div class="empty">Ansluter …</div>'
+      : `<p class="note" style="margin-top:0">Logga in för att se dina jaktlag och jakter, eller gå med som gäst med en jaktkod.</p><div class="btnrow"><button class="btn primary sm" type="button" data-j="go-konto">Logga in under Mitt konto</button></div>`;
+  } else if(nav.team){
+    html += teamHtml(cloud.groups[nav.team]);
+  } else {
+    const u = cloud.user, gs = teamGroups();
+    html += calAgendaHtml();
+    html += `<h3 class="sec">Jaktlag</h3>${gs.length ? `<div class="team-list">${gs.map(teamRowHtml).join('')}</div>` : '<p class="note" style="margin-top:0">Du är inte med i något jaktlag ännu.</p>'}
+      <div class="btnrow">${canCreate() ? '<button class="btn sm" type="button" data-j="group-new">Skapa jaktlag</button>' : ''}<button class="btn sm" type="button" data-j="join">Gå med med kod</button></div>
+      ${u.isAnonymous ? '<p class="note">Som gäst kan du gå med i jakter. Logga in med Google för att bli medlem i ett jaktlag.</p>' : canCreate() ? '' : '<p class="note">Bara ägaren av den här Jaktkartan kan skapa jaktlag. Du går med i ett lag eller en jakt med en kod.</p>'}`;
+  }
+  pane.innerHTML = html;
+  renderDrawerTeams(); if(typeof renderNav === 'function') renderNav();
   calRefresh();
   // Stänger man av själv under en jakt man deltar i startar delningen inte automatiskt igen för den jakten.
   const stg = $('#shareToggle'); if(stg) stg.addEventListener('change', e => { if(e.target.checked){ cloud.autoOff = {}; startSharing(); } else { for(const k of acceptedLive()) cloud.autoOff[k] = true; stopSharing(); renderJakt(); } });
+}
+/* Dela min position: under jakten, i jaktlagets flik Jakt */
+function shareHtml(){
+  return `<label class="bigtoggle" for="shareToggle"><span><strong>Dela min position</strong><br><span class="small muted">Syns bara för deltagarna i pågående jakter</span></span><input class="sw-toggle" type="checkbox" id="shareToggle" ${cloud.sharing ? 'checked' : ''} ${anyLiveHunt() ? '' : 'disabled'}></label>
+    <p class="note" id="posCount">${posCountText()}</p>
+    ${cloud.sharing ? '<p class="note">Positionen skickas bara medan appen är öppen och skärmen är på.</p>' : ''}`;
+}
+function teamHtml(g){
+  const u = cloud.user;
+  if(g.kind === 'guest'){
+    const hid = g.guest && g.guest.hid, hunt = hid && g.hunts[hid];
+    return shareHtml() + (hunt ? huntCard(g, hid, hunt, false) : '<div class="empty">Jakten laddas eller är avslutad.</div>')
+      + `<div class="btnrow"><button class="btn sm" type="button" data-j="guest-leave" data-g="${esc(g.id)}">Lämna jakten</button></div>`;
+  }
+  const lead = canLeadGroup(g), adm = isAdminGroup(g), sub = TEAM_TABS[nav.sub] ? nav.sub : 'jakt';
+  const all = Object.entries(g.hunts || {}).filter(([, v]) => v).sort((a, b) => huntSort(a[1]) - huntSort(b[1]));
+  let html = '';
+  if(sub === 'jakt'){
+    // Pågående jakter (och avslutade som inte är städade än), och de som kan startas
+    const live = all.filter(([, h]) => ['live', 'ended'].includes(huntState(h))).sort((a, b) => (huntState(a[1]) === 'live' ? 0 : 1) - (huntState(b[1]) === 'live' ? 0 : 1));
+    const next = all.filter(([, h]) => ['planned', 'upcoming'].includes(huntState(h)));
+    html += shareHtml();
+    html += live.map(([hid, h]) => huntCard(g, hid, h, lead)).join('');
+    if(next.length) html += `<h3 class="sec">Kommande jakter</h3>` + next.map(([hid, h]) => { const st = huntState(h);
+      return `<div class="hunt-row"><span><b>${esc(h.name)}</b><br><span class="small muted">${esc(fmtDay(huntDay(h)))} · ${st === 'planned' ? 'startas av jaktledaren' : 'startar automatiskt ' + esc(fmtTime(h.starts))}</span></span>
+        ${lead ? `<button class="btn sm primary" type="button" data-j="hunt-start" data-g="${esc(g.id)}" data-h="${esc(hid)}">Starta jakten</button>` : `<button class="btn sm" type="button" data-j="team-sub" data-s="plan">Visa</button>`}</div>`; }).join('');
+    if(!live.length && !next.length) html += `<p class="note">Ingen jakt pågår.${lead ? ' Planera en jakt under Planera.' : ''}</p>`;
+  } else if(sub === 'plan'){
+    const plan = all.filter(([, h]) => ['planned', 'upcoming'].includes(huntState(h)));
+    if(lead) html += `<div class="btnrow" style="margin-top:0"><button class="btn primary sm" type="button" data-j="hunt-new" data-g="${esc(g.id)}">Ny jakt</button></div>`;
+    html += plan.length ? plan.map(([hid, h]) => huntCard(g, hid, h, lead)).join('') : `<p class="note">Ingen jakt är planerad.${lead ? ' Tryck Ny jakt för att planera en.' : ''}</p>`;
+  } else if(sub === 'omr'){
+    const shared = state.areas.filter(a => a.gid === g.id), own = canEditGroup(g) ? state.areas.filter(a => !a.gid && !a.example) : [];
+    html += `<p class="note" style="margin-top:0">Lagets delade marker. Tryck Ändra för gränser, vägar, stigar, bäckar och nålar.</p>`;
+    html += shared.length ? shared.map(a => { const n = state.pins.filter(p => p.areaId === a.id).length, ha = areaRings(a).reduce((s, r) => s + areaHa(r), 0);
+      return `<div class="frow"><span class="fname">${esc(a.name)}<br><span class="small muted">${n} ${n === 1 ? 'nål' : 'nålar'}${ha ? ' · ' + fmtHa(ha) : ''}${areaLines(a).length ? ' · ' + areaLines(a).length + (areaLines(a).length === 1 ? ' linje' : ' linjer') : ''}</span></span>
+        <button class="iconbtn" type="button" data-act="area-zoom" data-id="${esc(a.id)}" aria-label="Zooma till ${esc(a.name)}">${ICON_ZOOM}</button>
+        ${canEditArea(a) ? `<button class="btn sm" type="button" data-act="area-edit" data-id="${esc(a.id)}">Ändra</button>` : ''}</div>`; }).join('') : '<p class="note">Laget har inga delade områden ännu.</p>';
+    if(own.length) html += `<div class="lbl">Dela ett av dina områden med laget</div><div class="addrow"><select class="input" id="teamShareArea" aria-label="Område att dela">${own.map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('')}</select><button class="btn sm" type="button" data-j="area-share" data-g="${esc(g.id)}">Dela</button></div>`;
+  } else {
+    const members = Object.entries(g.members || {}).filter(([, v]) => v).sort((a, b) => (a[1].name || '').localeCompare(b[1].name || '', 'sv'));
+    html += `<div class="lbl" style="margin-top:0">Medlemmar och rättigheter</div>`;
+    for(const [mu, m] of members){
+      const isOwner = g.meta.owner === mu;
+      html += `<div class="frow"><span class="fname">${esc(m.name || 'Medlem')}${mu === u.uid ? ' <span class="muted">(du)</span>' : ''}</span>${adm && !isOwner ? `<select class="input rolesel" data-j="role" data-g="${esc(g.id)}" data-u="${esc(mu)}" aria-label="Rättighet för ${esc(m.name)}">${Object.entries(ROLES).map(([k, l]) => `<option value="${esc(k)}"${m.role === k ? ' selected' : ''}>${l}</option>`).join('')}</select><button class="iconbtn" type="button" data-j="member-del" data-g="${esc(g.id)}" data-u="${esc(mu)}" aria-label="Ta bort ${esc(m.name)}">${ICON_TRASH}</button>` : `<span class="tag">${isOwner ? 'Ägare' : esc(ROLES[m.role] || '')}</span>`}</div>`;
+    }
+    if(adm) html += `<p class="note">${Object.entries(ROLES).map(([k, l]) => `<b>${l}</b>: ${ROLE_HELP[k].toLowerCase()}`).join(' · ')}.</p><div class="btnrow"><button class="btn sm" type="button" data-j="invite" data-g="${esc(g.id)}">Bjud in medlem</button></div>`;
+    html += `<div class="btnrow" style="margin-top:8px">${g.meta.owner === u.uid ? `<button class="btn sm danger" type="button" data-j="group-del" data-g="${esc(g.id)}">Ta bort jaktlaget</button>` : `<button class="btn sm" type="button" data-j="group-leave" data-g="${esc(g.id)}">Lämna jaktlaget</button>`}</div>`;
+  }
+  return html;
+}
+/* Sidomenyn: en rad per jaktlag under Jakt */
+function renderDrawerTeams(){
+  const box = document.getElementById('drTeams'); if(!box) return;
+  const gs = cloud.status === 'in' ? teamGroups() : [];
+  box.innerHTML = gs.map(g => `<button class="dr-team${nav.tab === 'jakt' && nav.team === g.id ? ' on' : ''}" type="button" data-team="${esc(g.id)}"><span>${esc(gname(g))}</span>${teamLive(g) ? '<span class="tag on">Pågår</span>' : ''}</button>`).join('');
 }
 function askText(title, label, value, okLabel, cb, max){
   openModal(`<h2>${esc(title)}</h2><form id="atForm"><label class="field"><span>${esc(label)}</span><input class="input" id="atVal" maxlength="${max || 60}" value="${esc(value || '')}" autocomplete="off"></label>
@@ -819,10 +880,14 @@ async function endHunt(g, hid, auto){
     else toast('Jakten är avslutad. Gästernas åtkomst är borttagen.' + (na ? ` ${na === 1 ? 'En observation' : na + ' observationer'} sparades till värmekartan.` : ''), 5000);
   }, err => { if(!auto) fail()(err); });
 }
-$('#paneJakt').addEventListener('click', e => {
+/* Knappar i Jakt, Mitt konto och Kalender */
+function jaktClick(e){
   const b = e.target.closest('[data-j]'); if(!b || b.tagName === 'SELECT') return;
   const act = b.dataset.j, g = cloud.groups[b.dataset.g], u = b.dataset.u, hid = b.dataset.h;
-  if(act === 'copy-rules') copyText(RULES_TEXT, 'Reglerna är kopierade');
+  if(act === 'go-konto') setTab('konto');
+  else if(act === 'team') openTeam(b.dataset.g);
+  else if(act === 'team-sub'){ nav.sub = b.dataset.s; renderJakt(); $('#pBody').scrollTop = 0; }
+  else if(act === 'copy-rules') copyText(RULES_TEXT, 'Reglerna är kopierade');
   else if(act === 'cfg-save'){ const cfg = parseCfg($('#fbCfg').value); if(!cfg){ toast('Hittade inte apiKey, databaseURL och projectId i texten.', 5000); return; } lsSet(FBKEY, JSON.stringify(cfg)); cloudInit(); }
   else if(act === 'cfg-reset') confirmClick(b, 'Tryck igen för att byta', () => { try { localStorage.removeItem(FBKEY); } catch(e){} location.reload(); });
   else if(act === 'login-google') fb.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(err => toast(err && err.code === 'auth/unauthorized-domain' ? 'Webbadressen är inte godkänd i Firebase. Lägg till den under Authentication, Settings, Authorized domains.' : 'Inloggningen avbröts.', 6000));
@@ -833,6 +898,7 @@ $('#paneJakt').addEventListener('click', e => {
   else if(act === 'group-new') askText('Skapa jaktlag', 'Namn på jaktlaget', '', 'Skapa', v => createGroup(v), 60);
   else if(act === 'join') askText('Gå med med kod', 'Inbjudningskod eller jaktkod', '', 'Gå med', v => joinByCode(v), 14);
   else if(act === 'cal') openCal();
+  else if(act === 'area-share'){ const sel = $('#teamShareArea'), a = sel && areaById(sel.value); if(!a || !g) return; a.gid = g.id; a.updated = Date.now(); delete a.example; save(); renderAll(); toast(`${a.name} delas nu med ${gname(g)}.`); }
   else if(!g) return;
   else if(act === 'obs-go'){ const o = ((g.huntObs || {})[hid] || {})[b.dataset.o]; if(o){ map.setView([o.lat, o.lng], Math.max(map.getZoom(), 16)); if(!isDesktop()) setSheet('peek'); } }
   else if(act === 'hunt-new') openHuntForm(g);
@@ -859,7 +925,9 @@ $('#paneJakt').addEventListener('click', e => {
   else if(act === 'guest-leave'){ stopSharing(); fb.db.ref(`groups/${g.id}/guests/${myUid()}`).remove().catch(() => {}).then(() => forgetGroup(g.id)); }
   else if(act === 'group-del') confirmClick(b, 'Tryck igen: allt i laget raderas', () => { const codes = {}; for(const hv of Object.values(g.hunts || {})) if(hv && hv.code) codes['huntCodes/' + hv.code] = null;
     (Object.keys(codes).length ? fb.db.ref().update(codes) : Promise.resolve()).catch(() => {}).then(() => fb.db.ref('groups/' + g.id).remove()).then(() => { forgetGroup(g.id); toast('Jaktlaget är borttaget'); }).catch(fail()); });
-});
+}
+$('#paneJakt').addEventListener('click', jaktClick);
+$('#paneKonto').addEventListener('click', jaktClick);
 $('#paneJakt').addEventListener('change', e => {
   const b = e.target.closest('select[data-j=role]'); if(!b) return;
   fb.db.ref(`groups/${b.dataset.g}/members/${b.dataset.u}/role`).set(b.value).then(() => toast('Rättigheten är ändrad')).catch(fail());

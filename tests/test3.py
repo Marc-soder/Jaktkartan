@@ -5,6 +5,11 @@ B=os.path.dirname(os.path.abspath(__file__)); APP='file://'+os.path.join(os.path
 CHROME=os.environ.get('CHROME_PATH') or None
 os.makedirs(os.path.join(B,'shots'),exist_ok=True)
 tile=open(os.path.join(B,'tile_osm.png'),'rb').read(); fails=[]; over=[]
+
+def nav(pg, tab):
+    """Sidomenyn: öppna menyn och välj en sida."""
+    pg.click('#btnMenu'); pg.wait_for_timeout(100); pg.click(f'#tab-{tab}'); pg.wait_for_timeout(100)
+
 def check(c,m):
     print(('PASS ' if c else 'FAIL ')+m); (None if c else fails.append(m))
 def route(r):
@@ -25,9 +30,9 @@ with sync_playwright() as p:
         pg.goto(APP); pg.wait_for_timeout(1200)
         ha=pg.evaluate('__fk.areaHa([[59.00,17.00],[59.00,17.01],[59.01,17.01],[59.01,17.00]])')
         check(63.0<ha<64.8, f'{name}: areal för 0,01° ruta vid 59°N = {ha:.2f} ha (väntat ca 63,9)')
-        pg.click('#tab-filter'); pg.wait_for_timeout(300)
+        nav(pg, 'filter'); pg.wait_for_timeout(300)
         pg.locator('#paneFilter [data-act="area-edit"]').first.click(); pg.wait_for_timeout(200)
-        check('Ingen gräns' in pg.inner_text('.modal'), f'{name}: området saknar gräns från början')
+        check('Ingen gräns' in pg.inner_text('#paneArea'), f'{name}: området saknar gräns från början')
         pg.click('#afDraw'); pg.wait_for_timeout(500)
         check(pg.is_visible('#drawbar') and not pg.is_visible('#btnAdd') and pg.is_disabled('#drawOk'), f'{name}: ritläge öppet, Klar avstängd')
         box=pg.locator('#map').bounding_box(); W,H=box['width'],box['height']
@@ -53,11 +58,11 @@ with sync_playwright() as p:
         inb=pg.evaluate(f'(() => {{ const b=__fk.map.getBounds(), a=__fk.state().areas.find(x => x.id==="{aid}"); return a.border.split(";").every(p => b.contains(p.split(",").map(Number))); }})()')
         check(inb and pg.evaluate('__fk.map.getZoom()') >= 12, f'{name}: Zooma till området visar hela gränsen')
         pg.evaluate('__fk.map.setView([62, 15], 6, {animate:false})'); pg.wait_for_timeout(300)
-        pg.click('#tab-filter'); pg.wait_for_timeout(400); pg.click(f'[data-act="area-zoom"][data-id="{aid}"]'); pg.wait_for_timeout(1000)
+        nav(pg, 'filter'); pg.wait_for_timeout(400); pg.click(f'[data-act="area-zoom"][data-id="{aid}"]'); pg.wait_for_timeout(1000)
         inb=pg.evaluate(f'(() => {{ const b=__fk.map.getBounds(), a=__fk.state().areas.find(x => x.id==="{aid}"); return a.border.split(";").every(p => b.contains(p.split(",").map(Number))); }})()')
         check(inb, f'{name}: zoomknappen under Filter zoomar till området')
         # dölj området -> gränsen försvinner
-        pg.click('#tab-filter'); pg.wait_for_timeout(500); pg.evaluate(f'document.getElementById("ar-{aid}").click()'); pg.wait_for_timeout(200)
+        nav(pg, 'filter'); pg.wait_for_timeout(500); pg.evaluate(f'document.getElementById("ar-{aid}").click()'); pg.wait_for_timeout(200)
         n=pg.evaluate('(() => { let n=0; __fk.map.eachLayer(l => { if(l instanceof L.Polygon && l.options.className !== "wind-sector") n++; }); return n; })()')
         check(n==0, f'{name}: släckt område döljer gränsen')
         pg.evaluate(f'document.getElementById("ar-{aid}").click()')
@@ -110,7 +115,7 @@ with sync_playwright() as p:
         n=pg.evaluate('(() => { let n=0; __fk.map.eachLayer(l => { if(l instanceof L.Polygon && l.options.className !== "wind-sector") n++; }); return n; })()')
         check(n==4, f'{name}: båda gränsdelarna ritas på kartan ({n} lager)')
         pg.evaluate(f'__fk.openAreaForm("{aid}")'); pg.wait_for_timeout(200)
-        txt=pg.inner_text('.modal')
+        txt=pg.inner_text('#paneArea')
         check(pg.locator('[data-ring-edit]').count()==2 and 'Del 1' in txt and 'Del 2' in txt and 'Totalt' in txt and 'Rita en till del' in txt, f'{name}: områdesformuläret listar två delar och totalen')
         pg.click('[data-ring-edit="1"]'); pg.wait_for_timeout(400)
         check(pg.evaluate('__fk.drawingPts()')==[[59,17],[59,17.01],[59.01,17.01],[59.01,17]] and pg.evaluate('(() => { let n=0; __fk.map.eachLayer(l => { if(l instanceof L.Polygon && l.options.className !== "wind-sector") n++; }); return n; })()')==3, f'{name}: Ändra del 2 laddar just den delen, del 1 syns kvar')
