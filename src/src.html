@@ -339,6 +339,9 @@ a{color:var(--accent)}
 .team-list{display:grid;gap:8px}
 .team-row{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:14px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);font:600 16px/1.25 var(--font-body);cursor:pointer}
 .team-row .tr-name{flex:1;min-width:0;overflow-wrap:anywhere}.team-row .tr-go{font-size:22px;color:var(--muted)}
+.team-item{display:flex;align-items:stretch;gap:6px}.team-item .team-row{flex:1;min-width:0}
+.team-ord{display:flex;flex-direction:column;gap:4px}.team-ord .iconbtn{width:36px;height:auto;flex:1;min-height:26px;font-size:15px;border:1px solid var(--line);border-radius:8px}
+.team-ord .iconbtn:disabled{opacity:.3}
 .hunt-row{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}
 .hunt-row > span{min-width:0;overflow-wrap:anywhere}
 .ar-sec{margin-top:18px}
@@ -637,14 +640,14 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
   <div class="dr-head"><span class="brand">Jakt<b>kartan</b></span><button class="iconbtn" id="drawerClose" type="button" aria-label="Stäng menyn">×</button></div>
   <div class="dr-list">
     <button class="tab dr-item" type="button" data-tab="konto" aria-selected="false" id="tab-konto">Mitt konto</button>
-    <button class="tab dr-item" type="button" data-tab="list" aria-selected="true" id="tab-list">Nålar</button>
-    <button class="tab dr-item" type="button" data-tab="filter" aria-selected="false" id="tab-filter">Filter</button>
-    <button class="tab dr-item" type="button" data-tab="svamp" aria-selected="false" id="tab-svamp">Svamp</button>
-    <button class="tab dr-item" type="button" data-tab="data" aria-selected="false" id="tab-data">Data</button>
+    <button class="tab dr-item" type="button" data-tab="kalender" aria-selected="false" id="tab-kalender">Kalender</button>
     <button class="tab dr-item" type="button" data-tab="jakt" aria-selected="false" id="tab-jakt">Jakt</button>
     <div class="dr-teams" id="drTeams"></div>
-    <button class="tab dr-item" type="button" data-tab="kalender" aria-selected="false" id="tab-kalender">Kalender</button>
     <button class="tab dr-item" type="button" data-tab="vilt" aria-selected="false" id="tab-vilt">Vilt</button>
+    <button class="tab dr-item" type="button" data-tab="list" aria-selected="true" id="tab-list">Nålar</button>
+    <button class="tab dr-item" type="button" data-tab="filter" aria-selected="false" id="tab-filter">Filter</button>
+    <button class="tab dr-item" type="button" data-tab="data" aria-selected="false" id="tab-data">Data</button>
+    <button class="tab dr-item" type="button" data-tab="svamp" aria-selected="false" id="tab-svamp">Svamp</button>
   </div>
 </nav>
 
