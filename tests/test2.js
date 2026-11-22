@@ -509,6 +509,10 @@ const team = async (P, sub, g) => { await P.evaluate(([x, t]) => __fk.openTeam(x
   await W(A, 500);
   const at2 = await A.innerText('#paneJakt');
   check(at2.includes('Rådjur 1') && at2.toUpperCase().includes('FÄLLT VILT (1)') && at2.includes('hona, vuxen, skytt Bob Test') && await A.locator('.obs-icon .obs-dot.kill').count() === 1, 'jaktkortet och kartan visar fällt vilt för sig');
+  const vrOk = async (P, sel) => { const l = P.locator(sel + ' a[data-vr]'); return await l.count() === 1 && await l.getAttribute('href') === 'https://viltrapport.se/' && await l.getAttribute('target') === '_blank' && (await l.getAttribute('rel')).includes('noopener') && (await l.innerText()).includes('Öppna Viltrapport'); };
+  await A.locator('.obs-icon .obs-dot.kill').click(); await W(A, 300);
+  check(await vrOk(A, '#paneJakt') && await vrOk(A, '.leaflet-popup'), 'fällt vilt har knappen Öppna Viltrapport i jaktkortet och på kartan');
+  await A.evaluate(() => __fk.map.closePopup());
   const kw = await C.evaluate(([g, h]) => firebase.database().ref(`groups/${g}/huntObs/${h}`).push({sp:'Älg', n:1, lat:58.72, lng:14.61, t:Date.now(), by:'anon-carl', kind:'kill', sex:'x'}).then(() => 'ok', () => 'denied'), [gid, hid]);
   check(kw === 'denied', 'fällt vilt tar bara emot giltiga värden för kön och ålder');
   await B.evaluate(([g, h, o]) => firebase.database().ref(`groups/${g}/huntObs/${h}/${o}`).remove(), [gid, hid, killE[0]]); await W(A, 500);
@@ -835,6 +839,7 @@ const team = async (P, sub, g) => { await P.evaluate(([x, t]) => __fk.openTeam(x
   check((await law('kraka', 'Stockholm', '06-15')).length === 0 && (await law('kraka', 'Jämtland', '04-20')).length === 1 && (await law('dovhjort', 'Örebro', '11-01')).join() === 'Hind och kalv|', 'kråka och dovhjort');
   await go(V, 'vilt'); await V.selectOption('#viltLan', 'Södermanland'); await V.fill('#viltDay', '2026-11-11'); await V.dispatchEvent('#viltDay', 'change'); await W(V, 200);
   const vt = (await V.innerText('#paneVilt')).toLowerCase();
+  { const l = V.locator('#paneVilt a[data-vr]'); check(await l.count() === 1 && await l.getAttribute('href') === 'https://viltrapport.se/' && vt.includes('sparar inga inloggningsuppgifter'), 'Vilt har knappen Öppna Viltrapport, utan sparade inloggningsuppgifter'); }
   check(/rådjur/.test(vt.split('licens eller')[0]) && /älg/.test(vt.split('licens eller')[1].split('inte lovligt')[0]) && !/järpe/.test(vt), 'Vilt-fliken: rådjur lovligt, älg under licens, järpe saknas i Södermanland');
   check(await V.locator('#paneVilt .vname').first().getAttribute('href') === 'https://jagareforbundet.se/jakt/jakttider/jakttid-for-enskilt-djur/?animalId=565', 'artnamn länkar till Jägareförbundets tabell');
   check(viltTxt.includes('Älg') && !viltTxt.includes('Bläsgås') && !viltTxt.includes('Järpe'), 'Ny jakt: bara vilt som är lovligt den dagen kan väljas');

@@ -328,7 +328,7 @@ function renderObs(){
     if(cur) obsLayer.removeLayer(cur.m);
     const m = L.marker([o.lat, o.lng], {icon:L.divIcon({className:'obs-icon', html:`<span class="obs-dot${o.kind === 'kill' ? ' kill' : ''}">${esc(obsKey(o.sp))}</span>${o.n > 1 ? `<span class="obs-n">${o.n}</span>` : ''}`, iconSize:[30, 30], iconAnchor:[15, 15], popupAnchor:[0, -14]}), zIndexOffset:400});
     m.bindPopup(() => {
-      const el = h(`<div class="pp"><h4>${o.kind === 'kill' ? 'Fällt: ' : ''}${esc(o.sp)}${o.n > 1 ? ' × ' + o.n : ''}</h4>${o.kind === 'kill' && killText(o) ? `<div class="pnote">${esc(killText(o))}</div>` : ''}<div class="pnote">${o.kind === 'kill' ? 'Fällt' : 'Sedd'} ${esc(fmtClock(o.t))} (${ago(o.t)})${o.name ? ' av ' + esc(o.name) : ''}${o.note ? '<br>' + esc(o.note) : ''}${myPos ? `<br>${fmtDist(distM(myPos, o))} bort` : ''}</div>${canDelObs(o) ? '<div class="pbtns"><button class="btn sm danger" type="button" data-obs-del>Ta bort</button></div>' : ''}</div>`);
+      const el = h(`<div class="pp"><h4>${o.kind === 'kill' ? 'Fällt: ' : ''}${esc(o.sp)}${o.n > 1 ? ' × ' + o.n : ''}</h4>${o.kind === 'kill' && killText(o) ? `<div class="pnote">${esc(killText(o))}</div>` : ''}<div class="pnote">${o.kind === 'kill' ? 'Fällt' : 'Sedd'} ${esc(fmtClock(o.t))} (${ago(o.t)})${o.name ? ' av ' + esc(o.name) : ''}${o.note ? '<br>' + esc(o.note) : ''}${myPos ? `<br>${fmtDist(distM(myPos, o))} bort` : ''}</div>${o.kind === 'kill' || canDelObs(o) ? `<div class="pbtns">${o.kind === 'kill' ? vrBtn() : ''}${canDelObs(o) ? '<button class="btn sm danger" type="button" data-obs-del>Ta bort</button>' : ''}</div>` : ''}</div>`);
       const d = el.querySelector('[data-obs-del]');
       if(d) d.addEventListener('click', () => confirmClick(d, 'Bekräfta', () => { map.closePopup(); fb.db.ref(`groups/${o.g.id}/huntObs/${o.hid}/${o.oid}`).remove().then(() => toast('Observationen är borttagen.')).catch(fail()); }));
       return el;
@@ -346,7 +346,7 @@ function obsList(g, hid){
     return `<button class="obs-row" type="button" data-j="obs-go" data-g="${esc(g.id)}" data-h="${esc(hid)}" data-o="${esc(oid)}"><span class="obs-dot sm${kill ? ' kill' : ''}">${esc(obsKey(o.sp))}</span><span><b>${esc(o.sp)}</b>${!kill && o.n > 1 ? ' × ' + o.n : ''} <span class="muted">${esc(fmtClock(o.t))}${o.name ? ' · ' + esc(o.name) : ''}</span>${kill && killText(o) ? `<br><span class="small">${esc(killText(o))}</span>` : ''}${o.note ? `<br><span class="small muted">${esc(o.note)}</span>` : ''}</span></button>`; };
   const kills = all.filter(([, o]) => o.kind === 'kill'), seen = all.filter(([, o]) => o.kind !== 'kill');
   const sum = {}; for(const [, o] of kills) sum[o.sp] = (sum[o.sp] || 0) + (o.n || 1);
-  return (kills.length ? `<div class="lbl">Fällt vilt (${kills.reduce((n, [, o]) => n + (o.n || 1), 0)})</div><div class="small">${Object.entries(sum).map(([k, n]) => esc(k) + ' ' + n).join(' · ')}</div>${kills.map(row).join('')}` : '')
+  return (kills.length ? `<div class="lbl">Fällt vilt (${kills.reduce((n, [, o]) => n + (o.n || 1), 0)})</div><div class="small">${Object.entries(sum).map(([k, n]) => esc(k) + ' ' + n).join(' · ')}</div>${kills.map(row).join('')}<div class="btnrow" style="margin-top:6px">${vrBtn()}</div>` : '')
     + `<div class="lbl">Viltobservationer</div>` + (seen.length ? seen.map(row).join('')
     : '<div class="small muted">Inga ännu. Tryck på kikaren på kartan för att lägga in en observation eller fällt vilt.</div>');
 }
