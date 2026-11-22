@@ -140,9 +140,19 @@ Källor: [Meshtastic: publik nyckelkryptering i 2.5](https://meshtastic.org/blog
 [meshtastic/protobufs (GPL-3.0)](https://www.github.com/meshtastic/protobufs),
 [@meshtastic/protobufs på JSR (GPL-3.0-only)](https://jsr.io/@meshtastic/protobufs@2.7.26).
 
-## Spåra positionen med släckt skärm (väntar)
+## Spåra positionen med släckt skärm (Android: koden är klar)
 
 Målet är att positionen ska delas under jakten även när skärmen är släckt eller man använder en annan app.
+
+**Läget:** koden för Android är klar och testad med en låtsad telefon: skalet i `android/` och `capacitor.config.json`,
+kopplingen i `src/native.js` och bygget i `.github/workflows/android.yml`. Kvar är stegen i **[ANDROID.md](ANDROID.md)**:
+signeringsnyckel, Firebase, hemligheter i GitHub, bygge, installation och en provjakt med släckt skärm.
+Listorna nedan är underlaget som användes. Det som avviker från dem:
+- Positionen skickas alltid med telefonens egen HTTP till Firebase REST i appen (inte via webbdelens Firebase),
+  och inloggningen förnyas på samma sätt med släckt skärm.
+- Påminnelsen när jakten startar schemaläggs i telefonen när man trycker **Jag deltar**, så den kommer även om appen är stängd.
+- `google-services.json` ligger som hemlighet i GitHub i stället för i repot, och bygget kontrollerar att nyckelns SHA-1 finns i den.
+- Ingen `ACCESS_BACKGROUND_LOCATION`: delningen startas i appen och fortsätter via tjänsten i förgrunden.
 
 ### Varför det inte går i webbappen
 

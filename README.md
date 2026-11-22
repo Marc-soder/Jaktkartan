@@ -38,6 +38,8 @@ Efter merge klistrar du in den nya filen i Firebase-konsolen under Realtime Data
 | `src/docs.js` | Mina dokument: jaktkort, jägarexamensbevis och vapenlicenser (bild, JPG, PNG eller PDF), krypterade och sparade bara på enheten. |
 | `pdfjs/` | PDF-läsaren pdf.js (Mozilla, Apache-2.0) för Mina dokument. Byggs från `node_modules/pdfjs-dist` av `npm run build`. Ändra inte här. |
 | `src/sos.js` | Nödlarm till jaktlaget, med navigering till den som larmar. |
+| `src/native.js` | Kopplingen till Android-appen: position med släckt skärm, inloggning med Google och aviseringar. Gör ingenting i en vanlig webbläsare. |
+| `android/`, `app/www/`, `capacitor.config.json` | Android-appen, ett tunt skal (Capacitor) som öppnar sidan. Se [ANDROID.md](ANDROID.md). |
 | `src/rules.js` | Säkerhetsreglerna för Firebase. |
 | `src/build.py` | Bygger `index.html` och `database.rules.json`. |
 | `TODO.md` | Saker som väntar, med beskrivning av hur de kan byggas. |
@@ -72,3 +74,6 @@ Om du vill använda en befintlig Chrome i stället för Playwrights, sätt `CHRO
 - kontrollerar att `index.html` och `database.rules.json` är byggda från `src/`
 - kör alla tester
 - varnar med en kommentar i PR:en om säkerhetsreglerna ändras
+
+`.github/workflows/android.yml` kontrollbygger Android-appen i PR:er som ändrar den, och bygger den signerade appen
+när man startar det för hand. Se [ANDROID.md](ANDROID.md).

@@ -77,6 +77,7 @@ function sosAlarm(x){
   });
   try { if(navigator.vibrate) navigator.vibrate([600, 200, 600, 200, 600]); } catch(e){}
   sosBeep();
+  if(document.hidden && NAT.on){ natNotify('sos/' + x.uid, `Nödlarm: ${s.name || 'en deltagare'} behöver hjälp`, has ? 'Tryck för att öppna Jaktkartan och navigera dit.' : 'Positionen är okänd. Ring personen eller 112.', 'sos'); return; }
   try {
     if(document.hidden && window.Notification && Notification.permission === 'granted' && navigator.serviceWorker) navigator.serviceWorker.getRegistration().then(r => {
       const title = `Nödlarm: ${s.name || 'en deltagare'} behöver hjälp`, opt = {body:has ? 'Tryck för att öppna Jaktkartan och navigera dit.' : 'Positionen är okänd. Ring personen eller 112.', tag:'sos-' + x.uid, requireInteraction:true, vibrate:[600, 200, 600]};

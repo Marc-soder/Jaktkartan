@@ -14,9 +14,11 @@ def check(c, m):
     if not c: fails.append(m)
 
 SW_NEW = {'body': None}   # sätts för att låtsas att en ny version av appen har publicerats
+ACCEPT = []               # Accept-rubriken när sidan hämtas (Android-appen kräver text/html, se src/sw.js)
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
     def do_GET(self):
+        if self.path.split('?')[0] in ('/', '/index.html'): ACCEPT.append(self.headers.get('Accept') or '')
         if SW_NEW['body'] is not None and self.path.split('?')[0] == '/sw.js':
             b = SW_NEW['body']; self.send_response(200); self.send_header('Content-Type', 'text/javascript'); self.send_header('Content-Length', str(len(b))); self.end_headers(); self.wfile.write(b); return
         return super().do_GET()
@@ -43,6 +45,7 @@ with sync_playwright() as p:
     ready = pg.evaluate("navigator.serviceWorker.ready.then(r => !!r.active)")
     pg.reload(); pg.wait_for_timeout(1500)
     check(ready and pg.evaluate("!!navigator.serviceWorker.controller"), 'service workern är installerad och styr sidan')
+    check(len(ACCEPT) >= 3 and all('text/html' in a for a in ACCEPT), f'sidan hämtas alltid med Accept: text/html, även av service workern ({ACCEPT})')
     man = pg.evaluate("fetch('manifest.webmanifest').then(r => r.json())")
     check(man['name'] == 'Jaktkartan' and man['display'] == 'standalone' and any(i['purpose'] == 'maskable' for i in man['icons']), 'manifestet gör att appen kan installeras på hemskärmen')
     check(pg.evaluate("document.querySelector('link[rel=manifest]').getAttribute('href')") == 'manifest.webmanifest', 'sidan länkar till manifestet')

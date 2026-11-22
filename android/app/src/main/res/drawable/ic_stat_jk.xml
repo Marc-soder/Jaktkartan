@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ikon i aviseringar (positionen delas, nödlarm, jakten börjar): samma sikte som appikonen. Android visar den i vitt. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M12,4.5a7.5,7.5 0 1,1 0,15a7.5,7.5 0 1,1 0,-15zM12,6.5a5.5,5.5 0 1,0 0,11a5.5,5.5 0 1,0 0,-11z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M11,1h2v6h-2zM11,17h2v6h-2zM1,11h6v2h-6zM17,11h6v2h-6zM12,10.3a1.7,1.7 0 1,1 0,3.4a1.7,1.7 0 1,1 0,-3.4z" />
+</vector>

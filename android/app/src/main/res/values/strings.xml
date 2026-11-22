@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Jaktkartan</string>
+    <string name="title_activity_main">Jaktkartan</string>
+    <string name="package_name">io.github.marcsoder.jaktkartan</string>
+    <string name="custom_url_scheme">io.github.marcsoder.jaktkartan</string>
+    <!-- Aviseringen som visas medan positionen delas (insticksprogrammet för position i bakgrunden) -->
+    <string name="capacitor_background_geolocation_notification_channel_name">Delad position</string>
+    <string name="capacitor_background_geolocation_notification_icon">drawable/ic_stat_jk</string>
+    <string name="capacitor_background_geolocation_notification_color">#D9520E</string>
+</resources>

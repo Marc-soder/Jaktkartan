@@ -10,8 +10,12 @@ const APP = 'jk-app-' + VERSION, LIBS = 'jk-libs-v1', TILES = 'jk-tiles-v1', TIL
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 const TILE_HOSTS = /(^|\.)tile\.openstreetmap\.org$|(^|\.)tile\.opentopomap\.org$|^server\.arcgisonline\.com$/;
 
+/* Sidan hämtas med Accept: text/html. Det gör ingen skillnad i en webbläsare, men i Android-appen (Capacitor) lägger
+   skalet bara in sina funktioner (window.Capacitor) i svar på sådana anrop. Utan det skulle appen sakna dem när
+   sidan kommer från service workern. */
+const HTML = {Accept:'text/html'};
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(APP).then(c => c.addAll(SHELL.map(u => new Request(u, {cache:'reload'})))).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(APP).then(c => c.addAll(SHELL.map(u => new Request(u, u === './' || u === './index.html' ? {cache:'reload', headers:HTML} : {cache:'reload'})))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('jk-app-') && k !== APP).map(k => caches.delete(k)))).then(() => self.clients.claim()));
@@ -21,10 +25,13 @@ self.addEventListener('activate', e => {
 async function appFirst(req){
   const cache = await caches.open(APP);
   try {
-    const res = await Promise.race([fetch(req.url, {cache:'no-cache', credentials:'same-origin'}), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000))]);
+    const init = {cache:'no-cache', credentials:'same-origin'}; if(req.mode === 'navigate') init.headers = HTML;
+    const res = await Promise.race([fetch(req.url, init), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000))]);
     if(res && res.ok) cache.put(req.mode === 'navigate' ? './index.html' : req, res.clone());
     return res;
   } catch(e){
+    // Sidan: den senast hämtade versionen (sparas som ./index.html), annars den som sparades vid installationen
+    if(req.mode === 'navigate') return (await cache.match('./index.html')) || (await cache.match(req, {ignoreSearch:true})) || Response.error();
     return (await cache.match(req, {ignoreSearch:true})) || (await cache.match('./index.html')) || Response.error();
   }
 }
