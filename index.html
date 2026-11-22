@@ -1531,10 +1531,15 @@ const typeById = id => state.types.find(t => t.id === id);
 const areaById = id => state.areas.find(a => a.id === id);
 const pinById = id => state.pins.find(p => p.id === id);
 
+/* Typer som är dolda i ett visst område: state.settings.areaTypes = {område: {typ: true}}.
+   Sparas bara på den här enheten (som övriga filter) och delas inte med jaktlaget. */
+const areaTypeHidden = (aid, tid) => !!(aid && ((state.settings.areaTypes || {})[aid] || {})[tid]);
+const areaHiddenCount = aid => Object.values((state.settings.areaTypes || {})[aid] || {}).filter(Boolean).length;
 function pinVisible(p){
   const t = typeById(p.typeId); if(!t) return false;
   const areaOn = p.areaId && areaById(p.areaId) ? areaById(p.areaId).visible !== false : state.settings.noAreaVisible !== false;
   if(!areaOn) return false;
+  if(p.areaId && areaById(p.areaId) && areaTypeHidden(p.areaId, p.typeId)) return false;
   if(state.settings.svampMode) return !!t.svamp;
   return t.visible !== false;
 }
@@ -1947,7 +1952,7 @@ function renderFilter(){
   let html = `<h3 class="sec">Områden <span><button class="linkbtn" type="button" data-act="areas-all">Visa alla</button> · <button class="linkbtn" type="button" data-act="areas-none">Dölj alla</button></span></h3><div>`;
   for(const a of state.areas){
     html += `<div class="frow"><input class="sw-toggle" type="checkbox" id="ar-${esc(a.id)}" data-act="area-toggle" data-id="${esc(a.id)}" ${a.visible !== false ? 'checked' : ''} aria-label="Visa ${esc(a.name)}">
-      <label class="fname" for="ar-${esc(a.id)}">${esc(a.name)}</label>${a.gid ? `<span class="tag" title="Delas med ${esc(gname(cloud.groups[a.gid]))}">Delat</span>` : ''}<span class="fcount">${cnt(p => p.areaId === a.id)}</span>
+      <label class="fname" for="ar-${esc(a.id)}">${esc(a.name)}${areaHiddenCount(a.id) ? `<br><span class="small muted">${areaHiddenCount(a.id)} ${areaHiddenCount(a.id) === 1 ? 'typ dold' : 'typer dolda'} här</span>` : ''}</label>${a.gid ? `<span class="tag" title="Delas med ${esc(gname(cloud.groups[a.gid]))}">Delat</span>` : ''}<span class="fcount">${cnt(p => p.areaId === a.id)}</span>
       <button class="iconbtn" type="button" data-act="area-zoom" data-id="${esc(a.id)}" aria-label="Zooma till ${esc(a.name)}" title="Zooma till området">${ICON_ZOOM}</button>
       ${canEditArea(a) ? `<button class="iconbtn" type="button" data-act="area-edit" data-id="${esc(a.id)}" aria-label="Ändra ${esc(a.name)}">${ICON_EDIT}</button>` : '<span style="width:36px"></span>'}
       ${!a.gid || (cloud.groups[a.gid] && isAdminGroup(cloud.groups[a.gid])) ? `<button class="iconbtn" type="button" data-act="area-del" data-id="${esc(a.id)}" aria-label="Ta bort ${esc(a.name)}">${ICON_TRASH}</button>` : '<span style="width:36px"></span>'}</div>`;
@@ -2063,6 +2068,7 @@ $('#panel').addEventListener('click', e => {
   else if(act === 'group'){ const k = b.dataset.key; state.settings.closedGroups[k] = !state.settings.closedGroups[k]; save(); b.parentElement.classList.toggle('closed'); b.setAttribute('aria-expanded', String(!state.settings.closedGroups[k])); }
   else if(act === 'clear-ex'){ clearExamples(); }
   else if(act === 'renumber') openRenumber();
+  else if(act === 'area-types-all'){ if(state.settings.areaTypes) delete state.settings.areaTypes[id]; save(); renderAll(); }
   else if(act === 'renumber-undo') undoRenumber();
   else if(act === 'areas-all' || act === 'areas-none'){ const v = act === 'areas-all'; state.areas.forEach(a => a.visible = v); state.settings.noAreaVisible = v; save(); renderAll(); }
   else if(act === 'area-edit') openAreaForm(id);
@@ -2084,6 +2090,7 @@ $('#panel').addEventListener('change', e => {
   if(act === 'area-toggle'){ areaById(id).visible = b.checked; }
   else if(act === 'noarea-toggle'){ state.settings.noAreaVisible = b.checked; }
   else if(act === 'type-toggle'){ typeById(id).visible = b.checked; }
+  else if(act === 'area-type-toggle'){ const at = state.settings.areaTypes || (state.settings.areaTypes = {}), m = at[b.dataset.area] || (at[b.dataset.area] = {}); if(b.checked) delete m[id]; else m[id] = true; if(!Object.keys(m).length) delete at[b.dataset.area]; save(); renderAll(); return; }
   else if(act === 'ext-toggle'){ const s = state.external.find(x => x.id === id); s.visible = b.checked; save(); renderExternal(); return; }
   else if(act === 'sp'){ const g = state.settings.gbif; g.species = b.checked ? Array.from(new Set(g.species.concat(id))) : g.species.filter(x => x !== id); save(); renderGbif(); renderDensity(); return; }
   else return;
@@ -2232,7 +2239,9 @@ function renderAreaView(force){
   if(passes.length) h += `<div class="ar-sec"><div class="lbl">Pass</div><p class="note" style="margin-top:0">${passes.length} ${passes.length === 1 ? 'pass' : 'pass'} i området.</p>
     <div class="btnrow">${passes.length >= 2 ? '<button class="btn sm" type="button" id="afRenumber">Numrera om passen</button>' : ''}${renumberUndo ? '<button class="btn sm ghost" type="button" data-act="renumber-undo">Ångra omnumreringen</button>' : ''}</div></div>`;
   // Typer som syns
-  if(used.length) h += `<div class="ar-sec"><div class="lbl">Typer som syns</div>${sm ? '<p class="note" style="margin:0 0 6px">Svampkartan är på: bara svamptyper visas.</p>' : '<p class="note" style="margin:0 0 6px">Gäller hela kartan.</p>'}${used.map(t => `<div class="frow"><input class="sw-toggle" type="checkbox" id="aty-${esc(t.id)}" data-act="type-toggle" data-id="${esc(t.id)}" ${(sm ? t.svamp : t.visible !== false) ? 'checked' : ''} ${sm ? 'disabled' : ''} aria-label="Visa ${esc(t.name)}">${swatch(t)}<label class="fname" for="aty-${esc(t.id)}">${esc(t.name)}</label><span class="fcount">${pins.filter(p => p.typeId === t.id).length}</span></div>`).join('')}</div>`;
+  if(used.length) h += `<div class="ar-sec"><div class="lbl">Typer som syns i området</div><p class="note" style="margin:0 0 6px">Gäller bara det här området och bara på den här enheten.${sm ? ' Svampkartan är på: bara svamptyper visas.' : ''}</p>${used.map(t => { const off = sm ? !t.svamp : t.visible === false;
+    return `<div class="frow"><input class="sw-toggle" type="checkbox" id="aty-${esc(t.id)}" data-act="area-type-toggle" data-area="${esc(id)}" data-id="${esc(t.id)}" ${areaTypeHidden(id, t.id) ? '' : 'checked'} aria-label="Visa ${esc(t.name)} i ${esc(a.name)}">${swatch(t)}<label class="fname" for="aty-${esc(t.id)}">${esc(t.name)}${off ? `<br><span class="small muted">${sm ? 'Döljs av svampkartan' : 'Dold på hela kartan under Filter'}</span>` : ''}</label><span class="fcount">${pins.filter(p => p.typeId === t.id).length}</span></div>`; }).join('')}
+    ${areaHiddenCount(id) ? `<div class="btnrow"><button class="btn sm ghost" type="button" data-act="area-types-all" data-id="${esc(id)}">Visa alla typer i området</button></div>` : ''}</div>`;
   // Flytta och ta bort
   if(edit && moveTargets(a).length && (a.border || areaLines(a).length || n)) h += `<details class="field ar-sec" id="afMoveBox"><summary><span>Flytta till ett annat område</span></summary>
       <label class="field" style="margin-top:8px"><span>Till</span><select class="input" id="afMoveTo">${moveTargets(a).map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('')}</select></label>
@@ -6433,7 +6442,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

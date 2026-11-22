@@ -339,6 +339,27 @@ with sync_playwright() as p:
     pg.evaluate("document.querySelectorAll('*').forEach(e => e.dispatchEvent(new MouseEvent('mouseover', {bubbles:true})))")
     check(pg.evaluate("document.querySelectorAll('[onmouseover]').length") == 0 and not pg.evaluate("window.__pwn"), 'id:n med citattecken escapas och blir inte kod i sidan')
     pg.evaluate("(() => { const s = __fk.state(), bad = s.pins.find(p => p.name === 'Elak nål').id; s.pins = s.pins.filter(p => p.id !== bad); s.areas = s.areas.filter(a => a.id !== bad); s.types = s.types.filter(t => t.id !== bad); __fk.renderAll(); })()")
+    # Typfilter per område: en typ kan döljas i ett område men synas i ett annat
+    pg.evaluate("""(() => { const s = __fk.state(), a = s.areas.find(x => x.name === 'Exempel: Svampskogen');
+      s.pins.push({id:'p-extra-pass', name:'Pass i svampskogen', typeId:'t-pass', areaId:a.id, lat:58.716, lng:14.602, note:'', created:1, updated:1}); __fk.renderAll(); })()""")
+    pg.wait_for_timeout(200)
+    n_all = pg.locator('.pin-icon').count()
+    jm = pg.evaluate("__fk.state().areas.find(x => x.name === 'Exempel: Jaktmarken').id")
+    nav(pg, 'filter'); pg.click(f'#paneFilter [data-act="area-edit"][data-id="{jm}"]'); pg.wait_for_timeout(300)
+    check(pg.locator('#paneArea [data-act="area-type-toggle"]').count() == 5 and 'bara det här området' in pg.inner_text('#paneArea'), 'områdets vy har ett typfilter som bara gäller området')
+    pg.uncheck(f'#paneArea [data-act="area-type-toggle"][data-id="t-pass"]', force=True); pg.wait_for_timeout(300)
+    vis = pg.evaluate("__fk.state().pins.filter(p => p.typeId === 't-pass').map(p => [p.name, p.areaId, __fk.pinVisible(p)])")
+    in_jm = [v for n, ar, v in vis if ar == jm]
+    check(in_jm and not any(in_jm) and ['Pass i svampskogen', True] in [[n, v] for n, ar, v in vis] and pg.locator('.pin-icon').count() == n_all - len(in_jm), f'Pass döljs i Jaktmarken men syns i Svampskogen: {vis}')
+    check(pg.evaluate("__fk.state().types.find(t => t.id === 't-pass').visible") is not False and pg.evaluate("__fk.state().settings.areaTypes")[jm].get('t-pass') is True, 'typen är inte dold på hela kartan, bara i området')
+    pg.click('#pBack'); pg.wait_for_timeout(200)
+    check('1 typ dold här' in pg.inner_text('#paneFilter'), 'Filter visar att området har en dold typ')
+    pg.reload(); pg.wait_for_timeout(1200)
+    check(pg.locator('.pin-icon').count() == n_all - 1, 'typfiltret per område finns kvar efter omladdning')
+    nav(pg, 'filter'); pg.click(f'#paneFilter [data-act="area-edit"][data-id="{jm}"]'); pg.wait_for_timeout(300)
+    pg.click('#paneArea [data-act="area-types-all"]'); pg.wait_for_timeout(300)
+    check(pg.locator('.pin-icon').count() == n_all and not pg.evaluate("(__fk.state().settings.areaTypes || {})['" + jm + "']"), 'Visa alla typer i området tar bort filtret')
+    pg.evaluate("(() => { const s = __fk.state(); s.pins = s.pins.filter(p => p.id !== 'p-extra-pass'); __fk.renderAll(); })()")
     check(not errors, f'inga JS-fel på dator: {errors[:3]}')
     ctx.close()
 
