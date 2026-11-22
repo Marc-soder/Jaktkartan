@@ -138,7 +138,7 @@ function msgLoad(g, mid, m){
       msgSeen.told[mid] = true;
       toast(`Meddelande från ${m.name || 'deltagare'}: ${r.text.slice(0, 80)}${r.text.length > 80 ? '…' : ''}`, 6000);
       try { if(navigator.vibrate) navigator.vibrate([150, 80, 150]); } catch(e){}
-      const tab = $('#tab-jakt'); if(tab && tab.getAttribute('aria-selected') !== 'true') tab.classList.add('has-news');
+      if(!(nav.tab === 'jakt' && nav.team === g.id)){ $('#tab-jakt').classList.add('has-news'); if($('#drawer').hidden) $('#btnMenu').classList.add('has-news'); }
     }
   }).catch(() => { msgPlain[mid] = {err:'Kunde inte låsa upp meddelandet.'}; scheduleRender(); });
 }
@@ -185,3 +185,4 @@ async function msgSend(g, hid, text, people, toAll){
   await sent;
 }
 $('#tab-jakt').addEventListener('click', () => $('#tab-jakt').classList.remove('has-news'));
+$('#drTeams').addEventListener('click', () => $('#tab-jakt').classList.remove('has-news'));

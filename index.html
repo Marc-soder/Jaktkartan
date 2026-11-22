@@ -970,13 +970,42 @@ a{color:var(--accent)}
 #panel.peek:not(.dragging) .p-body{visibility:hidden}
 .handle{flex:none;height:22px;display:grid;place-items:center;touch-action:none;cursor:grab;border:0;background:none;width:100%;padding:0}
 .handle span{width:42px;height:5px;border-radius:3px;background:var(--line)}
-.p-head{flex:none;display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:0 max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px));touch-action:none}
+.p-head{flex:none;display:flex;align-items:center;gap:4px;padding:0 max(10px,env(safe-area-inset-right,0px)) 4px max(6px,env(safe-area-inset-left,0px));touch-action:none;min-height:48px}
+.p-title{flex:1;min-width:0;margin:0;font:700 21px/1.15 var(--font-display);letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p-head .iconbtn{flex:none;width:44px;height:44px;border-radius:12px}
+.p-head .iconbtn svg{width:24px;height:24px}
+.p-menu.has-news{position:relative}.p-menu.has-news::after{content:'';position:absolute;top:8px;right:8px;width:9px;height:9px;border-radius:50%;background:var(--accent)}
 .brand{font:700 22px/1.1 var(--font-display);letter-spacing:.02em;margin:0;color:var(--spruce)}
 .brand b{color:var(--accent)}
 .p-stat{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
-.tabs{flex:none;display:flex;gap:2px;padding:6px max(10px,env(safe-area-inset-right,0px)) 0 max(10px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--line)}
-.tab{flex:1;border:0;background:none;padding:10px 2px 9px;font:600 14px/1 var(--font-display);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-1px}
-.tab[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+.tabs{flex:none;display:flex;gap:2px;padding:0 max(10px,env(safe-area-inset-right,0px)) 0 max(10px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--line)}
+.tabs[hidden]{display:none}
+.stab{flex:1;border:0;background:none;padding:10px 2px 9px;font:600 13px/1 var(--font-display);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-1px;cursor:pointer;white-space:nowrap}
+.stab[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+/* Sidomenyn */
+.drawer-back{position:fixed;inset:0;z-index:1480;background:var(--scrim)}
+.drawer-back[hidden],.drawer[hidden]{display:none}
+.drawer{position:fixed;z-index:1490;top:0;bottom:0;left:0;width:min(300px,84vw);background:var(--surface);box-shadow:var(--shadow);display:flex;flex-direction:column;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);overflow:auto;animation:drawerin .18s ease-out}
+@keyframes drawerin{from{transform:translateX(-100%)}to{transform:none}}
+.dr-head{display:flex;align-items:center;justify-content:space-between;padding:14px 10px 10px 18px;border-bottom:1px solid var(--line)}
+.dr-head .iconbtn{font-size:24px;width:44px;height:44px}
+.dr-list{display:flex;flex-direction:column;padding:8px 0}
+.tab.dr-item{display:block;width:100%;text-align:left;border:0;border-left:4px solid transparent;background:none;padding:14px 18px;font:600 16px/1.2 var(--font-body);color:var(--fg);cursor:pointer}
+.tab.dr-item:hover{background:var(--surface-2)}
+.tab.dr-item[aria-selected="true"]{border-left-color:var(--accent);background:var(--accent-soft)}
+.dr-teams{display:flex;flex-direction:column}
+.dr-team{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:0;background:none;padding:11px 18px 11px 38px;font:500 15px/1.25 var(--font-body);color:var(--fg);cursor:pointer}
+.dr-team span:first-child{flex:1;min-width:0;overflow-wrap:anywhere}
+.dr-team:hover{background:var(--surface-2)}.dr-team.on{color:var(--accent);font-weight:700}
+.team-list{display:grid;gap:8px}
+.team-row{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:14px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);font:600 16px/1.25 var(--font-body);cursor:pointer}
+.team-row .tr-name{flex:1;min-width:0;overflow-wrap:anywhere}.team-row .tr-go{font-size:22px;color:var(--muted)}
+.hunt-row{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}
+.hunt-row > span{min-width:0;overflow-wrap:anywhere}
+.ar-sec{margin-top:18px}
+.ar-pins{display:grid;gap:2px}
+.ar-pin{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;padding:8px 2px;color:var(--fg);font:400 15px/1.3 var(--font-body);cursor:pointer}
+.ar-pin .fname{flex:1;min-width:0}
 .p-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:14px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px))}
 @media (min-width:860px){
   #panel{top:0;right:auto;width:var(--panel-w);height:auto;border-radius:0;box-shadow:none;border-right:1px solid var(--line);padding-top:env(safe-area-inset-top,0px)}
@@ -1264,27 +1293,41 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
   </div>
 </div>
 
+<div class="drawer-back" id="drawerBack" hidden></div>
+<nav class="drawer" id="drawer" aria-label="Meny" hidden>
+  <div class="dr-head"><span class="brand">Jakt<b>kartan</b></span><button class="iconbtn" id="drawerClose" type="button" aria-label="Stäng menyn">×</button></div>
+  <div class="dr-list">
+    <button class="tab dr-item" type="button" data-tab="konto" aria-selected="false" id="tab-konto">Mitt konto</button>
+    <button class="tab dr-item" type="button" data-tab="list" aria-selected="true" id="tab-list">Nålar</button>
+    <button class="tab dr-item" type="button" data-tab="filter" aria-selected="false" id="tab-filter">Filter</button>
+    <button class="tab dr-item" type="button" data-tab="svamp" aria-selected="false" id="tab-svamp">Svamp</button>
+    <button class="tab dr-item" type="button" data-tab="data" aria-selected="false" id="tab-data">Data</button>
+    <button class="tab dr-item" type="button" data-tab="jakt" aria-selected="false" id="tab-jakt">Jakt</button>
+    <div class="dr-teams" id="drTeams"></div>
+    <button class="tab dr-item" type="button" data-tab="kalender" aria-selected="false" id="tab-kalender">Kalender</button>
+    <button class="tab dr-item" type="button" data-tab="vilt" aria-selected="false" id="tab-vilt">Vilt</button>
+  </div>
+</nav>
+
 <aside id="panel" aria-label="Kartnålar och inställningar">
   <button class="handle" id="handle" type="button" aria-label="Dra upp eller ned panelen"><span></span></button>
   <div class="p-head" id="pHead">
-    <h1 class="brand">Jakt<b>kartan</b></h1>
+    <button class="iconbtn p-menu" id="btnMenu" type="button" aria-label="Meny" aria-controls="drawer" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <button class="iconbtn p-back" id="pBack" type="button" aria-label="Tillbaka" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <h1 class="p-title" id="pTitle">Nålar</h1>
     <span class="p-stat" id="pStat"></span>
   </div>
-  <div class="tabs" role="tablist">
-    <button class="tab" role="tab" data-tab="list" aria-selected="true" id="tab-list">Nålar</button>
-    <button class="tab" role="tab" data-tab="filter" aria-selected="false" id="tab-filter">Filter</button>
-    <button class="tab" role="tab" data-tab="jakt" aria-selected="false" id="tab-jakt">Jakt</button>
-    <button class="tab" role="tab" data-tab="vilt" aria-selected="false" id="tab-vilt">Vilt</button>
-    <button class="tab" role="tab" data-tab="svamp" aria-selected="false" id="tab-svamp">Svamp</button>
-    <button class="tab" role="tab" data-tab="data" aria-selected="false" id="tab-data">Data</button>
-  </div>
+  <div class="tabs" id="subTabs" role="tablist" aria-label="Jaktlaget" hidden></div>
   <div class="p-body" id="pBody">
     <section data-pane="list" id="paneList"></section>
+    <section data-pane="konto" id="paneKonto" hidden></section>
     <section data-pane="filter" id="paneFilter" hidden></section>
     <section data-pane="jakt" id="paneJakt" hidden></section>
+    <section data-pane="kalender" id="paneKalender" hidden><div id="calInv"></div><div id="calBox"></div></section>
     <section data-pane="vilt" id="paneVilt" hidden></section>
     <section data-pane="svamp" id="paneSvamp" hidden></section>
     <section data-pane="data" id="paneData" hidden></section>
+    <section data-pane="area" id="paneArea" hidden></section>
   </div>
 </aside>
 
@@ -1734,7 +1777,7 @@ function setSvampMode(on){
 
 /* ---------- Panel / bottenlåda ---------- */
 let sheet = 'peek';
-function peekH(){ return $('#handle').offsetHeight + $('#pHead').offsetHeight + $('.tabs').offsetHeight; }
+function peekH(){ return $('#handle').offsetHeight + $('#pHead').offsetHeight + $('#subTabs').offsetHeight; }
 function sheetHeight(s){
   const vh = window.innerHeight;
   if(s === 'full') return Math.round(vh - 64);
@@ -1762,7 +1805,7 @@ function sheetRestore(){ if(sheet === 'min' && !placing && !drawing && !(typeof 
 function bottomPad(){ return isDesktop() ? 0 : (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-h')) || 0); }
 (function sheetDrag(){
   const panel = $('#panel'); let startY = 0, startH = 0, moved = false, active = false;
-  const down = e => { if(isDesktop()) return; active = true; moved = false; startY = e.clientY; startH = panel.getBoundingClientRect().height; panel.classList.add('dragging'); e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId); };
+  const down = e => { if(isDesktop() || (e.currentTarget.id === 'pHead' && e.target.closest('button'))) return; active = true; moved = false; startY = e.clientY; startH = panel.getBoundingClientRect().height; panel.classList.add('dragging'); e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId); };
   const move = e => { if(!active) return; const dy = startY - e.clientY; if(Math.abs(dy) > 6) moved = true; if(!moved) return;
     const hpx = Math.max(minH(), Math.min(window.innerHeight - 40, startH + dy)); panel.style.height = hpx + 'px'; document.documentElement.style.setProperty('--sheet-h', hpx + 'px'); syncCross(); if(typeof renderCompass === 'function') renderCompass(); };
   const up = e => { if(!active) return; active = false; panel.classList.remove('dragging');
@@ -1775,13 +1818,60 @@ function bottomPad(){ return isDesktop() ? 0 : (parseFloat(getComputedStyle(docu
     el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
   }
 })();
-function setTab(tab){
+/* ---------- Navigering: sidomenyn och panelen ----------
+   Sidomenyn väljer vad panelen visar (Mitt konto, Nålar, Filter, Svamp, Data, Jakt, Kalender, Vilt).
+   Under Jakt finns en rad per jaktlag: jaktlagets egen vy har flikarna Jakt, Planera, Områden och Medlemmar.
+   Pennan vid ett område öppnar områdets vy. Tillbaka-pilen går ett steg tillbaka. */
+const nav = {tab:'list', team:null, sub:'jakt', area:null, from:null};
+const NAV_TITLE = {list:'Nålar', konto:'Mitt konto', filter:'Filter', jakt:'Jakt', kalender:'Kalender', vilt:'Vilt', svamp:'Svamp', data:'Data', area:'Område'};
+function showPane(tab){
   $$('.tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
   $$('[data-pane]').forEach(p => { p.hidden = p.dataset.pane !== tab; });
   $('#pBody').scrollTop = 0;
-  if(sheet === 'peek' && !isDesktop()) setSheet('half');
+  if(!isDesktop() && (sheet === 'peek' || sheet === 'min')) setSheet('half');
 }
-$$('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+function setTab(tab){
+  nav.tab = tab; nav.team = null; nav.area = null; nav.from = null;
+  showPane(tab);
+  if(tab === 'jakt' || tab === 'konto') renderJakt();
+  if(tab === 'kalender' && typeof renderKalender === 'function') renderKalender();
+  renderNav();
+}
+function openTeam(gid, sub){
+  nav.tab = 'jakt'; nav.team = gid; nav.area = null; nav.from = null;
+  if(sub) nav.sub = sub;
+  showPane('jakt'); renderJakt(); renderNav();
+}
+function navBack(){
+  if(nav.tab === 'area' && nav.from){ const f = nav.from; nav.from = null; nav.area = null; if(f.team) openTeam(f.team, f.sub); else setTab(f.tab); return; }
+  if(nav.tab === 'area'){ setTab('filter'); return; }
+  if(nav.tab === 'jakt' && nav.team){ setTab('jakt'); return; }
+}
+function renderNav(){
+  const g = nav.team && typeof cloud !== 'undefined' ? cloud.groups[nav.team] : null, a = nav.area ? areaById(nav.area) : null;
+  $('#pTitle').textContent = nav.tab === 'jakt' && g ? gname(g) : nav.tab === 'area' ? (a ? a.name : 'Område') : NAV_TITLE[nav.tab] || '';
+  $('#pBack').hidden = !((nav.tab === 'jakt' && g) || nav.tab === 'area');
+  const st = $('#subTabs'), tabs = !!(nav.tab === 'jakt' && g && g.kind === 'member');
+  if(tabs) st.innerHTML = Object.entries(TEAM_TABS).map(([k, l]) => `<button class="stab" type="button" role="tab" data-sub="${k}" aria-selected="${nav.sub === k}" id="sub-${k}">${l}</button>`).join('');
+  if(st.hidden === tabs){ st.hidden = !tabs; if(!isDesktop()) setSheet(sheet, true); }   // höjden i nedfällt läge ändras
+  if(typeof renderDrawerTeams === 'function') renderDrawerTeams();
+}
+$('#subTabs').addEventListener('click', e => { const b = e.target.closest('[data-sub]'); if(!b) return; nav.sub = b.dataset.sub; renderJakt(); renderNav(); $('#pBody').scrollTop = 0; if(!isDesktop() && (sheet === 'peek' || sheet === 'min')) setSheet('half'); });
+$('#pBack').addEventListener('click', navBack);
+/* Sidomenyn */
+function drawerOpen(open){
+  const d = $('#drawer'), back = $('#drawerBack');
+  d.hidden = !open; back.hidden = !open; $('#btnMenu').setAttribute('aria-expanded', String(open));
+  if(open){ $('#btnMenu').classList.remove('has-news'); if(typeof renderDrawerTeams === 'function') renderDrawerTeams(); const cur = d.querySelector('.dr-item[aria-selected="true"]') || d.querySelector('.dr-item'); if(cur) cur.focus(); }
+}
+$('#btnMenu').addEventListener('click', () => drawerOpen($('#drawer').hidden));
+$('#drawerClose').addEventListener('click', () => drawerOpen(false));
+$('#drawerBack').addEventListener('click', () => drawerOpen(false));
+$('#drawer').addEventListener('click', e => {
+  const t = e.target.closest('[data-team]'), b = e.target.closest('.dr-item');
+  if(t){ drawerOpen(false); openTeam(t.dataset.team); }
+  else if(b){ drawerOpen(false); setTab(b.dataset.tab); }
+});
 
 /* ---------- Nållista ---------- */
 let listQuery = '';
@@ -1953,7 +2043,7 @@ function renderLayerPop(){
   renderTrailControls(); renderShotList(); renderWindNote(); heatSync();
 }
 function renderAll(){
-  renderMarkers(); renderExternal(); renderList(); renderFilter(); renderSvampPane(); renderData(); renderStatus(); renderLayerPop(); renderJakt(); renderVilt(); renderBorders(); renderPlan(); planBodyRender(); renderSos();
+  renderMarkers(); renderExternal(); renderList(); renderFilter(); renderSvampPane(); renderData(); renderStatus(); renderLayerPop(); renderJakt(); renderVilt(); renderBorders(); renderPlan(); planBodyRender(); renderSos(); renderAreaView(); if(typeof renderKalender === 'function' && nav.tab === 'kalender') renderKalender(); renderNav();
 }
 
 /* ---------- Händelser i panelen ---------- */
@@ -1977,7 +2067,7 @@ $('#panel').addEventListener('click', e => {
   else if(act === 'areas-all' || act === 'areas-none'){ const v = act === 'areas-all'; state.areas.forEach(a => a.visible = v); state.settings.noAreaVisible = v; save(); renderAll(); }
   else if(act === 'area-edit') openAreaForm(id);
   else if(act === 'area-zoom') zoomToArea(id);
-  else if(act === 'area-del'){ const a = areaById(id); confirmClick(b, 'Bekräfta', () => { state.pins.forEach(p => { if(p.areaId === id) p.areaId = null; }); state.areas = state.areas.filter(x => x.id !== id); save(); renderAll(); toast(a.gid ? `”${a.name}” togs bort för hela laget. Nålarna ligger nu privat hos dig under Utan område.` : `”${a.name}” togs bort. Nålarna ligger nu under Utan område.`, 5000); }); }
+  else if(act === 'area-del'){ const a = areaById(id); confirmClick(b, 'Bekräfta', () => { state.pins.forEach(p => { if(p.areaId === id) p.areaId = null; }); state.areas = state.areas.filter(x => x.id !== id); save(); if(nav.tab === 'area' && nav.area === id) navBack(); renderAll(); toast(a.gid ? `”${a.name}” togs bort för hela laget. Nålarna ligger nu privat hos dig under Utan område.` : `”${a.name}” togs bort. Nålarna ligger nu under Utan område.`, 5000); }); }
   else if(act === 'type-new') openTypeForm(null);
   else if(act === 'type-edit') openTypeForm(id);
   else if(act === 'import-ext'){ importTarget = 'ext'; $('#fileImport').click(); }
@@ -2020,7 +2110,7 @@ function openModal(html, onReady){
   if(f && isDesktop()) f.focus();
 }
 function closeModal(){ if(modalEl){ modalEl.remove(); modalEl = null; if(lastFocus && lastFocus.focus) try{ lastFocus.focus(); }catch(e){} } }
-document.addEventListener('keydown', e => { if(e.key === 'Escape'){ if(modalEl) closeModal(); else if(!$('#layerPop').hidden) toggleLayerPop(false); else if(placing) endPlacing(); } });
+document.addEventListener('keydown', e => { if(e.key === 'Escape'){ if(!$('#drawer').hidden){ drawerOpen(false); return; } if(modalEl) closeModal(); else if(!$('#layerPop').hidden) toggleLayerPop(false); else if(placing) endPlacing(); } });
 
 function areaOptions(sel){
   return `<option value="">Utan område (privat)</option>${state.areas.filter(canEditArea).map(a => `<option value="${esc(a.id)}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}${a.gid ? ' · delat' : ''}</option>`).join('')}<option value="__new">+ Nytt område …</option>`;
@@ -2101,48 +2191,83 @@ function openPinForm(opts){
   });
 }
 
+/* ---------- Områdets vy ----------
+   Pennan vid ett område (under Filter eller i jaktlagets Områden) öppnar allt för marken nerifrån:
+   namn och delning, gräns, vägar, stigar och bäckar, nålarna i området, omnumrering av passen,
+   vilka typer som syns, flytta innehåll och ta bort. */
 function openAreaForm(id){
-  const a = areaById(id); if(!a) return;
-  const mine = Object.values(cloud.groups).filter(g => g.kind === 'member' && canEditGroup(g));
+  if(!areaById(id)) return;
+  closeModal();
+  if(nav.tab !== 'area') nav.from = {tab:nav.tab, team:nav.team, sub:nav.sub};
+  nav.tab = 'area'; nav.area = id; nav.team = null;
+  showPane('area'); renderAreaView(true); renderNav();
+}
+function renderAreaView(force){
+  const pane = $('#paneArea'); if(!pane || nav.tab !== 'area') return;
+  // Rita inte om medan man skriver (en uppdatering från molnet skulle annars ta bort det man skrivit)
+  if(!force && pane.contains(document.activeElement) && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName) && document.activeElement.type !== 'checkbox') return;
+  const id = nav.area, a = areaById(id);
+  if(!a){ pane.innerHTML = '<div class="empty">Området finns inte längre.</div>'; return; }
+  const edit = canEditArea(a), mine = Object.values(cloud.groups).filter(g => g.kind === 'member' && canEditGroup(g));
   const canMove = !a.gid || (cloud.groups[a.gid] && isAdminGroup(cloud.groups[a.gid]));
-  const n = state.pins.filter(p => p.areaId === id).length, rings = areaRings(a);
-  openModal(`<h2>Ändra område</h2><form id="afForm"><label class="field"><span>Namn</span><input class="input" id="afName" maxlength="60" value="${esc(a.name)}"></label>
-    ${mine.length || a.gid ? `<label class="field"><span>Delas med</span><select class="input" id="afShare" ${canMove ? '' : 'disabled'}><option value="">Bara jag (privat)</option>${mine.map(g => `<option value="${esc(g.id)}"${a.gid === g.id ? ' selected' : ''}>${esc(gname(g))}</option>`).join('')}</select></label>
-    <p class="note" style="margin:-4px 0 0">${canMove ? `Delar du området ser alla i jaktlaget dess ${n} ${n === 1 ? 'nål' : 'nålar'}, och medlemmar kan ändra dem.` : 'Bara en admin kan sluta dela området.'}</p>` : '<p class="note" style="margin:-4px 0 0">Logga in under Jakt och skapa ett jaktlag för att kunna dela området.</p>'}
-    <div class="field" style="margin-top:14px"><span>Gräns</span>${rings.length ? rings.map((r, k) => `<div class="frow"><span class="fname">${rings.length > 1 ? `Del ${k + 1}` : 'Gränsen'}<br><span class="small muted">${r.length} punkter · ${fmtHa(areaHa(r))}</span></span><button class="btn sm" type="button" data-ring-edit="${k}">Ändra</button><button class="btn sm danger" type="button" data-ring-del="${k}">Ta bort</button></div>`).join('') + (rings.length > 1 ? `<div class="small" style="margin-top:4px">Totalt ${fmtHa(ringsHa(rings))} i ${rings.length} delar.</div>` : '') : '<div class="small">Ingen gräns är ritad.</div>'}
-      <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afDraw">${rings.length ? 'Rita en till del' : 'Rita gräns'}</button><button class="btn sm" type="button" id="afImport">Importera från fil</button><button class="btn sm" type="button" id="afShot">Från skärmdump</button></div>
-      ${rings.length ? '<p class="note" style="margin:6px 0 0">Består marken av flera skiften? Rita en del för varje. Alla delar hör till samma område och delas med samma jaktlag.</p>' : ''}</div>
-    <div class="field" style="margin-top:14px"><span>Egna vägar, stigar och bäckar</span>${areaLines(a).length ? areaLines(a).map(([lid, l]) => `<div class="frow"><span class="fname">${esc(l.n || LINE_KIND[l.k])}<br><span class="small muted">${LINE_KIND[l.k]} · ${fmtDist(lineLen(parseBorder(l.p)))}</span></span><button class="btn sm" type="button" data-line-edit="${lid}">Ändra</button></div>`).join('') : '<div class="small">Inga egna vägar, stigar eller bäckar.</div>'}
-      <div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afLine">Rita väg, stig eller bäck</button></div></div>
-    ${moveTargets(a).length && (a.border || areaLines(a).length || n) ? `<details class="field" style="margin-top:14px" id="afMoveBox"><summary><span>Flytta till ett annat område</span></summary>
+  const pins = state.pins.filter(p => p.areaId === id).sort((x, y) => (x.name || '').localeCompare(y.name || '', 'sv', {numeric:true}));
+  const n = pins.length, rings = areaRings(a), passes = pins.filter(p => isPassType(typeById(p.typeId)) && canEditPin(p));
+  const used = state.types.filter(t => pins.some(p => p.typeId === t.id)), sm = state.settings.svampMode;
+  let h = `<form id="afForm"><label class="field"><span>Namn</span><input class="input" id="afName" maxlength="60" value="${esc(a.name)}"${edit ? '' : ' disabled'}></label>
+    ${mine.length || a.gid ? `<label class="field"><span>Delas med</span><select class="input" id="afShare" ${canMove && edit ? '' : 'disabled'}><option value="">Bara jag (privat)</option>${mine.map(g => `<option value="${esc(g.id)}"${a.gid === g.id ? ' selected' : ''}>${esc(gname(g))}</option>`).join('')}${a.gid && !mine.some(g => g.id === a.gid) ? `<option value="${esc(a.gid)}" selected>${esc(gname(cloud.groups[a.gid]))}</option>` : ''}</select></label>
+    <p class="note" style="margin:-4px 0 0">${canMove ? `Delar du området ser alla i jaktlaget dess ${n} ${n === 1 ? 'nål' : 'nålar'}, och medlemmar kan ändra dem.` : 'Bara en admin kan sluta dela området.'}</p>` : '<p class="note" style="margin:-4px 0 0">Logga in under Mitt konto och skapa ett jaktlag för att kunna dela området.</p>'}
+    <div class="btnrow">${edit ? '<button class="btn primary sm" type="submit">Spara</button>' : ''}<button class="btn sm" type="button" data-act="area-zoom" data-id="${esc(id)}">Visa på kartan</button></div></form>`;
+  // Gräns
+  h += `<div class="ar-sec"><div class="lbl">Gräns</div>${rings.length ? rings.map((r, k) => `<div class="frow"><span class="fname">${rings.length > 1 ? `Del ${k + 1}` : 'Gränsen'}<br><span class="small muted">${r.length} punkter · ${fmtHa(areaHa(r))}</span></span>${edit ? `<button class="btn sm" type="button" data-ring-edit="${k}">Ändra</button><button class="iconbtn" type="button" data-ring-del="${k}" aria-label="Ta bort ${rings.length > 1 ? 'del ' + (k + 1) : 'gränsen'}">${ICON_TRASH}</button>` : ''}</div>`).join('') : '<div class="small muted">Ingen gräns ritad.</div>'}
+    ${rings.length > 1 ? `<div class="small" style="margin-top:4px">Totalt ${fmtHa(ringsHa(rings))} i ${rings.length} delar.</div>` : ''}
+    ${edit ? `<div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afDraw">${rings.length ? 'Rita en till del' : 'Rita gräns'}</button><button class="btn sm" type="button" id="afImport">Importera från fil</button><button class="btn sm" type="button" id="afShot">Från skärmdump</button></div>
+    ${rings.length ? '<p class="note" style="margin:6px 0 0">Består marken av flera skiften? Rita en del för varje. Alla delar hör till samma område och delas med samma jaktlag.</p>' : ''}` : ''}</div>`;
+  // Vägar, stigar och bäckar
+  h += `<div class="ar-sec"><div class="lbl">Vägar, stigar och bäckar</div>${areaLines(a).length ? areaLines(a).map(([lid, l]) => `<div class="frow"><span class="fname">${esc(l.n || LINE_KIND[l.k])}<br><span class="small muted">${LINE_KIND[l.k]} · ${fmtDist(lineLen(parseBorder(l.p)))}</span></span>${edit ? `<button class="btn sm" type="button" data-line-edit="${esc(lid)}">Ändra</button>` : ''}</div>`).join('') : '<div class="small muted">Inga egna vägar, stigar eller bäckar.</div>'}
+    ${edit ? '<div class="btnrow" style="margin-top:6px"><button class="btn sm" type="button" id="afLine">Rita väg, stig eller bäck</button></div>' : ''}</div>`;
+  // Nålar i området
+  h += `<div class="ar-sec"><div class="lbl">Nålar i området (${n})</div>${n ? `<div class="ar-pins">${pins.map(p => { const t = typeById(p.typeId) || {};
+    return `<button class="ar-pin" type="button" data-act="goto" data-id="${esc(p.id)}">${swatch(t)}<span class="fname">${esc(p.name || t.name || 'Nål')}<br><span class="small muted">${esc(t.name || '')}</span></span></button>`; }).join('')}</div>` : '<div class="small muted">Inga nålar i området.</div>'}</div>`;
+  // Passen
+  if(passes.length) h += `<div class="ar-sec"><div class="lbl">Pass</div><p class="note" style="margin-top:0">${passes.length} ${passes.length === 1 ? 'pass' : 'pass'} i området.</p>
+    <div class="btnrow">${passes.length >= 2 ? '<button class="btn sm" type="button" id="afRenumber">Numrera om passen</button>' : ''}${renumberUndo ? '<button class="btn sm ghost" type="button" data-act="renumber-undo">Ångra omnumreringen</button>' : ''}</div></div>`;
+  // Typer som syns
+  if(used.length) h += `<div class="ar-sec"><div class="lbl">Typer som syns</div>${sm ? '<p class="note" style="margin:0 0 6px">Svampkartan är på: bara svamptyper visas.</p>' : '<p class="note" style="margin:0 0 6px">Gäller hela kartan.</p>'}${used.map(t => `<div class="frow"><input class="sw-toggle" type="checkbox" id="aty-${esc(t.id)}" data-act="type-toggle" data-id="${esc(t.id)}" ${(sm ? t.svamp : t.visible !== false) ? 'checked' : ''} ${sm ? 'disabled' : ''} aria-label="Visa ${esc(t.name)}">${swatch(t)}<label class="fname" for="aty-${esc(t.id)}">${esc(t.name)}</label><span class="fcount">${pins.filter(p => p.typeId === t.id).length}</span></div>`).join('')}</div>`;
+  // Flytta och ta bort
+  if(edit && moveTargets(a).length && (a.border || areaLines(a).length || n)) h += `<details class="field ar-sec" id="afMoveBox"><summary><span>Flytta till ett annat område</span></summary>
       <label class="field" style="margin-top:8px"><span>Till</span><select class="input" id="afMoveTo">${moveTargets(a).map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('')}</select></label>
       ${rings.length ? `<label class="checkline"><input type="checkbox" id="afMvBorder" checked><span>${rings.length > 1 ? `Gränsen (${rings.length} delar)` : 'Gränsen'}</span></label>` : ''}
       ${areaLines(a).length ? `<label class="checkline"><input type="checkbox" id="afMvLines" checked><span>Vägar, stigar och bäckar (${areaLines(a).length})</span></label>` : ''}
       ${n ? `<label class="checkline"><input type="checkbox" id="afMvPins" checked><span>Nålar och pass (${n})</span></label>` : ''}
-      <div class="btnrow"><button class="btn sm" type="button" id="afMove">Flytta</button></div></details>` : ''}
-    <div class="actions"><button class="btn primary grow" type="submit">Spara</button><button class="btn ghost" type="button" id="afCancel">Avbryt</button></div></form>`, m => {
-    m.querySelector('#afCancel').addEventListener('click', closeModal);
-    m.querySelector('#afDraw').addEventListener('click', () => startDrawing(id));
-    m.querySelector('#afImport').addEventListener('click', () => { borderTarget = id; $('#fileBorder').click(); });
-    m.querySelector('#afShot').addEventListener('click', () => startShotAdd(id));
-    m.querySelector('#afLine').addEventListener('click', () => openLineForm({areaId:id}));
-    const mv = m.querySelector('#afMove');
-    if(mv) mv.addEventListener('click', () => {
-      const to = areaById(m.querySelector('#afMoveTo').value), chk = s => { const c = m.querySelector(s); return !!(c && c.checked); };
-      const what = {border:chk('#afMvBorder'), lines:chk('#afMvLines'), pins:chk('#afMvPins')};
-      if(!to || !(what.border || what.lines || what.pins)){ toast('Välj vad som ska flyttas.'); return; }
-      closeModal(); toast(moveAreaContent(id, to.id, what));
-    });
-    m.querySelectorAll('[data-line-edit]').forEach(b => b.addEventListener('click', () => openLineForm({areaId:id, lid:b.dataset.lineEdit})));
-    m.querySelectorAll('[data-ring-edit]').forEach(b => b.addEventListener('click', () => startDrawing(id, +b.dataset.ringEdit)));
-    m.querySelectorAll('[data-ring-del]').forEach(b => b.addEventListener('click', () => confirmClick(b, 'Bekräfta', () => {
-      const cur = areaById(id); if(cur){ const r = areaRings(cur); r.splice(+b.dataset.ringDel, 1); setRings(cur, r); cur.updated = Date.now(); save(); }
-      closeModal(); renderAll(); toast(rings.length > 1 ? 'Gränsdelen är borttagen' : 'Gränsen är borttagen'); })));
-    m.querySelector('#afForm').addEventListener('submit', e => { e.preventDefault(); const v = m.querySelector('#afName').value.trim(); if(!v) return; const cur = areaById(id); if(!cur){ closeModal(); return; }
-      cur.name = v; cur.updated = Date.now(); delete cur.example;
-      const sh = m.querySelector('#afShare');
-      if(sh && !sh.disabled){ const was = cur.gid || ''; if(sh.value !== was){ if(sh.value) cur.gid = sh.value; else delete cur.gid; toast(sh.value ? `Området delas nu med ${gname(cloud.groups[sh.value])}` : 'Området är privat igen'); } }
-      save(); closeModal(); renderAll(); });
+      <div class="btnrow"><button class="btn sm" type="button" id="afMove">Flytta</button></div></details>`;
+  if(!a.gid || (cloud.groups[a.gid] && isAdminGroup(cloud.groups[a.gid]))) h += `<div class="btnrow ar-sec"><button class="btn sm danger" type="button" data-act="area-del" data-id="${esc(id)}">Ta bort området</button></div>`;
+  pane.innerHTML = h;
+  const on = (sel, fn) => { const el = pane.querySelector(sel); if(el) el.addEventListener('click', fn); };
+  on('#afDraw', () => startDrawing(id));
+  on('#afImport', () => { borderTarget = id; $('#fileBorder').click(); });
+  on('#afShot', () => startShotAdd(id));
+  on('#afLine', () => openLineForm({areaId:id}));
+  on('#afRenumber', () => openRenumber(id));
+  on('#afMove', () => {
+    const to = areaById(pane.querySelector('#afMoveTo').value), chk = s => { const c = pane.querySelector(s); return !!(c && c.checked); };
+    const what = {border:chk('#afMvBorder'), lines:chk('#afMvLines'), pins:chk('#afMvPins')};
+    if(!to || !(what.border || what.lines || what.pins)){ toast('Välj vad som ska flyttas.'); return; }
+    toast(moveAreaContent(id, to.id, what)); renderAreaView(true);
+  });
+  pane.querySelectorAll('[data-line-edit]').forEach(b => b.addEventListener('click', () => openLineForm({areaId:id, lid:b.dataset.lineEdit})));
+  pane.querySelectorAll('[data-ring-edit]').forEach(b => b.addEventListener('click', () => startDrawing(id, +b.dataset.ringEdit)));
+  pane.querySelectorAll('[data-ring-del]').forEach(b => b.addEventListener('click', () => confirmClick(b, 'Bekräfta', () => {
+    const cur = areaById(id); if(cur){ const r = areaRings(cur); r.splice(+b.dataset.ringDel, 1); setRings(cur, r); cur.updated = Date.now(); save(); }
+    renderAll(); renderAreaView(true); toast(rings.length > 1 ? 'Gränsdelen är borttagen' : 'Gränsen är borttagen'); })));
+  pane.querySelector('#afForm').addEventListener('submit', e => {
+    e.preventDefault(); if(!edit) return;
+    const v = pane.querySelector('#afName').value.trim(); if(!v) return; const cur = areaById(id); if(!cur) return;
+    cur.name = v; cur.updated = Date.now(); delete cur.example;
+    const sh = pane.querySelector('#afShare');
+    if(sh && !sh.disabled){ const was = cur.gid || ''; if(sh.value !== was){ if(sh.value) cur.gid = sh.value; else delete cur.gid; toast(sh.value ? `Området delas nu med ${gname(cloud.groups[sh.value])}` : 'Området är privat igen'); } else toast('Området är sparat.'); }
+    else toast('Området är sparat.');
+    if(document.activeElement && pane.contains(document.activeElement)) document.activeElement.blur();
+    save(); renderAll(); renderAreaView(true); renderNav();
   });
 }
 
@@ -3252,8 +3377,10 @@ function rsvpHtml(g, hid){
     <div class="btnrow" style="margin-top:6px">${me ? `<span class="tag on">Du deltar</span><button class="btn sm ghost" type="button" data-j="rsvp-no" data-g="${esc(g.id)}" data-h="${esc(hid)}">Avböj</button>` : no ? `<span class="tag">Du har avböjt</span><button class="btn sm" type="button" data-j="rsvp" data-g="${esc(g.id)}" data-h="${esc(hid)}">Jag deltar ändå</button>` : `<button class="btn sm primary" type="button" data-j="rsvp" data-g="${esc(g.id)}" data-h="${esc(hid)}">Jag deltar</button><button class="btn sm ghost" type="button" data-j="rsvp-no" data-g="${esc(g.id)}" data-h="${esc(hid)}">Avböj</button>`}</div>
     <p class="note" style="margin-top:4px">${me ? auto : 'Deltar du delas din position automatiskt med jaktlaget medan jakten pågår.'}</p>`;
 }
-function renderJakt(){
-  const pane = $('#paneJakt'); if(!pane) return;
+/* ---------- Mitt konto ----------
+   Inloggning (Google eller gäst med jaktkod), namn, logga ut, aviseringar och Mina dokument. */
+function renderKonto(){
+  const pane = $('#paneKonto'); if(!pane) return;
   let html = '';
   const st = cloud.status;
   if(st === 'off' || st === 'error'){
@@ -3278,46 +3405,105 @@ function renderJakt(){
       <div class="btnrow"><button class="btn" type="button" data-j="login-guest">Gå med som gäst</button></div>
       ${BAKED_CFG ? '' : '<p class="note"><button class="linkbtn" type="button" data-j="cfg-reset">Byt Firebase-projekt</button></p>'}`;
   } else {
-    const u = cloud.user, gs = Object.values(cloud.groups);
-    html += `<div class="userrow"><span class="pos-dot">${esc(initials(myName()))}</span><span class="grow"><strong>${esc(myName())}</strong><br><span class="small muted">${u.isAnonymous ? 'Gäst' : esc(u.email || 'Inloggad')}</span></span><button class="btn sm" type="button" data-j="name">Byt namn</button><button class="btn sm ghost" type="button" data-j="logout">Logga ut</button></div>
-      <label class="bigtoggle" for="shareToggle" style="margin-top:10px"><span><strong>Dela min position</strong><br><span class="small muted">Syns bara för deltagarna i pågående jakter</span></span><input class="sw-toggle" type="checkbox" id="shareToggle" ${cloud.sharing ? 'checked' : ''} ${anyLiveHunt() ? '' : 'disabled'}></label>
-      <p class="note" id="posCount">${posCountText()}</p>
-      ${window.Notification && Notification.permission === 'default' ? '<div class="btnrow"><button class="btn sm" type="button" data-j="notif">Tillåt aviseringar om nödlarm</button></div><p class="note" style="margin-top:2px">Då kan ett nödlarm synas även när appen ligger i bakgrunden.</p>' : ''}
-      ${cloud.sharing ? '<p class="note">Positionen skickas bara medan appen är öppen och skärmen är på.</p>' : ''}
-      ${calAgendaHtml()}`;
-    for(const g of gs){
-      if(!g.meta) continue;
-      if(g.kind === 'guest'){
-        const hid = g.guest && g.guest.hid, hunt = hid && g.hunts[hid];
-        html += `<h3 class="sec">${esc(gname(g))} <span class="tag">Gäst</span></h3>${hunt ? huntCard(g, hid, hunt, false) : '<div class="empty">Jakten laddas eller är avslutad.</div>'}
-          <div class="btnrow"><button class="btn sm" type="button" data-j="guest-leave" data-g="${esc(g.id)}">Lämna jakten</button></div>`;
-        continue;
-      }
-      const role = myRole(g), lead = canLeadGroup(g), adm = isAdminGroup(g);
-      const ord = {live:0, planned:1, upcoming:1, ended:2};
-      const hunts = Object.entries(g.hunts || {}).filter(([, v]) => v).sort((a, b) => (ord[huntState(a[1])] - ord[huntState(b[1])]) || (huntSort(a[1]) - huntSort(b[1])));
-      const members = Object.entries(g.members || {}).filter(([, v]) => v).sort((a, b) => (a[1].name || '').localeCompare(b[1].name || '', 'sv'));
-      const shared = state.areas.filter(a => a.gid === g.id);
-      html += `<h3 class="sec">${esc(gname(g))} <span class="tag">${esc(ROLES[role] || '')}</span></h3>`;
-      html += hunts.length ? hunts.map(([hid, hunt]) => huntCard(g, hid, hunt, lead)).join('') : '<p class="note" style="margin-top:0">Ingen jakt är skapad.</p>';
-      if(lead) html += `<div class="btnrow"><button class="btn primary sm" type="button" data-j="hunt-new" data-g="${esc(g.id)}">Ny jakt</button></div>`;
-      html += `<div class="lbl">Delade områden</div><div class="small">${shared.length ? shared.map(a => esc(a.name)).join(', ') : '<span class="muted">Inga ännu. Öppna Filter, tryck på pennan vid ett område och välj att dela det med laget.</span>'}</div>`;
-      html += `<div class="lbl">Medlemmar och rättigheter</div>`;
-      for(const [mu, m] of members){
-        const isOwner = g.meta.owner === mu;
-        html += `<div class="frow"><span class="fname">${esc(m.name || 'Medlem')}${mu === u.uid ? ' <span class="muted">(du)</span>' : ''}</span>${adm && !isOwner ? `<select class="input rolesel" data-j="role" data-g="${esc(g.id)}" data-u="${esc(mu)}" aria-label="Rättighet för ${esc(m.name)}">${Object.entries(ROLES).map(([k, l]) => `<option value="${esc(k)}"${m.role === k ? ' selected' : ''}>${l}</option>`).join('')}</select><button class="iconbtn" type="button" data-j="member-del" data-g="${esc(g.id)}" data-u="${esc(mu)}" aria-label="Ta bort ${esc(m.name)}">${ICON_TRASH}</button>` : `<span class="tag">${isOwner ? 'Ägare' : esc(ROLES[m.role] || '')}</span>`}</div>`;
-      }
-      if(adm) html += `<p class="note">${Object.entries(ROLES).map(([k, l]) => `<b>${l}</b>: ${ROLE_HELP[k].toLowerCase()}`).join(' · ')}.</p><div class="btnrow"><button class="btn sm" type="button" data-j="invite" data-g="${esc(g.id)}">Bjud in medlem</button></div>`;
-      html += `<div class="btnrow" style="margin-top:8px">${g.meta.owner === u.uid ? `<button class="btn sm danger" type="button" data-j="group-del" data-g="${esc(g.id)}">Ta bort jaktlaget</button>` : `<button class="btn sm" type="button" data-j="group-leave" data-g="${esc(g.id)}">Lämna jaktlaget</button>`}</div>`;
-    }
-    html += `<h3 class="sec">Fler jaktlag</h3><div class="btnrow">${canCreate() ? '<button class="btn sm" type="button" data-j="group-new">Skapa jaktlag</button>' : ''}<button class="btn sm" type="button" data-j="join">Gå med med kod</button></div>
-      ${u.isAnonymous ? '<p class="note">Som gäst kan du gå med i jakter. Logga in med Google för att bli medlem i ett jaktlag.</p>' : canCreate() ? '' : '<p class="note">Bara ägaren av den här Jaktkartan kan skapa jaktlag. Du går med i ett lag eller en jakt med en kod.</p>'}`;
+    const u = cloud.user;
+    html += `<div class="userrow"><span class="pos-dot">${esc(initials(myName()))}</span><span class="grow"><strong>${esc(myName())}</strong><br><span class="small muted">${u.isAnonymous ? 'Gäst' : esc(u.email || 'Inloggad')}</span></span></div>
+      <div class="btnrow" style="margin-top:8px"><button class="btn sm" type="button" data-j="name">Byt namn</button><button class="btn sm ghost" type="button" data-j="logout">Logga ut</button></div>
+      ${window.Notification && Notification.permission === 'default' ? '<div class="btnrow"><button class="btn sm" type="button" data-j="notif">Tillåt aviseringar om nödlarm</button></div><p class="note" style="margin-top:2px">Då kan ett nödlarm synas även när appen ligger i bakgrunden.</p>' : ''}`;
   }
   html += docsCardHtml();
   pane.innerHTML = html;
+}
+
+/* ---------- Jakt ----------
+   Utan valt jaktlag: kommande jakter och inbjudningar, en rad per jaktlag, och skapa eller gå med i ett lag.
+   Med valt jaktlag (nav.team): lagets egen vy med flikarna Jakt, Planera, Områden och Medlemmar.
+   Alla ser flikarna. Knappar för att ändra syns bara för den som har rättighet. */
+const TEAM_TABS = {jakt:'Jakt', plan:'Planera', omr:'Områden', med:'Medlemmar'};
+const teamGroups = () => Object.values(cloud.groups).filter(g => g.meta).sort((a, b) => gname(a).localeCompare(gname(b), 'sv'));
+const teamLive = g => liveHunts(g).length > 0;
+function teamRowHtml(g){
+  const role = g.kind === 'guest' ? 'Gäst' : ROLES[myRole(g)] || '';
+  return `<button class="team-row" type="button" data-j="team" data-g="${esc(g.id)}"><span class="tr-name">${esc(gname(g))}</span>${teamLive(g) ? '<span class="tag on">Pågår</span>' : ''}<span class="tag">${esc(role)}</span><span class="tr-go" aria-hidden="true">›</span></button>`;
+}
+function renderJakt(){
+  renderKonto();
+  const pane = $('#paneJakt'); if(!pane) return;
+  const st = cloud.status;
+  if(nav.team && !(cloud.groups[nav.team] && cloud.groups[nav.team].meta)) nav.team = null;
+  let html = '';
+  if(st !== 'in'){
+    html += st === 'loading' ? '<div class="empty">Ansluter …</div>'
+      : `<p class="note" style="margin-top:0">Logga in för att se dina jaktlag och jakter, eller gå med som gäst med en jaktkod.</p><div class="btnrow"><button class="btn primary sm" type="button" data-j="go-konto">Logga in under Mitt konto</button></div>`;
+  } else if(nav.team){
+    html += teamHtml(cloud.groups[nav.team]);
+  } else {
+    const u = cloud.user, gs = teamGroups();
+    html += calAgendaHtml();
+    html += `<h3 class="sec">Jaktlag</h3>${gs.length ? `<div class="team-list">${gs.map(teamRowHtml).join('')}</div>` : '<p class="note" style="margin-top:0">Du är inte med i något jaktlag ännu.</p>'}
+      <div class="btnrow">${canCreate() ? '<button class="btn sm" type="button" data-j="group-new">Skapa jaktlag</button>' : ''}<button class="btn sm" type="button" data-j="join">Gå med med kod</button></div>
+      ${u.isAnonymous ? '<p class="note">Som gäst kan du gå med i jakter. Logga in med Google för att bli medlem i ett jaktlag.</p>' : canCreate() ? '' : '<p class="note">Bara ägaren av den här Jaktkartan kan skapa jaktlag. Du går med i ett lag eller en jakt med en kod.</p>'}`;
+  }
+  pane.innerHTML = html;
+  renderDrawerTeams(); if(typeof renderNav === 'function') renderNav();
   calRefresh();
   // Stänger man av själv under en jakt man deltar i startar delningen inte automatiskt igen för den jakten.
   const stg = $('#shareToggle'); if(stg) stg.addEventListener('change', e => { if(e.target.checked){ cloud.autoOff = {}; startSharing(); } else { for(const k of acceptedLive()) cloud.autoOff[k] = true; stopSharing(); renderJakt(); } });
+}
+/* Dela min position: under jakten, i jaktlagets flik Jakt */
+function shareHtml(){
+  return `<label class="bigtoggle" for="shareToggle"><span><strong>Dela min position</strong><br><span class="small muted">Syns bara för deltagarna i pågående jakter</span></span><input class="sw-toggle" type="checkbox" id="shareToggle" ${cloud.sharing ? 'checked' : ''} ${anyLiveHunt() ? '' : 'disabled'}></label>
+    <p class="note" id="posCount">${posCountText()}</p>
+    ${cloud.sharing ? '<p class="note">Positionen skickas bara medan appen är öppen och skärmen är på.</p>' : ''}`;
+}
+function teamHtml(g){
+  const u = cloud.user;
+  if(g.kind === 'guest'){
+    const hid = g.guest && g.guest.hid, hunt = hid && g.hunts[hid];
+    return shareHtml() + (hunt ? huntCard(g, hid, hunt, false) : '<div class="empty">Jakten laddas eller är avslutad.</div>')
+      + `<div class="btnrow"><button class="btn sm" type="button" data-j="guest-leave" data-g="${esc(g.id)}">Lämna jakten</button></div>`;
+  }
+  const lead = canLeadGroup(g), adm = isAdminGroup(g), sub = TEAM_TABS[nav.sub] ? nav.sub : 'jakt';
+  const all = Object.entries(g.hunts || {}).filter(([, v]) => v).sort((a, b) => huntSort(a[1]) - huntSort(b[1]));
+  let html = '';
+  if(sub === 'jakt'){
+    // Pågående jakter (och avslutade som inte är städade än), och de som kan startas
+    const live = all.filter(([, h]) => ['live', 'ended'].includes(huntState(h))).sort((a, b) => (huntState(a[1]) === 'live' ? 0 : 1) - (huntState(b[1]) === 'live' ? 0 : 1));
+    const next = all.filter(([, h]) => ['planned', 'upcoming'].includes(huntState(h)));
+    html += shareHtml();
+    html += live.map(([hid, h]) => huntCard(g, hid, h, lead)).join('');
+    if(next.length) html += `<h3 class="sec">Kommande jakter</h3>` + next.map(([hid, h]) => { const st = huntState(h);
+      return `<div class="hunt-row"><span><b>${esc(h.name)}</b><br><span class="small muted">${esc(fmtDay(huntDay(h)))} · ${st === 'planned' ? 'startas av jaktledaren' : 'startar automatiskt ' + esc(fmtTime(h.starts))}</span></span>
+        ${lead ? `<button class="btn sm primary" type="button" data-j="hunt-start" data-g="${esc(g.id)}" data-h="${esc(hid)}">Starta jakten</button>` : `<button class="btn sm" type="button" data-j="team-sub" data-s="plan">Visa</button>`}</div>`; }).join('');
+    if(!live.length && !next.length) html += `<p class="note">Ingen jakt pågår.${lead ? ' Planera en jakt under Planera.' : ''}</p>`;
+  } else if(sub === 'plan'){
+    const plan = all.filter(([, h]) => ['planned', 'upcoming'].includes(huntState(h)));
+    if(lead) html += `<div class="btnrow" style="margin-top:0"><button class="btn primary sm" type="button" data-j="hunt-new" data-g="${esc(g.id)}">Ny jakt</button></div>`;
+    html += plan.length ? plan.map(([hid, h]) => huntCard(g, hid, h, lead)).join('') : `<p class="note">Ingen jakt är planerad.${lead ? ' Tryck Ny jakt för att planera en.' : ''}</p>`;
+  } else if(sub === 'omr'){
+    const shared = state.areas.filter(a => a.gid === g.id), own = canEditGroup(g) ? state.areas.filter(a => !a.gid && !a.example) : [];
+    html += `<p class="note" style="margin-top:0">Lagets delade marker. Tryck Ändra för gränser, vägar, stigar, bäckar och nålar.</p>`;
+    html += shared.length ? shared.map(a => { const n = state.pins.filter(p => p.areaId === a.id).length, ha = areaRings(a).reduce((s, r) => s + areaHa(r), 0);
+      return `<div class="frow"><span class="fname">${esc(a.name)}<br><span class="small muted">${n} ${n === 1 ? 'nål' : 'nålar'}${ha ? ' · ' + fmtHa(ha) : ''}${areaLines(a).length ? ' · ' + areaLines(a).length + (areaLines(a).length === 1 ? ' linje' : ' linjer') : ''}</span></span>
+        <button class="iconbtn" type="button" data-act="area-zoom" data-id="${esc(a.id)}" aria-label="Zooma till ${esc(a.name)}">${ICON_ZOOM}</button>
+        ${canEditArea(a) ? `<button class="btn sm" type="button" data-act="area-edit" data-id="${esc(a.id)}">Ändra</button>` : ''}</div>`; }).join('') : '<p class="note">Laget har inga delade områden ännu.</p>';
+    if(own.length) html += `<div class="lbl">Dela ett av dina områden med laget</div><div class="addrow"><select class="input" id="teamShareArea" aria-label="Område att dela">${own.map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('')}</select><button class="btn sm" type="button" data-j="area-share" data-g="${esc(g.id)}">Dela</button></div>`;
+  } else {
+    const members = Object.entries(g.members || {}).filter(([, v]) => v).sort((a, b) => (a[1].name || '').localeCompare(b[1].name || '', 'sv'));
+    html += `<div class="lbl" style="margin-top:0">Medlemmar och rättigheter</div>`;
+    for(const [mu, m] of members){
+      const isOwner = g.meta.owner === mu;
+      html += `<div class="frow"><span class="fname">${esc(m.name || 'Medlem')}${mu === u.uid ? ' <span class="muted">(du)</span>' : ''}</span>${adm && !isOwner ? `<select class="input rolesel" data-j="role" data-g="${esc(g.id)}" data-u="${esc(mu)}" aria-label="Rättighet för ${esc(m.name)}">${Object.entries(ROLES).map(([k, l]) => `<option value="${esc(k)}"${m.role === k ? ' selected' : ''}>${l}</option>`).join('')}</select><button class="iconbtn" type="button" data-j="member-del" data-g="${esc(g.id)}" data-u="${esc(mu)}" aria-label="Ta bort ${esc(m.name)}">${ICON_TRASH}</button>` : `<span class="tag">${isOwner ? 'Ägare' : esc(ROLES[m.role] || '')}</span>`}</div>`;
+    }
+    if(adm) html += `<p class="note">${Object.entries(ROLES).map(([k, l]) => `<b>${l}</b>: ${ROLE_HELP[k].toLowerCase()}`).join(' · ')}.</p><div class="btnrow"><button class="btn sm" type="button" data-j="invite" data-g="${esc(g.id)}">Bjud in medlem</button></div>`;
+    html += `<div class="btnrow" style="margin-top:8px">${g.meta.owner === u.uid ? `<button class="btn sm danger" type="button" data-j="group-del" data-g="${esc(g.id)}">Ta bort jaktlaget</button>` : `<button class="btn sm" type="button" data-j="group-leave" data-g="${esc(g.id)}">Lämna jaktlaget</button>`}</div>`;
+  }
+  return html;
+}
+/* Sidomenyn: en rad per jaktlag under Jakt */
+function renderDrawerTeams(){
+  const box = document.getElementById('drTeams'); if(!box) return;
+  const gs = cloud.status === 'in' ? teamGroups() : [];
+  box.innerHTML = gs.map(g => `<button class="dr-team${nav.tab === 'jakt' && nav.team === g.id ? ' on' : ''}" type="button" data-team="${esc(g.id)}"><span>${esc(gname(g))}</span>${teamLive(g) ? '<span class="tag on">Pågår</span>' : ''}</button>`).join('');
 }
 function askText(title, label, value, okLabel, cb, max){
   openModal(`<h2>${esc(title)}</h2><form id="atForm"><label class="field"><span>${esc(label)}</span><input class="input" id="atVal" maxlength="${max || 60}" value="${esc(value || '')}" autocomplete="off"></label>
@@ -3459,10 +3645,14 @@ async function endHunt(g, hid, auto){
     else toast('Jakten är avslutad. Gästernas åtkomst är borttagen.' + (na ? ` ${na === 1 ? 'En observation' : na + ' observationer'} sparades till värmekartan.` : ''), 5000);
   }, err => { if(!auto) fail()(err); });
 }
-$('#paneJakt').addEventListener('click', e => {
+/* Knappar i Jakt, Mitt konto och Kalender */
+function jaktClick(e){
   const b = e.target.closest('[data-j]'); if(!b || b.tagName === 'SELECT') return;
   const act = b.dataset.j, g = cloud.groups[b.dataset.g], u = b.dataset.u, hid = b.dataset.h;
-  if(act === 'copy-rules') copyText(RULES_TEXT, 'Reglerna är kopierade');
+  if(act === 'go-konto') setTab('konto');
+  else if(act === 'team') openTeam(b.dataset.g);
+  else if(act === 'team-sub'){ nav.sub = b.dataset.s; renderJakt(); $('#pBody').scrollTop = 0; }
+  else if(act === 'copy-rules') copyText(RULES_TEXT, 'Reglerna är kopierade');
   else if(act === 'cfg-save'){ const cfg = parseCfg($('#fbCfg').value); if(!cfg){ toast('Hittade inte apiKey, databaseURL och projectId i texten.', 5000); return; } lsSet(FBKEY, JSON.stringify(cfg)); cloudInit(); }
   else if(act === 'cfg-reset') confirmClick(b, 'Tryck igen för att byta', () => { try { localStorage.removeItem(FBKEY); } catch(e){} location.reload(); });
   else if(act === 'login-google') fb.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(err => toast(err && err.code === 'auth/unauthorized-domain' ? 'Webbadressen är inte godkänd i Firebase. Lägg till den under Authentication, Settings, Authorized domains.' : 'Inloggningen avbröts.', 6000));
@@ -3473,6 +3663,7 @@ $('#paneJakt').addEventListener('click', e => {
   else if(act === 'group-new') askText('Skapa jaktlag', 'Namn på jaktlaget', '', 'Skapa', v => createGroup(v), 60);
   else if(act === 'join') askText('Gå med med kod', 'Inbjudningskod eller jaktkod', '', 'Gå med', v => joinByCode(v), 14);
   else if(act === 'cal') openCal();
+  else if(act === 'area-share'){ const sel = $('#teamShareArea'), a = sel && areaById(sel.value); if(!a || !g) return; a.gid = g.id; a.updated = Date.now(); delete a.example; save(); renderAll(); toast(`${a.name} delas nu med ${gname(g)}.`); }
   else if(!g) return;
   else if(act === 'obs-go'){ const o = ((g.huntObs || {})[hid] || {})[b.dataset.o]; if(o){ map.setView([o.lat, o.lng], Math.max(map.getZoom(), 16)); if(!isDesktop()) setSheet('peek'); } }
   else if(act === 'hunt-new') openHuntForm(g);
@@ -3499,7 +3690,9 @@ $('#paneJakt').addEventListener('click', e => {
   else if(act === 'guest-leave'){ stopSharing(); fb.db.ref(`groups/${g.id}/guests/${myUid()}`).remove().catch(() => {}).then(() => forgetGroup(g.id)); }
   else if(act === 'group-del') confirmClick(b, 'Tryck igen: allt i laget raderas', () => { const codes = {}; for(const hv of Object.values(g.hunts || {})) if(hv && hv.code) codes['huntCodes/' + hv.code] = null;
     (Object.keys(codes).length ? fb.db.ref().update(codes) : Promise.resolve()).catch(() => {}).then(() => fb.db.ref('groups/' + g.id).remove()).then(() => { forgetGroup(g.id); toast('Jaktlaget är borttaget'); }).catch(fail()); });
-});
+}
+$('#paneJakt').addEventListener('click', jaktClick);
+$('#paneKonto').addEventListener('click', jaktClick);
 $('#paneJakt').addEventListener('change', e => {
   const b = e.target.closest('select[data-j=role]'); if(!b) return;
   fb.db.ref(`groups/${b.dataset.g}/members/${b.dataset.u}/role`).set(b.value).then(() => toast('Rättigheten är ändrad')).catch(fail());
@@ -4665,11 +4858,12 @@ function renumberAreas(){
   return Object.entries(counts).map(([id, n]) => ({id, n, name:id ? ((areaById(id) || {}).name || 'Okänt område') : 'Utan område'}))
     .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, 'sv'));
 }
-function openRenumber(){
+/* areaId: börja med det området (från områdets vy) */
+function openRenumber(areaId){
   const areas = renumberAreas();
   if(!passPins().length){ toast('Det finns inga pass som du kan ändra.'); return; }
   const set = state.settings.renumber || {};
-  let areaKey = areas.some(a => a.id === set.area) ? set.area : areas[0].id, dir = RENUM_DIRS[set.dir] ? set.dir : 'sn', start = 1;
+  let areaKey = areaId && areas.some(a => a.id === areaId) ? areaId : areas.some(a => a.id === set.area) ? set.area : areas[0].id, dir = RENUM_DIRS[set.dir] ? set.dir : 'sn', start = 1;
   openModal(`<h2>Numrera om passen</h2>
     <p class="note" style="margin-top:0">Passen får nummer i ordning efter var de ligger. Varje jaktmark numreras för sig. Text efter numret behålls.</p>
     <div class="row2">
@@ -4700,7 +4894,7 @@ function openRenumber(){
       state.settings.renumber = {area:areaKey, dir};
       renumberUndo = changed ? undo : null;
       save(); closeModal(); renderAll();
-      toast(changed ? `${changed} pass har numrerats om. Ångra under Nålar.` : 'Passen var redan i ordning.', 4500);
+      toast(changed ? `${changed} pass har numrerats om. Ångra under Nålar eller i områdets vy.` : 'Passen var redan i ordning.', 4500);
     });
     preview();
   });
@@ -5572,7 +5766,7 @@ function msgLoad(g, mid, m){
       msgSeen.told[mid] = true;
       toast(`Meddelande från ${m.name || 'deltagare'}: ${r.text.slice(0, 80)}${r.text.length > 80 ? '…' : ''}`, 6000);
       try { if(navigator.vibrate) navigator.vibrate([150, 80, 150]); } catch(e){}
-      const tab = $('#tab-jakt'); if(tab && tab.getAttribute('aria-selected') !== 'true') tab.classList.add('has-news');
+      if(!(nav.tab === 'jakt' && nav.team === g.id)){ $('#tab-jakt').classList.add('has-news'); if($('#drawer').hidden) $('#btnMenu').classList.add('has-news'); }
     }
   }).catch(() => { msgPlain[mid] = {err:'Kunde inte låsa upp meddelandet.'}; scheduleRender(); });
 }
@@ -5619,6 +5813,7 @@ async function msgSend(g, hid, text, people, toAll){
   await sent;
 }
 $('#tab-jakt').addEventListener('click', () => $('#tab-jakt').classList.remove('has-news'));
+$('#drTeams').addEventListener('click', () => $('#tab-jakt').classList.remove('has-news'));
 
 /* ---------- Nödläge ----------
    Knappen SOS skickar ett nödlarm med min position till alla i mina jaktlag (medlemmar, och gäster i pågående jakter).
@@ -5817,22 +6012,28 @@ function calAgendaHtml(){
   h += `<div class="btnrow"><button class="btn sm" type="button" data-j="cal">Visa kalendern</button></div>`;
   return h;
 }
-/* Visar jaktkortet i Jakt-fliken. */
+/* Visar jaktkortet i jaktlagets vy: pågående jakter under Jakt, kommande under Planera. */
 function calGo(gid, hid){
-  closeModal(); setTab('jakt'); if(!isDesktop() && sheet !== 'full') setSheet('full');
+  const g = cloud.groups[gid], h = g && (g.hunts || {})[hid], st = h ? huntState(h) : 'live';
+  closeModal(); openTeam(gid, g && g.kind === 'member' && (st === 'planned' || st === 'upcoming') ? 'plan' : 'jakt'); if(!isDesktop() && sheet !== 'full') setSheet('full');
   setTimeout(() => { const el = document.getElementById(`hc-${gid}-${hid}`); if(!el) return; el.scrollIntoView({block:'start', behavior:'smooth'}); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1600); }, 80);
 }
-function openCal(iso){
+/* Kalendern i panelen. Väljer dagen i dag, eller nästa dag med en jakt. */
+function calPick(iso){
   const hs = calHunts(), today = todayISO();
   const first = hs.find(x => x.st !== 'ended' && x.day >= today);
   calUi.sel = iso || (hs.some(x => x.day === today) ? today : first ? first.day : today);
   calUi.month = calUi.sel.slice(0, 7);
-  openModal(`<div class="cal-head"><h2>Kalender</h2><button class="iconbtn" type="button" id="calClose" aria-label="Stäng">×</button></div><div id="calBox"></div>`, m => {
-    m.querySelector('#calClose').addEventListener('click', closeModal);
-    m.querySelector('#calBox').addEventListener('click', calClick);
-    calRender();
-  });
 }
+function openCal(iso){ calPick(iso); setTab('kalender'); }
+function renderKalender(){
+  if(!calUi.sel) calPick();
+  const inv = document.getElementById('calInv'), n = cloud.status === 'in' ? calInvites().length : 0;
+  if(inv) inv.innerHTML = cloud.status !== 'in' ? '<p class="note" style="margin-top:0">Logga in under Mitt konto för att se jakterna i dina jaktlag.</p>'
+    : n ? `<div class="banner cal-inv"><span>Du har ${n === 1 ? 'en inbjudan' : n + ' inbjudningar'} att svara på.</span></div>` : '';
+  calRender();
+}
+$('#paneKalender').addEventListener('click', e => { if(e.target.closest('#calBox')) calClick(e); });
 function calRender(){
   const box = document.getElementById('calBox'); if(!box) return;
   const [y, mo] = calUi.month.split('-').map(Number), first = new Date(y, mo - 1, 1), days = new Date(y, mo, 0).getDate();
@@ -5857,8 +6058,8 @@ function calRender(){
     ${sel.length ? `<div class="cal-list">${sel.map(x => calRow(x, true)).join('')}</div>` : '<p class="note" style="margin-top:0">Ingen jakt den här dagen.</p>'}
     ${lead.length && calUi.sel >= today ? `<div class="btnrow">${lead.map(g => `<button class="btn sm primary" type="button" data-c="new" data-g="${esc(g.id)}">Planera jakt ${esc(dayLabel(calUi.sel))}${lead.length > 1 ? ' i ' + esc(gname(g)) : ''}</button>`).join('')}</div>` : ''}`;
 }
-/* Ritar om kalendern när något ändras i molnet, om den är öppen. */
-function calRefresh(){ if(document.getElementById('calBox')) calRender(); }
+/* Ritar om kalendern när något ändras i molnet. */
+function calRefresh(){ if(document.getElementById('calBox') && calUi.sel) renderKalender(); }
 function calClick(e){
   const b = e.target.closest('[data-c]'); if(!b) return;
   const c = b.dataset.c, g = cloud.groups[b.dataset.g], hid = b.dataset.h;
@@ -5869,9 +6070,9 @@ function calClick(e){
   if(c === 'go' || c === 'cal-go') calGo(g.id, hid);
   else if(c === 'rsvp') rsvpSet(g, hid, true);
   else if(c === 'rsvp-no') rsvpSet(g, hid, false);
-  else if(c === 'plan'){ closeModal(); openPlan(g, hid); }
+  else if(c === 'plan') openPlan(g, hid);
   else if(c === 'start'){ const h = (g.hunts || {})[hid]; if(h && huntDay(h) !== todayISO()) confirmClick(b, 'Starta i dag?', () => startHunt(g, hid)); else startHunt(g, hid); }
-  else if(c === 'new'){ closeModal(); openHuntForm(g, null, calUi.sel); }
+  else if(c === 'new') openHuntForm(g, null, calUi.sel);
 }
 
 /* ---------- Mina dokument ----------
@@ -6181,7 +6382,7 @@ function docsRemind(){
     if(!soon.length || lsGet('jk.docsRemind') === todayISO()) return;
     lsSet('jk.docsRemind', todayISO());
     const n = daysTo(soon[0]);
-    toast(n < 0 ? 'Ett av dina sparade dokument har gått ut. Öppna Mina dokument under Jakt.' : `Ett av dina sparade dokument går ut ${fmtDay(soon[0])}. Öppna Mina dokument under Jakt.`, 7000);
+    toast(n < 0 ? 'Ett av dina sparade dokument har gått ut. Öppna Mina dokument under Mitt konto.' : `Ett av dina sparade dokument går ut ${fmtDay(soon[0])}. Öppna Mina dokument under Mitt konto.`, 7000);
   }).catch(() => {});
 }
 setTimeout(docsRemind, 2500);
@@ -6220,7 +6421,7 @@ setBase(state.settings.base);
 setSheet('peek', true);
 readHash();
 renderAll(); roadsUpdate(); renderGbif(); renderDensity();
-if(cloud.pending) setTab('jakt');
+if(cloud.pending) setTab('konto');
 cloudInit();
 if(!v && state.pins.length) setTimeout(fitAll, 50);
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(() => setSheet(sheet, true));
@@ -6232,7 +6433,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

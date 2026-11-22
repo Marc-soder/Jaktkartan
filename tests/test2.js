@@ -75,6 +75,9 @@ async function mkPage(browser, who, hash, opts){
 const W = (p, ms) => p.waitForTimeout(ms || 350);
 const st = p => p.evaluate(() => __fk.state());
 const gids = () => Object.keys(data.groups || {});
+/* Sidomenyn: öppna menyn och välj en sida. Jaktlagets vy: öppna laget och en flik (jakt, plan, omr, med). */
+const go = async (P, tab) => { await P.click('#btnMenu'); await W(P, 80); await P.click('#tab-' + tab); await W(P, 200); };
+const team = async (P, sub, g) => { await P.evaluate(([x, t]) => __fk.openTeam(x, t), [g || gids()[0], sub || 'jakt']); await W(P, 250); };
 
 (async () => {
   const server = http.createServer((q, r) => { r.writeHead(200, {'Content-Type':'text/html; charset=utf-8'}); r.end(HTML); });
@@ -82,22 +85,34 @@ const gids = () => Object.keys(data.groups || {});
   const browser = await chromium.launch({executablePath: process.env.CHROME_PATH || undefined});
   // ---- Alice skapar lag och delar ett område ----
   const A = await mkPage(browser, 'alice');
-  await A.click('#tab-jakt'); await W(A);
-  check(await A.isVisible('[data-j="login-google"]'), 'utloggad: inloggningsknapp visas');
+  await go(A, 'jakt');
+  check(await A.isVisible('[data-j="go-konto"]') && (await A.innerText('#pTitle')) === 'Jakt', 'utloggad: Jakt hänvisar till inloggning under Mitt konto');
+  await A.click('[data-j="go-konto"]'); await W(A, 200);
+  check(await A.isVisible('[data-j="login-google"]') && (await A.innerText('#pTitle')) === 'Mitt konto', 'utloggad: inloggningsknapp visas under Mitt konto');
   await A.click('[data-j="login-google"]'); await W(A);
   check(data.owner === 'alice', 'första inloggade (Alice) blev ägare');
-  await A.click('[data-j="group-new"]'); await A.fill('#atVal', 'Älglaget'); await A.click('#atForm button[type=submit]'); await W(A, 500);
+  check((await A.innerText('#paneKonto')).includes('Byt namn') && (await A.innerText('#paneKonto')).includes('Logga ut') && (await A.innerText('#paneKonto')).toLowerCase().includes('mina dokument') && await A.isVisible('#docsOpenBtn'), 'Mitt konto har Byt namn, Logga ut och Mina dokument');
+  await go(A, 'jakt'); await A.click('[data-j="group-new"]'); await A.fill('#atVal', 'Älglaget'); await A.click('#atForm button[type=submit]'); await W(A, 500);
   const gid = gids()[0];
   check(gid && data.groups[gid].members.alice.role === 'admin' && data.userGroups.alice[gid] === 'member', 'Alice skapade jaktlag och är admin');
-  check((await A.innerText('#paneJakt')).includes('ÄLGLAGET') || (await A.innerText('#paneJakt')).toLowerCase().includes('älglaget'), 'laget visas i Jakt-fliken');
-  await A.click('#tab-filter'); await A.locator('#paneFilter [data-act="area-edit"]').first().click(); await W(A, 200);
+  check((await A.innerText('#paneJakt')).toLowerCase().includes('älglaget') && await A.locator(`#paneJakt .team-row[data-g="${gid}"]`).count() === 1, 'laget visas som en rad under Jakt');
+  await A.click('#btnMenu'); await W(A, 150);
+  check(await A.isVisible('#drawer') && await A.locator(`#drTeams [data-team="${gid}"]`).count() === 1 && (await A.innerText('#drawer')).includes('Älglaget'), 'sidomenyn visar jaktlaget under Jakt');
+  await A.click(`#drTeams [data-team="${gid}"]`); await W(A, 300);
+  check(!(await A.isVisible('#drawer')) && (await A.innerText('#pTitle')) === 'Älglaget' && await A.isVisible('#subTabs') && (await A.locator('#subTabs .stab').allInnerTexts()).join() === 'JAKT,PLANERA,OMRÅDEN,MEDLEMMAR', 'jaktlaget öppnas nerifrån med flikarna Jakt, Planera, Områden och Medlemmar');
+  await A.click('#sub-med'); await W(A, 200);
+  check((await A.innerText('#paneJakt')).toLowerCase().includes('medlemmar och rättigheter') && await A.locator('#paneJakt [data-j="invite"]').count() === 1, 'fliken Medlemmar visar medlemmarna och Bjud in');
+  await A.click('#pBack'); await W(A, 200);
+  check((await A.innerText('#pTitle')) === 'Jakt' && await A.locator('#paneJakt .team-row').count() === 1 && !(await A.isVisible('#subTabs')), 'tillbaka-pilen går till listan med jaktlag');
+  await go(A, 'filter'); await A.locator('#paneFilter [data-act="area-edit"]').first().click(); await W(A, 200);
+  check(await A.isVisible('#paneArea #afForm') && (await A.innerText('#pTitle')).startsWith('Exempel') && (await A.innerText('#paneArea')).toLowerCase().includes('nålar i området') && (await A.innerText('#paneArea')).toLowerCase().includes('typer som syns'), 'pennan vid ett område öppnar områdets vy nerifrån, med nålar och typer');
   await A.selectOption('#afShare', gid); await A.click('#afForm button[type=submit]'); await W(A, 500);
   const aid = Object.keys(data.groups[gid].areas || {})[0];
   check(aid && Object.keys(data.groups[gid].pins[aid]).length === 5, 'delat område laddades upp med 5 nålar');
   check(Object.keys(data.groups[gid].types || {}).length === 5, 'de 5 typer som nålarna använder följde med');
   check((await st(A)).pins.length === 8 && await A.locator('.pin-icon').count() === 8, 'Alice ser fortfarande 8 nålar, inga dubbletter');
   for(let i = subs.length - 1; i >= 0; i--) if(subs[i].page === A) subs.splice(i, 1);
-  await A.reload(); await W(A, 700); await A.click('#tab-jakt'); await A.click('[data-j="login-google"]'); await W(A, 600);
+  await A.reload(); await W(A, 700); await go(A, 'konto'); await A.click('[data-j="login-google"]'); await W(A, 600);
   const sa = await st(A);
   check(sa.pins.length === 8 && sa.areas.filter(a => a.gid === gid).length === 1 && sa.areas.length === 2, 'efter omladdning: delat område hämtas från molnet utan dubbletter');
   await A.evaluate(a => { const ar = __fk.state().areas.find(x => x.id === a); ar.border = '58.72000,14.60000;58.73000,14.61000;58.72000,14.62000'; ar.updated = Date.now(); document.querySelector('#btnZoomIn').click(); }, aid); await W(A, 600);
@@ -107,13 +122,19 @@ const gids = () => Object.keys(data.groups || {});
   await A.evaluate(a => { const ar = __fk.state().areas.find(x => x.id === a); delete ar.lines['l-1']; ar.lines['l-2'] = {k:'road', p:'58.72000,14.60000;58.72300,14.60800'}; ar.updated = Date.now(); document.querySelector('#btnZoomOut').click(); }, aid); await W(A, 600);
   check(JSON.stringify(Object.keys(data.groups[gid].areas[aid].lines || {})) === '["l-2"]', 'ändrade vägar i delat område synkas (borttagen stig försvinner)');
   // ---- Inbjudan ----
-  await A.click('[data-j="invite"]'); await A.selectOption('#ivRole', 'editor'); await A.click('#ivOk'); await W(A, 400);
+  await team(A, 'omr');
+  check((await A.innerText('#paneJakt')).includes('Exempel: Jaktmarken') && await A.locator(`#paneJakt [data-act="area-edit"][data-id="${aid}"]`).count() === 1, 'fliken Områden visar lagets delade område');
+  await A.click(`#paneJakt [data-act="area-edit"][data-id="${aid}"]`); await W(A, 300);
+  check(await A.isVisible('#paneArea') && (await A.innerText('#paneArea')).toLowerCase().includes('vägar, stigar och bäckar') && await A.isVisible('#afLine'), 'Ändra öppnar områdets vy, där man ritar gräns, väg, stig och bäck');
+  await A.click('#pBack'); await W(A, 300);
+  check((await A.innerText('#pTitle')) === 'Älglaget' && await A.isVisible('#sub-omr') && (await A.getAttribute('#sub-omr', 'aria-selected')) === 'true', 'tillbaka från området går till jaktlagets flik Områden');
+  await team(A, 'med'); await A.click('[data-j="invite"]'); await A.selectOption('#ivRole', 'editor'); await A.click('#ivOk'); await W(A, 400);
   await A.keyboard.press('Escape');
   const inv = Object.keys(data.invites || {})[0];
   check(inv && inv.length === 10 && data.invites[inv].role === 'editor', 'inbjudan skapad med roll Medlem');
   // ---- Bob går med via länk ----
   const B = await mkPage(browser, 'bob', '#l-' + inv);
-  check(await B.isVisible('#paneJakt [data-j="login-google"]') && (await B.innerText('#paneJakt')).includes(inv), 'Bob: länken öppnar Jakt-fliken med koden');
+  check(await B.isVisible('#paneKonto [data-j="login-google"]') && (await B.innerText('#paneKonto')).includes(inv), 'Bob: länken öppnar Mitt konto med koden');
   await B.click('[data-j="login-google"]'); await W(B, 800);
   check(data.groups[gid].members.bob && data.groups[gid].members.bob.role === 'editor', 'Bob blev medlem med rätt roll');
   let sb = await st(B);
@@ -131,7 +152,7 @@ const gids = () => Object.keys(data.groups || {});
   await A.evaluate(id => __fk.openPinForm({id}), pid); await W(A, 200); await A.fill('#pfName', 'Jaktstugan (ny)'); await A.click('#pinForm button[type=submit]'); await W(A, 500);
   check((await st(B)).pins.some(p => p.name === 'Jaktstugan (ny)'), 'Bob ser Alices namnändring');
   // ---- Rättigheter ----
-  await A.click('#tab-jakt'); await W(A, 200);
+  await team(A, 'med');
   await A.selectOption('select[data-j="role"][data-u="bob"]', 'viewer'); await W(A, 500);
   check(data.groups[gid].members.bob.role === 'viewer', 'Alice ändrade Bob till Läsare');
   const row = await A.evaluate(() => { const sel = document.querySelector('select[data-j="role"][data-u="bob"]'), r = sel.closest('.frow'), n = r.querySelector('.fname'), t = r.querySelector('.iconbtn');
@@ -148,18 +169,19 @@ const gids = () => Object.keys(data.groups || {});
   const r3 = await B.evaluate(g => firebase.database().ref('invites/ABCDEFGHJK').set({gid:g, role:'leader', expires:Date.now() + 1e6}).then(() => 'ok', () => 'denied'), gid);
   check(r1 === 'denied' && r2 === 'denied' && r3 === 'denied', 'Läsare nekas: höja egen roll, skriva nål, skapa inbjudan');
   await A.selectOption('select[data-j="role"][data-u="bob"]', 'leader'); await W(A, 500);
-  check(await B.locator('#paneJakt [data-j="hunt-new"]').count() === 1 && await B.locator('#paneJakt [data-j="invite"]').count() === 0, 'Jaktledare får knappen Ny jakt men inte Bjud in');
+  await team(B, 'plan'); const bNew = await B.locator('#paneJakt [data-j="hunt-new"]').count(); await team(B, 'med');
+  check(bNew === 1 && await B.locator('#paneJakt [data-j="invite"]').count() === 0, 'Jaktledare får knappen Ny jakt men inte Bjud in');
   // ---- Ingen jakt: inga positioner ----
-  await A.click('#tab-jakt'); await W(A, 200);
+  await team(A, 'jakt');
   check(await A.locator('#shareToggle').isDisabled() && (await A.innerText('#posCount')).includes('bara delas och ses medan en jakt pågår'), 'utan pågående jakt går det inte att dela position');
   const noHunt = await A.evaluate(g => firebase.database().ref('groups/' + g + '/huntPos/xx/alice').set({lat:1, lng:1, t:1}).then(() => 'ok', () => 'denied'), gid);
   check(noHunt === 'denied', 'utan pågående jakt nekas skrivning av position direkt mot databasen');
   // ---- Jakt med gäståtkomst ----
-  await A.click('#tab-filter'); await A.locator('#paneFilter [data-act="area-edit"]').first().click(); await W(A, 200);
+  await go(A, 'filter'); await A.locator('#paneFilter [data-act="area-edit"]').first().click(); await W(A, 200);
   await A.selectOption('#afShare', gid); await A.click('#afForm button[type=submit]'); await W(A, 500);
   const aid2 = Object.keys(data.groups[gid].areas).find(k => k !== aid);
   check(aid2 && Object.keys(data.groups[gid].pins[aid2]).length === 3, 'andra området (svamp) delat med 3 nålar');
-  await B.click('#tab-jakt'); await B.click('[data-j="hunt-new"]'); await W(B, 200);
+  await team(B, 'plan'); await B.click('[data-j="hunt-new"]'); await W(B, 200);
   await B.selectOption('#hfLan', 'Södermanland'); await W(B, 100);
   const viltTxt = await B.innerText('#hfVilt');
   await B.check('#hfVilt [data-vilt="radjur"]'); await B.check('#hfVilt [data-vilt="vildsvin"]');
@@ -173,15 +195,20 @@ const gids = () => Object.keys(data.groups || {});
   check(hunt.expires > Date.now() && new Date(hunt.expires).getHours() === 23, 'jakten gäller till kl. 23.59 i dag');
   check(hunt.manual === true && hunt.starts === hunt.expires - 1000, 'jakten är planerad och startas för hand som standard');
   await W(A, 300);
-  { const at = await A.innerText('#paneJakt'); check(at.toUpperCase().includes('PLANERAD') && at.includes('Du har en inbjudan att svara på') && at.includes('Startas av jaktledaren'), 'Alice ser den planerade jakten som en inbjudan i kalendern'); }
+  await go(A, 'jakt');
+  { const at = await A.innerText('#paneJakt'); check(at.includes('Du har en inbjudan att svara på') && at.includes('Startas av jaktledaren'), 'Alice ser den planerade jakten som en inbjudan under Jakt'); }
+  await team(A, 'plan');
+  check((await A.innerText('#paneJakt')).toUpperCase().includes('PLANERAD'), 'jaktlagets flik Planera visar den planerade jakten');
   check(await A.evaluate(([g, h]) => firebase.database().ref('groups/' + g + '/huntPos/' + h + '/alice').set({lat:1, lng:1, t:Date.now(), name:'A'}).then(() => 'ok', () => 'denied'), [gid, hid]) === 'denied', 'positioner kan inte delas innan jakten har startat');
   check(await B.locator(`[data-j="hunt-start"][data-h="${hid}"]`).count() === 1 && await A.locator(`[data-j="hunt-start"]`).count() === 1, 'jaktledare och admin har knappen Starta jakten');
   await B.click(`[data-j="hunt-start"][data-h="${hid}"]`); await W(B, 600);
-  { const h = data.groups[gid].hunts[hid]; check(!h.manual && h.starts <= Date.now() && Date.now() - h.starts < 60000 && h.expires === hunt.expires && (await B.innerText('#paneJakt')).toUpperCase().includes('PÅGÅR'), 'jaktledaren startar jakten: den pågår nu, med samma sluttid'); }
-  check((await A.innerText('#paneJakt')).includes(hunt.code), 'Alice ser jakten och koden');
+  await team(B, 'jakt');
+  { const h = data.groups[gid].hunts[hid]; check(!h.manual && h.starts <= Date.now() && Date.now() - h.starts < 60000 && h.expires === hunt.expires && (await B.innerText('#paneJakt')).toUpperCase().includes('PÅGÅR'), 'jaktledaren startar jakten: den pågår nu under fliken Jakt, med samma sluttid'); }
+  await team(A, 'jakt');
+  check((await A.innerText('#paneJakt')).includes(hunt.code) && await A.isVisible('#shareToggle'), 'Alice ser jakten, koden och Dela min position under fliken Jakt');
   // ---- Carl: gäst utan konto ----
   const C = await mkPage(browser, 'carl', '#j-' + hunt.code);
-  await C.fill('#gName', 'Carl Gäst'); await C.click('[data-j="login-guest"]'); await W(C, 900);
+  await C.fill('#gName', 'Carl Gäst'); await C.click('[data-j="login-guest"]'); await W(C, 900); await team(C, 'jakt');
   check(data.groups[gid].guests && data.groups[gid].guests['anon-carl'] && data.groups[gid].guests['anon-carl'].expires === hunt.expires, 'Carl gick med som gäst, åtkomsten slutar när jakten slutar');
   // Gästens områden och nålar hämtas efter att gästposten finns: vänta på dem (högst 5 s) i stället för en fast tid
   for(let i = 0; i < 25 && (await st(C)).pins.filter(p => p.areaId === aid).length < 6; i++) await W(C, 200);
@@ -199,7 +226,7 @@ const gids = () => Object.keys(data.groups || {});
   // ---- Jaktplan ----
   await B.evaluate(([g, a]) => firebase.database().ref('groups/' + g + '/pins/' + a + '/pass1').set({name:'Pass 1 – bäcken', note:'', typeId:'t-pass', lat:58.7228, lng:14.6045, created:1, updated:1, by:'bob'}), [gid, aid]); await W(B, 500);
   const passIds = Object.entries(data.groups[gid].pins[aid]).filter(([, p]) => p.typeId === 't-pass').map(([k]) => k);
-  await B.click('#tab-jakt'); await W(B, 200); await C.click('#tab-jakt'); await W(C, 200);
+  await team(B, 'jakt'); await team(C, 'jakt');
   check(await B.locator('[data-j="plan"]').count() === 1 && await A.locator('[data-j="plan"]').count() === 1 && await C.locator('[data-j="plan"]').count() === 0, 'jaktledare och admin kan planera jakten, gästen kan inte');
   await B.click('[data-j="plan"]'); await W(B, 300);
   check(await B.locator('#planBody select[data-pl="who"]').count() === passIds.length && passIds.length === 2, `planen listar jaktens ${passIds.length} pass`);
@@ -341,7 +368,7 @@ const gids = () => Object.keys(data.groups || {});
   const hp = () => ((data.groups[gid].huntPos || {})[hid] || {});
   await W(C, 900);
   check(hp()['anon-carl'] && await C.isChecked('#shareToggle') && (await C.innerText('#paneJakt')).includes('delas automatiskt'), 'gästen som gått med via jaktkoden delar sin position automatiskt under jakten');
-  await A.click('#tab-jakt'); await W(A, 200);
+  await team(A, 'jakt');
   check(!(await A.isChecked('#shareToggle')) && !hp().alice && (await A.innerText('#paneJakt')).includes('Carl Gäst (gäst)'), 'Alice har inte svarat och delar inte, men ser att gästen deltar');
   await A.evaluate(() => { window.__toasts = []; const t = document.getElementById('toast'); new MutationObserver(() => window.__toasts.push(t.textContent)).observe(t, {childList:true, characterData:true, subtree:true}); });
   await A.click(`[data-j="rsvp"][data-h="${hid}"]`); await W(A, 900);
@@ -355,7 +382,7 @@ const gids = () => Object.keys(data.groups || {});
   const rw2 = await B.evaluate(([g, h]) => firebase.database().ref('groups/' + g + '/huntRsvp/' + h + '/alice').set({name:'Fejk', t:Date.now()}).then(() => 'ok', () => 'denied'), [gid, hid]);
   check(rw === 'denied' && rw2 === 'denied', 'man kan bara svara för sig själv');
   // ---- Ändra en pågående jakt utan att bryta den ----
-  await B.click('#tab-jakt'); await W(B, 200);
+  await team(B, 'jakt');
   check(await B.locator(`[data-j="hunt-edit"][data-h="${hid}"]`).count() === 1 && await C.locator('[data-j="hunt-edit"]').count() === 0, 'jaktledaren kan ändra jakten, gästen kan inte');
   const hunt0 = JSON.parse(JSON.stringify(data.groups[gid].hunts[hid]));
   await B.click(`[data-j="hunt-edit"][data-h="${hid}"]`); await W(B, 300);
@@ -378,7 +405,7 @@ const gids = () => Object.keys(data.groups || {});
   const carlKey = Object.values(keys()['anon-carl'] || {})[0];
   check(Object.keys(keys().alice || {}).length === 1 && Object.keys(keys().bob || {}).length === 1 && carlKey && carlKey.hid === hid && carlKey.name === 'Carl Gäst', 'varje deltagare har publicerat sin nyckel, gästens är märkt med jakten');
   const msgs = () => Object.values(((data.groups[gid].huntMsg || {})[hid]) || {});
-  await B.click('#tab-jakt'); await W(B, 200);
+  await team(B, 'jakt');
   await B.click(`[data-j="msg-new"][data-h="${hid}"]`); await W(B, 200);
   const opts2 = await B.locator('#msgPeople .checkline').allInnerTexts();
   check(opts2.length === 2 && opts2.some(o => o.includes('Alice Test')) && opts2.some(o => o.includes('Carl Gäst (gäst)')) && await B.isChecked('#msgAll'), `mottagare: alla i jakten, eller valda (${opts2.join(' | ')})`);
@@ -386,7 +413,7 @@ const gids = () => Object.keys(data.groups || {});
   const m1 = msgs()[0];
   check(msgs().length === 1 && m1.from === 'bob' && m1.to && m1.to['anon-carl'] && !m1.all && Object.keys(m1.keys).length === 2, 'meddelandet till Carl sparas med en nyckel till Carl och en till Bob');
   check(!JSON.stringify(data).includes('Hej Carl') && !JSON.stringify(data).includes('pass 1'), 'texten finns inte i klartext någonstans i databasen');
-  await W(C, 600); await C.click('#tab-jakt'); await W(C, 400);
+  await W(C, 600); await team(C, 'jakt'); await W(C, 200);
   check((await C.innerText('#paneJakt')).includes('Hej Carl, du står på pass 1'), 'Carl kan läsa meddelandet till honom');
   check(!(await A.innerText('#paneJakt')).includes('Hej Carl') && (await A.evaluate(() => Object.values(__fk.msgPlain()).filter(Boolean).filter(p => p.text).length)) === 0, 'Alice ser inte meddelandet, och kan inte låsa upp det');
   await B.click(`[data-j="msg-new"][data-h="${hid}"]`); await W(B, 200);
@@ -425,7 +452,7 @@ const gids = () => Object.keys(data.groups || {});
   const ctx2 = await C.innerText('#paneJakt');
   check(cp === 'ok' && ctx2.includes('Kunde inte bekräfta avsändaren'), 'ett kopierat meddelande avslöjas: avsändaren kan inte bekräftas');
   // ---- Positioner ----
-  await A.click('#tab-jakt'); await A.locator('#shareToggle').check({force:true}); await W(A, 900);
+  await team(A, 'jakt'); await A.locator('#shareToggle').check({force:true}); await W(A, 900);
   check(hp().alice && Math.abs(hp().alice.lat - 58.72) < 1e-6 && !data.groups[gid].positions, 'Alice delar sin position i den pågående jakten');
   check(await B.locator('.pos-icon').count() === 2 && await C.locator('.pos-icon').count() === 1 && await A.locator('.pos-icon').count() === 1, 'Bob ser Alice och Carl, Carl ser Alice, Alice ser Carl men inte sig själv');
   await C.locator('#shareToggle').check({force:true}); await W(C, 900);
@@ -517,7 +544,7 @@ const gids = () => Object.keys(data.groups || {});
   // ---- Såtar som minijakter: pass per såt, lotta pass, starta och bryta, återsamling ----
   const PLN = () => (data.groups[gid].huntPlan || {})[hid] || {};
   const dM = Object.keys(PLN().drives || {})[0];
-  await B.click('#tab-jakt'); await W(B, 200); await B.click(`[data-j="plan"][data-h="${hid}"]`); await W(B, 400);
+  await team(B, 'jakt'); await B.click(`[data-j="plan"][data-h="${hid}"]`); await W(B, 400);
   check(await B.locator('#planBody [data-pl="easy"]').count() === 2 && await B.locator('#planBody .gear-row').count() >= 3, 'planeringen har passens egenskaper och deltagarnas utrustning');
   await B.check(`#planBody [data-pl="easy"][data-p="${pA}"]`); await W(B, 700);
   await B.selectOption(`#planBody [data-pl="ammo"][data-p="${pB}"]`, 'kula'); await W(B, 700);
@@ -560,7 +587,7 @@ const gids = () => Object.keys(data.groups || {});
   { const ps = PLN().drives[d2].pass || {}; check(ps[pA] && ps[pA].uid === 'alice' && ps[pB] && lotPeople.includes(ps[pB].uid) && ps[pB].uid !== 'alice', `passen i såt 2 är lottade, och Alice fick det lättillgängliga passet (${JSON.stringify(ps)})`); }
   await B.click('#plClose'); await W(B, 300);
   // under jakten: Carl ser sitt pass i nästa såt, jaktledaren startar såten
-  await W(C, 400); await C.click('#tab-jakt'); await W(C, 200);
+  await W(C, 400); await team(C, 'jakt');
   check((await C.innerText('#paneJakt')).includes('Ditt pass i nästa såt, Mossen: Pass 1 – bäcken'), 'Carl ser sitt pass i nästa såt');
   check(await B.locator(`[data-j="drive-start"][data-h="${hid}"]`).count() === 1 && await C.locator('[data-j="drive-start"]').count() === 0, 'jaktledaren kan starta såten, gästen kan inte');
   await B.click(`[data-j="drive-start"][data-h="${hid}"]`); await W(B, 1200); await W(C, 600);
@@ -599,15 +626,17 @@ const gids = () => Object.keys(data.groups || {});
   const h2 = 'h2kvall', t2 = Date.now();
   await B.evaluate(() => { __fk.cloud.cleanAfter = 3000; });   // i appen: en timme efter sluttiden
   await B.evaluate(([g, h, t]) => firebase.database().ref().update({[`groups/${g}/hunts/${h}`]: {name:'Kvällsjakt', day:'2026-11-14', starts:t + 5000, expires:t + 16000, code:'KVALL234', by:'bob', created:t, areas:{}, species:{}}, 'huntCodes/KVALL234': {gid:g, hid:h, expires:t + 16000}}), [gid, h2, t2]); await W(A, 500);
-  check((await A.innerText('#paneJakt')).includes('Kvällsjakt') && (await A.innerText('#paneJakt')).includes('KOMMANDE'), 'Alice ser den kommande jakten');
-  await A.click(`[data-j="rsvp"][data-h="${h2}"]`); await W(A, 600);
+  check((await A.innerText('#paneJakt')).includes('Kvällsjakt') && (await A.innerText('#paneJakt')).includes('startar automatiskt'), 'Alice ser den kommande jakten under fliken Jakt');
+  await team(A, 'plan');
+  check((await A.innerText('#paneJakt')).includes('Kvällsjakt') && (await A.innerText('#paneJakt')).includes('KOMMANDE'), 'och med kort och svarsknappar under Planera');
+  await A.click(`[data-j="rsvp"][data-h="${h2}"]`); await W(A, 600); await team(A, 'jakt');
   const hp2 = () => ((data.groups[gid].huntPos || {})[h2] || {});
   check(((data.groups[gid].huntRsvp || {})[h2] || {}).alice && !(await A.isChecked('#shareToggle')) && !hp2().alice, 'Alice deltar i kvällsjakten, men inget delas innan den startar');
   await A.waitForTimeout(Math.max(0, t2 + 5000 - Date.now()) + 1800);
   check(await A.isChecked('#shareToggle') && hp2().alice && !hp().alice, 'när kvällsjakten startar delas Alices position automatiskt, bara i den jakten');
   await A.waitForTimeout(Math.max(0, t2 + 16000 - Date.now()) + 1800);
   check(!(await A.isChecked('#shareToggle')) && (await A.evaluate(() => __fk.cloud.sharing)) === false, 'när kvällsjakten är slut slutar delningen av sig själv');
-  await B.click('#tab-jakt'); await W(B, 200);
+  await team(B, 'jakt');
   check(!!data.groups[gid].hunts[h2] && (await B.innerText('#paneJakt')).includes('Tas bort automatiskt'), 'en jakt som passerat sluttiden finns kvar en stund, med besked om när den tas bort');
   await B.waitForTimeout(Math.max(0, t2 + 16000 + 3000 - Date.now()) + 2500);
   check(!data.groups[gid].hunts[h2] && !(data.groups[gid].huntRsvp || {})[h2] && !(data.groups[gid].huntPos || {})[h2] && !(data.huntCodes || {})['KVALL234'], 'kvällsjakten städas bort av sig själv efter sluttiden, med kod, svar och positioner');
@@ -617,7 +646,7 @@ const gids = () => Object.keys(data.groups || {});
   const futD = new Date(); futD.setDate(futD.getDate() + 40);
   const futISO = `${futD.getFullYear()}-${String(futD.getMonth() + 1).padStart(2, '0')}-${String(futD.getDate()).padStart(2, '0')}`;
   const MONS = ['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'];
-  await B.click('#tab-jakt'); await W(B, 200); await B.click(`[data-j="hunt-new"][data-g="${gid}"]`); await W(B, 200);
+  await team(B, 'plan'); await B.click(`[data-j="hunt-new"][data-g="${gid}"]`); await W(B, 200);
   check(await B.isChecked('input[name=hfMode][value=manual]') && await B.isDisabled('#hfStart'), 'en ny jakt startas för hand som standard, utan starttid');
   await B.fill('#hfDay', futISO); await B.dispatchEvent('#hfDay', 'change'); await B.fill('#hfEnd', '23:58');
   check((await B.inputValue('#hfName')) === `Jakt ${futD.getDate()} ${MONS[futD.getMonth()]} ${futD.getFullYear()}`, `namnet följer det valda datumet: ${await B.inputValue('#hfName')}`);
@@ -625,7 +654,7 @@ const gids = () => Object.keys(data.groups || {});
   const h3 = Object.keys(data.groups[gid].hunts).find(k => data.groups[gid].hunts[k].day === futISO), H3 = () => data.groups[gid].hunts[h3];
   check(h3 && H3().manual && H3().expires === new Date(futD.getFullYear(), futD.getMonth(), futD.getDate(), 23, 58, 59).getTime() && H3().starts === H3().expires - 1000 && data.huntCodes[H3().code].hid === h3, 'jakten planeras för ett datum långt fram, med jaktkod');
   check(await A.evaluate(([g, h]) => firebase.database().ref('groups/' + g + '/huntPos/' + h + '/alice').set({lat:1, lng:1, t:Date.now(), name:'A'}).then(() => 'ok', () => 'denied'), [gid, h3]) === 'denied', 'den planerade jakten tar inte emot positioner');
-  await A.click('#tab-jakt'); await W(A, 300);
+  await go(A, 'jakt');
   check((await A.innerText('#paneJakt')).includes('Du har en inbjudan att svara på') && await A.locator(`#paneJakt .cal-row.me-invite [data-j="cal-go"][data-h="${h3}"]`).count() >= 1, 'Alice ser inbjudan till den planerade jakten i Jakt-fliken');
   await A.click('[data-j="cal"]'); await W(A, 300);
   check(await A.isVisible('#calBox') && await A.locator('.cal-day.today').count() === 1 && await A.locator('.cal-grid .cal-wk').count() >= 5, 'kalendern öppnas med dagens datum markerat och veckonummer');
@@ -639,9 +668,9 @@ const gids = () => Object.keys(data.groups || {});
   await W(B, 300);
   check((await B.innerText(`#hc-${gid}-${h3}`)).includes('Avböjt: Alice Test'), 'jaktledaren ser vem som har avböjt');
   await A.click(`#calBox [data-c="rsvp"][data-h="${h3}"]`); await W(A, 600);
-  check(rs3() && !rs3().no && (await A.innerText('#calBox')).toUpperCase().includes('DU DELTAR') && !(await A.isChecked('#shareToggle')), 'Alice ångrar sig och deltar, men inget delas innan jakten startar');
+  check(rs3() && !rs3().no && (await A.innerText('#calBox')).toUpperCase().includes('DU DELTAR') && !(await A.evaluate(() => __fk.cloud.sharing)), 'Alice ångrar sig och deltar, men inget delas innan jakten startar');
   await A.click(`#calBox [data-c="go"][data-h="${h3}"]`); await W(A, 500);
-  check(!(await A.isVisible('#calBox')) && await A.isVisible(`#hc-${gid}-${h3}`), 'Visa jakten stänger kalendern och visar jaktkortet');
+  check(!(await A.isVisible('#calBox')) && await A.isVisible(`#hc-${gid}-${h3}`) && (await A.getAttribute('#sub-plan', 'aria-selected')) === 'true', 'Visa jakten visar jaktkortet under jaktlagets flik Planera');
   // automatisk start
   await B.click(`[data-j="hunt-edit"][data-h="${h3}"]`); await W(B, 300);
   check(await B.isChecked('input[name=hfMode][value=manual]') && !(await B.isDisabled('#hfDay')), 'en planerad jakt går att ändra, även datum och start');
@@ -656,7 +685,7 @@ const gids = () => Object.keys(data.groups || {});
   await B.click(`[data-j="hunt-start"][data-h="${h3}"]`); await W(B, 700);
   { const n = new Date(), want = new Date(n.getFullYear(), n.getMonth(), n.getDate(), 23, 58, 59).getTime();
     check(H3().day === `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}` && H3().expires === want && H3().starts <= Date.now() && data.huntCodes[H3().code].expires === want && exp0 !== want, 'jakten startar i dag, med samma sluttid på dagen, och jaktkoden följer med'); }
-  await B.click(`[data-j="hunt-end"][data-h="${h3}"]`); await B.click(`[data-j="hunt-end"][data-h="${h3}"]`); await W(B, 900);
+  await team(B, 'jakt'); await B.click(`[data-j="hunt-end"][data-h="${h3}"]`); await B.click(`[data-j="hunt-end"][data-h="${h3}"]`); await W(B, 900);
   check(!data.groups[gid].hunts[h3] && !(data.groups[gid].huntRsvp || {})[h3], 'den extra jakten är avslutad');
   // ---- Avsluta jakten ----
   await B.click('[data-j="hunt-end"]'); await B.click('[data-j="hunt-end"]'); await W(B, 900);
@@ -690,14 +719,14 @@ const gids = () => Object.keys(data.groups || {});
   await B.keyboard.press('Escape');
   await W(A, 300);
   check(await A.locator('.obs-icon').count() === 0 && !(await A.isVisible('#btnObs')), 'efter jakten syns inga observationer och ingen kikare');
-  await W(B, 300);
+  await W(B, 300); await team(A, 'jakt');
   check(await A.locator('.pos-icon').count() === 0 && await B.locator('.pos-icon').count() === 0 && await A.locator('#shareToggle').isDisabled(), 'efter jakten syns inga positioner och delningen är avstängd');
   sc = await st(C);
   check(sc.pins.filter(p => p.areaId === aid).length === 0 && !(data.userGroups || {})['anon-carl'], 'gästen förlorade åtkomsten och nålarna försvann hos honom');
   const g3 = await C.evaluate(([g, a, h]) => Promise.all(['meta', 'pins/' + a, 'huntPos/' + h].map(p => firebase.database().ref('groups/' + g + '/' + p).get().then(() => 'ok', () => 'denied'))), [gid, aid, hid]);
   check(g3.every(x => x === 'denied'), 'efter avslutad jakt nekas gästen all läsning');
   // ---- Alice tar bort Bob ----
-  await A.click('#tab-jakt'); await A.click('[data-j="member-del"][data-u="bob"]'); await A.click('[data-j="member-del"][data-u="bob"]'); await W(A, 900);
+  await team(A, 'med'); await A.click('[data-j="member-del"][data-u="bob"]'); await A.click('[data-j="member-del"][data-u="bob"]'); await W(A, 900);
   sb = await st(B);
   check(!data.groups[gid].members.bob && sb.pins.length === 8 && sb.areas.length === 2, 'borttagen medlem: Bob har bara sina egna 8 nålar kvar');
   // Lokalt sparat innehåller inget delat
@@ -803,15 +832,15 @@ const gids = () => Object.keys(data.groups || {});
   check((await law('jarpe', 'Skåne', '09-01')).length === 0 && (await law('blasgas', 'Halland', '11-01')).length === 0 && (await law('raka', 'Halland', '08-01')).length === 1, 'arter som bara har jakttid i vissa län');
   check((await law('grasand', 'Uppsala', '12-15')).length === 1 && (await law('kricka', 'Uppsala', '12-15')).length === 0 && (await law('gragas', 'Norrbotten', '08-15')).join() === '|utom gränsälvsområdet', 'änder och gäss, gränsälvsområdet');
   check((await law('kraka', 'Stockholm', '06-15')).length === 0 && (await law('kraka', 'Jämtland', '04-20')).length === 1 && (await law('dovhjort', 'Örebro', '11-01')).join() === 'Hind och kalv|', 'kråka och dovhjort');
-  await V.click('#tab-vilt'); await V.selectOption('#viltLan', 'Södermanland'); await V.fill('#viltDay', '2026-11-11'); await V.dispatchEvent('#viltDay', 'change'); await W(V, 200);
+  await go(V, 'vilt'); await V.selectOption('#viltLan', 'Södermanland'); await V.fill('#viltDay', '2026-11-11'); await V.dispatchEvent('#viltDay', 'change'); await W(V, 200);
   const vt = (await V.innerText('#paneVilt')).toLowerCase();
   check(/rådjur/.test(vt.split('licens eller')[0]) && /älg/.test(vt.split('licens eller')[1].split('inte lovligt')[0]) && !/järpe/.test(vt), 'Vilt-fliken: rådjur lovligt, älg under licens, järpe saknas i Södermanland');
   check(await V.locator('#paneVilt .vname').first().getAttribute('href') === 'https://jagareforbundet.se/jakt/jakttider/jakttid-for-enskilt-djur/?animalId=565', 'artnamn länkar till Jägareförbundets tabell');
   check(viltTxt.includes('Älg') && !viltTxt.includes('Bläsgås') && !viltTxt.includes('Järpe'), 'Ny jakt: bara vilt som är lovligt den dagen kan väljas');
-  await V.screenshot({path:shot('v_vilt.png')}); await A.click('#tab-jakt'); await W(A, 200); await A.screenshot({path:shot('a_jakt.png')});
+  await V.screenshot({path:shot('v_vilt.png')}); await go(A, 'jakt'); await A.screenshot({path:shot('a_jakt.png')});
   // mobilvy av Jakt
   const M = await mkPage(browser, 'mia', '', {viewport:{width:390, height:844}, deviceScaleFactor:2, isMobile:true, hasTouch:true});
-  await M.click('#tab-jakt'); await W(M, 300); await M.click('[data-j="login-google"]'); await W(M, 300);
+  await go(M, 'konto'); await W(M, 100); await M.click('[data-j="login-google"]'); await W(M, 300); await go(M, 'jakt');
   check(await M.locator('[data-j="group-new"]').count() === 0 && (await M.innerText('#paneJakt')).includes('Bara ägaren') && data.owner === 'alice', 'annan inloggad: ingen knapp för att skapa jaktlag, ägaren oförändrad');
   const mk = await M.evaluate(() => { const up = {}; up['groups/zz/meta'] = {name:'Z', owner:'mia', created:1}; up['groups/zz/members/mia'] = {role:'admin', name:'M'}; up['userGroups/mia/zz'] = 'member'; return firebase.database().ref().update(up).then(() => 'ok', () => 'denied'); });
   check(mk === 'denied' && !data.groups.zz, 'annan inloggad nekas skapa jaktlag direkt mot databasen');
