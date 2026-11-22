@@ -98,6 +98,7 @@ const team = async (P, sub, g) => { await P.evaluate(([x, t]) => __fk.openTeam(x
   check((await A.innerText('#paneJakt')).toLowerCase().includes('älglaget') && await A.locator(`#paneJakt .team-row[data-g="${gid}"]`).count() === 1, 'laget visas som en rad under Jakt');
   await A.click('#btnMenu'); await W(A, 150);
   check(await A.isVisible('#drawer') && await A.locator(`#drTeams [data-team="${gid}"]`).count() === 1 && (await A.innerText('#drawer')).includes('Älglaget'), 'sidomenyn visar jaktlaget under Jakt');
+  check((await A.locator('#drawer .dr-item').allInnerTexts()).join() === 'Mitt konto,Kalender,Jakt,Vilt,Nålar,Filter,Data,Svamp', `menyns ordning: ${(await A.locator('#drawer .dr-item').allInnerTexts()).join()}`);
   await A.click(`#drTeams [data-team="${gid}"]`); await W(A, 300);
   check(!(await A.isVisible('#drawer')) && (await A.innerText('#pTitle')) === 'Älglaget' && await A.isVisible('#subTabs') && (await A.locator('#subTabs .stab').allInnerTexts()).join() === 'JAKT,PLANERA,OMRÅDEN,MEDLEMMAR', 'jaktlaget öppnas nerifrån med flikarna Jakt, Planera, Områden och Medlemmar');
   await A.click('#sub-med'); await W(A, 200);
@@ -838,6 +839,18 @@ const team = async (P, sub, g) => { await P.evaluate(([x, t]) => __fk.openTeam(x
   check(await V.locator('#paneVilt .vname').first().getAttribute('href') === 'https://jagareforbundet.se/jakt/jakttider/jakttid-for-enskilt-djur/?animalId=565', 'artnamn länkar till Jägareförbundets tabell');
   check(viltTxt.includes('Älg') && !viltTxt.includes('Bläsgås') && !viltTxt.includes('Järpe'), 'Ny jakt: bara vilt som är lovligt den dagen kan väljas');
   await V.screenshot({path:shot('v_vilt.png')}); await go(A, 'jakt'); await A.screenshot({path:shot('a_jakt.png')});
+  // ---- Ordningen på jaktlagen i menyn ----
+  await A.click('[data-j="group-new"]'); await A.fill('#atVal', 'Andra laget'); await A.click('#atForm button[type=submit]'); await W(A, 700);
+  const gNew = gids().find(k => k !== gid);
+  await go(A, 'jakt');
+  const teamRows = () => A.locator('#paneJakt .team-row .tr-name').allInnerTexts();
+  const menuTeams = async () => { await A.click('#btnMenu'); await W(A, 150); const t = await A.locator('#drTeams .dr-team span:first-child').allInnerTexts(); await A.click('#drawerClose'); await W(A, 100); return t; };
+  check(gNew && (await teamRows()).join() === 'Andra laget,Älglaget' && (await menuTeams()).join() === 'Andra laget,Älglaget' && await A.isDisabled(`[data-j="team-up"][data-g="${gNew}"]`), 'från början står lagen i bokstavsordning, med pilar för att flytta');
+  await A.click(`[data-j="team-down"][data-g="${gNew}"]`); await W(A, 300);
+  check((await teamRows()).join() === 'Älglaget,Andra laget' && (await menuTeams()).join() === 'Älglaget,Andra laget' && await A.isDisabled(`[data-j="team-up"][data-g="${gid}"]`), 'ett lag flyttas ned: ordningen ändras i listan och i menyn');
+  for(let i = subs.length - 1; i >= 0; i--) if(subs[i].page === A) subs.splice(i, 1);
+  await A.reload(); await W(A, 700); await go(A, 'konto'); await A.click('[data-j="login-google"]'); await W(A, 700); await go(A, 'jakt');
+  check((await teamRows()).join() === 'Älglaget,Andra laget' && (await menuTeams()).join() === 'Älglaget,Andra laget', 'ordningen på lagen finns kvar efter omladdning');
   // mobilvy av Jakt
   const M = await mkPage(browser, 'mia', '', {viewport:{width:390, height:844}, deviceScaleFactor:2, isMobile:true, hasTouch:true});
   await go(M, 'konto'); await W(M, 100); await M.click('[data-j="login-google"]'); await W(M, 300); await go(M, 'jakt');

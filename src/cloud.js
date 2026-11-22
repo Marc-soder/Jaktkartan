@@ -654,11 +654,23 @@ function renderKonto(){
    Med valt jaktlag (nav.team): lagets egen vy med flikarna Jakt, Planera, Områden och Medlemmar.
    Alla ser flikarna. Knappar för att ändra syns bara för den som har rättighet. */
 const TEAM_TABS = {jakt:'Jakt', plan:'Planera', omr:'Områden', med:'Medlemmar'};
-const teamGroups = () => Object.values(cloud.groups).filter(g => g.meta).sort((a, b) => gname(a).localeCompare(gname(b), 'sv'));
+/* Jaktlagen i den ordning användaren har valt (state.settings.teamOrder, sparas bara på enheten). Nya lag hamnar sist. */
+function teamGroups(){
+  const ord = state.settings.teamOrder || [], at = g => { const i = ord.indexOf(g.id); return i < 0 ? 1e6 : i; };
+  return Object.values(cloud.groups).filter(g => g.meta).sort((a, b) => (at(a) - at(b)) || gname(a).localeCompare(gname(b), 'sv'));
+}
+function teamMove(gid, dir){
+  const ids = teamGroups().map(g => g.id), i = ids.indexOf(gid), j = i + dir;
+  if(i < 0 || j < 0 || j >= ids.length) return;
+  [ids[i], ids[j]] = [ids[j], ids[i]];
+  state.settings.teamOrder = ids; save(); renderJakt();
+}
 const teamLive = g => liveHunts(g).length > 0;
-function teamRowHtml(g){
+function teamRowHtml(g, i, n){
   const role = g.kind === 'guest' ? 'Gäst' : ROLES[myRole(g)] || '';
-  return `<button class="team-row" type="button" data-j="team" data-g="${esc(g.id)}"><span class="tr-name">${esc(gname(g))}</span>${teamLive(g) ? '<span class="tag on">Pågår</span>' : ''}<span class="tag">${esc(role)}</span><span class="tr-go" aria-hidden="true">›</span></button>`;
+  const row = `<button class="team-row" type="button" data-j="team" data-g="${esc(g.id)}"><span class="tr-name">${esc(gname(g))}</span>${teamLive(g) ? '<span class="tag on">Pågår</span>' : ''}<span class="tag">${esc(role)}</span><span class="tr-go" aria-hidden="true">›</span></button>`;
+  if(!(n > 1)) return row;
+  return `<div class="team-item">${row}<span class="team-ord"><button class="iconbtn" type="button" data-j="team-up" data-g="${esc(g.id)}" aria-label="Flytta upp ${esc(gname(g))}"${i === 0 ? ' disabled' : ''}>↑</button><button class="iconbtn" type="button" data-j="team-down" data-g="${esc(g.id)}" aria-label="Flytta ned ${esc(gname(g))}"${i === n - 1 ? ' disabled' : ''}>↓</button></span></div>`;
 }
 function renderJakt(){
   renderKonto();
@@ -674,7 +686,7 @@ function renderJakt(){
   } else {
     const u = cloud.user, gs = teamGroups();
     html += calAgendaHtml();
-    html += `<h3 class="sec">Jaktlag</h3>${gs.length ? `<div class="team-list">${gs.map(teamRowHtml).join('')}</div>` : '<p class="note" style="margin-top:0">Du är inte med i något jaktlag ännu.</p>'}
+    html += `<h3 class="sec">Jaktlag</h3>${gs.length ? `<div class="team-list">${gs.map((g, i) => teamRowHtml(g, i, gs.length)).join('')}</div>${gs.length > 1 ? '<p class="note" style="margin:6px 0 0">Ordningen gäller också i menyn. Den sparas på den här enheten.</p>' : ''}` : '<p class="note" style="margin-top:0">Du är inte med i något jaktlag ännu.</p>'}
       <div class="btnrow">${canCreate() ? '<button class="btn sm" type="button" data-j="group-new">Skapa jaktlag</button>' : ''}<button class="btn sm" type="button" data-j="join">Gå med med kod</button></div>
       ${u.isAnonymous ? '<p class="note">Som gäst kan du gå med i jakter. Logga in med Google för att bli medlem i ett jaktlag.</p>' : canCreate() ? '' : '<p class="note">Bara ägaren av den här Jaktkartan kan skapa jaktlag. Du går med i ett lag eller en jakt med en kod.</p>'}`;
   }
@@ -886,6 +898,7 @@ function jaktClick(e){
   const act = b.dataset.j, g = cloud.groups[b.dataset.g], u = b.dataset.u, hid = b.dataset.h;
   if(act === 'go-konto') setTab('konto');
   else if(act === 'team') openTeam(b.dataset.g);
+  else if(act === 'team-up' || act === 'team-down') teamMove(b.dataset.g, act === 'team-up' ? -1 : 1);
   else if(act === 'team-sub'){ nav.sub = b.dataset.s; renderJakt(); $('#pBody').scrollTop = 0; }
   else if(act === 'copy-rules') copyText(RULES_TEXT, 'Reglerna är kopierade');
   else if(act === 'cfg-save'){ const cfg = parseCfg($('#fbCfg').value); if(!cfg){ toast('Hittade inte apiKey, databaseURL och projectId i texten.', 5000); return; } lsSet(FBKEY, JSON.stringify(cfg)); cloudInit(); }
