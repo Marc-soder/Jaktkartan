@@ -16,6 +16,8 @@ const owner = `data.parent().parent().child('meta/owner').val()`;
 const invite = `root.child('invites/'+newData.child('code').val())`;
 const hunt = `root.child(${G}+'/hunts/'+$hid)`;
 // Jakten pågår: sluttiden har inte passerat och starttiden (om den finns) har passerat.
+// Inbjuden till jakten: jakten har ingen lista (hela laget är inbjudet) eller så står man på listan (invited/<uid>).
+const invitedOk = `(!root.child(${G}+'/hunts/'+$hid+'/invited').exists() || root.child(${G}+'/hunts/'+$hid+'/invited/'+auth.uid).val() === true)`;
 const huntLive = `(${hunt}.child('expires').val() > now && (!${hunt}.child('starts').exists() || ${hunt}.child('starts').val() <= now))`;
 // Nycklar som deltagare själva väljer: bara bokstäver, siffror, - och _. Då kan en nyckel aldrig bära med sig kod in i sidan.
 const KEY = v => `(${v}.matches(/^[A-Za-z0-9_-]+$/) && ${v}.length <= 64)`;
@@ -123,7 +125,9 @@ const rules = { rules: {
       '$hid': {
         '.read': `${isGuest} && ${guest}.child('hid').val() === $hid`,
         '.write': canLead,
-        '.validate': `${KEY('$hid')} && newData.hasChildren(['name','expires','code']) && newData.child('expires').isNumber() && (!newData.child('starts').exists() || (newData.child('starts').isNumber() && newData.child('starts').val() < newData.child('expires').val()))`
+        '.validate': `${KEY('$hid')} && newData.hasChildren(['name','expires','code']) && newData.child('expires').isNumber() && (!newData.child('starts').exists() || (newData.child('starts').isNumber() && newData.child('starts').val() < newData.child('expires').val()))`,
+        // Utvalda medlemmar som bjuds in. Saknas listan är hela laget inbjudet.
+        invited: { '$uid': { '.validate': `${KEY('$uid')} && newData.val() === true` } }
       }
     },
     guests: {
@@ -140,7 +144,7 @@ const rules = { rules: {
         '.read': `(${isMember} || (${isGuest} && ${guest}.child('hid').val() === $hid)) && ${huntLive}`,
         '.write': `${canLead} && !newData.exists()`,
         '$uid': {
-          '.write': `${signed} && $uid === auth.uid && ${huntLive} && (${me}.exists() || (${isGuest} && ${guest}.child('hid').val() === $hid))`,
+          '.write': `${signed} && $uid === auth.uid && ${huntLive} && ((${me}.exists() && ${invitedOk}) || (${isGuest} && ${guest}.child('hid').val() === $hid))`,
           '.validate': `newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber()`
         }
       }
@@ -284,7 +288,7 @@ const rules = { rules: {
       '$hid': {
         '.write': `${canLead} && !newData.exists()`,
         '$uid': {
-          '.write': `${signed} && $uid === auth.uid && ${me}.exists() && (${hunt}.exists() || !newData.exists())`,
+          '.write': `${signed} && (($uid === auth.uid && ${me}.exists() && ((${hunt}.exists() && ${invitedOk}) || !newData.exists())) || (${canLead} && !newData.exists()))`,
           '.validate': `newData.hasChildren(['name','t'])`,
           name: {'.validate': 'newData.isString() && newData.val().length <= 60'},
           t: {'.validate': 'newData.isNumber() && newData.val() <= now + 60000'},
@@ -372,7 +376,7 @@ const rules = { rules: {
         '.read': `(${isMember} || (${isGuest} && ${guest}.child('hid').val() === $hid)) && ${huntLive}`,
         '.write': `${canLead} && !newData.exists()`,
         '$uid': {
-          '.write': `${signed} && $uid === auth.uid && ${huntLive} && (${me}.exists() || (${isGuest} && ${guest}.child('hid').val() === $hid))`,
+          '.write': `${signed} && $uid === auth.uid && ${huntLive} && ((${me}.exists() && ${invitedOk}) || (${isGuest} && ${guest}.child('hid').val() === $hid))`,
           '$pt': { '.validate': `${KEY('$pt')} && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000` }
         }
       }

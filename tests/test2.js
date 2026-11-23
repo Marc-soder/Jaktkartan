@@ -880,6 +880,26 @@ async function inviteRevokeAll(){
   check(rs3() && !rs3().no && (await A.innerText('#calBox')).toUpperCase().includes('DU DELTAR') && !(await A.evaluate(() => __fk.cloud.sharing)), 'Alice ångrar sig och deltar, men inget delas innan jakten startar');
   await A.click(`#calBox [data-c="go"][data-h="${h3}"]`); await W(A, 500);
   check(!(await A.isVisible('#calBox')) && await A.isVisible(`#hc-${gid}-${h3}`) && (await A.getAttribute('#sub-plan', 'aria-selected')) === 'true', 'Visa jakten visar jaktkortet under jaktlagets flik Planera');
+  // Inbjudna: bara utvalda medlemmar
+  await team(B, 'plan'); await B.click(`[data-j="hunt-edit"][data-h="${h3}"]`); await W(B, 300);
+  check(await B.isChecked('input[name=hfInv][value=all]') && !(await B.isVisible('#hfMembers')), 'en jakt bjuder från början in hela laget');
+  await B.check('input[name=hfInv][value=some]', {force:true}); await W(B, 100);
+  const memRows = await B.locator('#hfMembers [data-mem]').count();
+  check(await B.isVisible('#hfMembers') && memRows === Object.keys(data.groups[gid].members).length && await B.isChecked('#hfMembers [data-mem="bob"]'), `Utvalda medlemmar visar lagets medlemmar, med en själv förvald (${memRows})`);
+  await B.click('#hfNone'); await B.click('#hfOk'); await W(B, 300);
+  check(!H3().invited && (await B.innerText('#toast')).includes('minst en medlem'), 'utan någon vald sparas inte jakten');
+  await B.check('#hfMembers [data-mem="alice"]', {force:true}); await B.click('#hfOk'); await W(B, 800);
+  check(JSON.stringify(H3().invited) === '{"alice":true}' && rs3() && !rs3().no, 'jakten bjuder bara in Alice, och hennes svar finns kvar');
+  { const card = (await B.innerText(`#hc-${gid}-${h3}`)).toLowerCase();
+    if(!card.includes('du är inte inbjuden')) console.log('DBG card', JSON.stringify(card));
+    check(card.includes('du är inte inbjuden') && /inbjudna: 1 av \d+ medlemmar/.test(card) && !(await B.locator(`#hc-${gid}-${h3} [data-j="rsvp"]`).count()), 'Bob ser att han inte är inbjuden, och kan inte svara Jag deltar'); }
+  check(await B.evaluate(([g, h]) => firebase.database().ref(`groups/${g}/huntRsvp/${h}/bob`).set({name:'Bob', t:Date.now()}).then(() => 'ok', () => 'denied'), [gid, h3]) === 'denied', 'den som inte är inbjuden kan inte heller svara via databasen');
+  await team(A, 'plan'); await W(A, 300);
+  check((await A.innerText(`#hc-${gid}-${h3}`)).toLowerCase().includes('du deltar'), 'Alice är inbjuden och deltar');
+  await B.click(`[data-j="hunt-edit"][data-h="${h3}"]`); await W(B, 300);
+  check(await B.isChecked('input[name=hfInv][value=some]') && await B.isChecked('#hfMembers [data-mem="alice"]') && !(await B.isChecked('#hfMembers [data-mem="bob"]')), 'Ändra jakt visar de inbjudna');
+  await B.check('input[name=hfInv][value=all]', {force:true}); await B.click('#hfOk'); await W(B, 800);
+  check(!H3().invited, 'Hela laget tar bort urvalet');
   // automatisk start
   await B.click(`[data-j="hunt-edit"][data-h="${h3}"]`); await W(B, 300);
   check(await B.isChecked('input[name=hfMode][value=manual]') && !(await B.isDisabled('#hfDay')), 'en planerad jakt går att ändra, även datum och start');
@@ -963,6 +983,19 @@ async function inviteRevokeAll(){
   const DP = (uid, now) => { const d = targaryen.database(rules, baseP, now || t0).as(uid ? tok(uid) : null);
     return {read: p => d.read(p, now || t0).allowed, write: (p, v) => d.write(p, v, undefined, now || t0).allowed}; };
   const PH = (phone, extra) => Object.assign({name:'N', phone:phone || '+46 70 123 45 67', t:1}, extra || {});
+  // Inbjudna till en jakt
+  const baseI = {owner:'o', groups:{g:{meta:{name:'L', owner:'o'}, members:{o:{role:'admin', name:'O'}, l:{role:'leader', name:'L'}, e:{role:'editor', name:'E'}, v:{role:'viewer', name:'V'}},
+    hunts:{h:{name:'J', expires:t0 + 1000, code:'HUNTCODE'}, hs:{name:'S', expires:t0 + 1000, code:'HUNTCODS', invited:{e:true, l:true}}},
+    guests:{gu:{hid:'hs', code:'HUNTCODS', name:'G', expires:t0 + 1000}},
+    huntRsvp:{hs:{v:{name:'V', t:1}}}}}};
+  const DI = uid => { const d = targaryen.database(rules, baseI, t0).as(uid ? tok(uid) : null); return {write: (p, v) => d.write(p, v, undefined, t0).allowed}; };
+  const RI = {name:'N', t:1}, PI = {lat:1, lng:1, t:1};
+  check(DI('v').write('/groups/g/huntRsvp/h/v', RI) && DI('e').write('/groups/g/huntRsvp/h/e', RI), 'regel: inbjudna: utan lista är hela laget inbjudet, som förut');
+  check(DI('e').write('/groups/g/huntRsvp/hs/e', RI) && !DI('v').write('/groups/g/huntRsvp/hs/v', RI) && !DI('o').write('/groups/g/huntRsvp/hs/o', RI), 'regel: inbjudna: bara utvalda medlemmar kan svara Jag deltar');
+  check(DI('v').write('/groups/g/huntRsvp/hs/v', null) && DI('l').write('/groups/g/huntRsvp/hs/v', null) && !DI('e').write('/groups/g/huntRsvp/hs/v', null), 'regel: inbjudna: man kan ta bort sitt svar, jaktledaren kan ta bort andras');
+  check(DI('e').write('/groups/g/huntPos/hs/e', PI) && !DI('v').write('/groups/g/huntPos/hs/v', PI) && DI('gu').write('/groups/g/huntPos/hs/gu', PI) && DI('v').write('/groups/g/huntPos/h/v', PI), 'regel: inbjudna: bara inbjudna medlemmar och jaktens gäster delar position');
+  check(DI('e').write('/groups/g/huntTrail/hs/e/k1', PI) && !DI('v').write('/groups/g/huntTrail/hs/v/k1', PI), 'regel: inbjudna: samma för spåret');
+  check(DI('l').write('/groups/g/hunts/h2', {name:'N', expires:t0 + 1000, code:'HUNTCOD3', invited:{e:true}}) && !DI('l').write('/groups/g/hunts/h2', {name:'N', expires:t0 + 1000, code:'HUNTCOD3', invited:{e:'ja'}}), 'regel: inbjudna: listan sparas med jakten, bara som true');
   check(DP('e').write('/groups/g/huntPhone/h/e', PH()) && DP('gu').write('/groups/g/huntPhone/h/gu', PH('0701234567')), 'regel: telefon: deltagare och jaktens gäst kan dela sitt nummer');
   check(!DP('e').write('/groups/g/huntPhone/h/v', PH()) && !DP('x').write('/groups/g/huntPhone/h/x', PH()) && !DP('gu').write('/groups/g/huntPhone/h2/gu', PH()), 'regel: telefon: bara sitt eget, bara med åtkomst till jakten');
   check(!DP('e').write('/groups/g/huntPhone/h/e', PH('ring mig')) && !DP('e').write('/groups/g/huntPhone/h/e', PH('<script>')) && !DP('e').write('/groups/g/huntPhone/h/e', PH('12')) && !DP('e').write('/groups/g/huntPhone/h/e', PH(undefined, {x:1})), 'regel: telefon: bara giltiga nummer, inga extra fält');
