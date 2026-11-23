@@ -66,13 +66,16 @@ eller på ett USB-minne i ett kassaskåp.
 
 Firebase behöver fingeravtrycket för att inloggningen med Google ska fungera i appen.
 
-1. Kör i samma mapp:
+1. Kör i samma mapp (en rad):
    ```
-   keytool -list -v -keystore jaktkartan.jks -alias jaktkartan
+   keytool "-J-Duser.language=en" -list -v -keystore jaktkartan.jks -alias jaktkartan
    ```
+   `"-J-Duser.language=en"` gör att keytool skriver på engelska. Den svenska översättningen i Java 25 har ett fel som
+   gör att keytool kraschar med `IllegalFormatConversionException` när certifikatet ska visas. Citattecknen behövs i
+   PowerShell, annars delas argumentet vid punkten.
 2. Skriv lösenordet. Leta upp raden som börjar med `SHA1:`, till exempel
    `SHA1: 94:6C:F5:56:9D:1F:74:CE:41:DE:7D:CB:46:06:63:73:24:8C:9F:49`.
-3. Kopiera hela värdet efter `SHA1:`. Du behöver det i steg 2.
+3. Kopiera hela värdet efter `SHA1:` (under **Certificate fingerprints**). Du behöver det i steg 2.
 
 Fingeravtrycket är inte hemligt.
 
