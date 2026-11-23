@@ -24,6 +24,13 @@
 
         </activity>
 
+        <!-- Positionen under jakten (JaktGpsService): en tjänst i förgrunden med en fast avisering -->
+        <service
+            android:name=".JaktGpsService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -40,4 +47,10 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Uppdatering från GitHub Releases: appen öppnar Androids installerare, som alltid frågar användaren -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Positionen under jakten, även med släckt skärm -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

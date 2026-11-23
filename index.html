@@ -690,8 +690,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
   --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
   --panel-w:380px; --sheet-h:120px;
   /* --sab: skärmens nedre kant som inte får täckas (iPhones list, Androids navigeringsfält när appen ritar ända ned).
-     --sheet-b: panelens överkant räknat från skärmens nederkant. Allt som ska ligga ovanför panelen utgår från den. */
-  --sab:env(safe-area-inset-bottom, 0px); --sheet-b:calc(var(--sheet-h) + var(--sab));
+     --sheet-b: panelens överkant räknat från skärmens nederkant. Allt som ska ligga ovanför panelen utgår från den.
+     I appen sätter Capacitor --safe-area-inset-* efter telefonens statusrad och navigeringsknappar, eftersom env() inte alltid
+     stämmer i Androids WebView. De används först; i webbläsaren gäller env().
+     --sat, --sar, --sal: samma sak för övre kanten och sidorna. */
+  --sat:var(--safe-area-inset-top, env(safe-area-inset-top, 0px)); --sar:var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --sal:var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  --sab:var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)); --sheet-b:calc(var(--sheet-h) + var(--sab));
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
@@ -736,7 +741,9 @@ a{color:var(--accent)}
 .me-cone[hidden]{display:none}
 
 /* Kontroller på kartan */
-.ctrls{position:fixed;z-index:900;top:calc(12px + env(safe-area-inset-top,0px));right:calc(12px + env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:8px}
+.ctrls{position:fixed;z-index:900;top:calc(12px + var(--sat));right:calc(12px + var(--sar));display:flex;flex-direction:column;gap:8px}
+/* Knapparna ska sluta ovanför plusknappen och panelen. Räcker inte höjden fortsätter de i en kolumn till vänster. */
+.ctrls{flex-wrap:wrap-reverse;align-content:flex-end;max-height:max(150px,calc(100vh - var(--sheet-b) - var(--sat) - 96px));max-height:max(150px,calc(100dvh - var(--sheet-b) - var(--sat) - 96px))}
 .ctrl.bell{position:relative}.ctrl.bell.on{color:var(--danger)}
 .ctrl.bell .bell-n{position:absolute;top:-5px;right:-5px;min-width:19px;height:19px;padding:0 5px;border-radius:10px;background:var(--danger);color:#fff;font:700 11px/19px var(--font-body);display:none}
 .ctrl.bell.on .bell-n{display:block}
@@ -745,20 +752,20 @@ a{color:var(--accent)}
 .ctrl svg{width:22px;height:22px}
 .ctrl[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
 .ctrl-gap{height:4px}
-.mode-chip{position:fixed;z-index:900;top:calc(12px + env(safe-area-inset-top,0px));left:calc(12px + env(safe-area-inset-left,0px));background:var(--accent);color:var(--accent-fg);font:700 13px/1 var(--font-display);letter-spacing:.08em;text-transform:uppercase;padding:9px 12px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.2);border:0;display:flex;gap:6px;align-items:center}
+.mode-chip{position:fixed;z-index:900;top:calc(12px + var(--sat));left:calc(12px + var(--sal));background:var(--accent);color:var(--accent-fg);font:700 13px/1 var(--font-display);letter-spacing:.08em;text-transform:uppercase;padding:9px 12px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.2);border:0;display:flex;gap:6px;align-items:center}
 @media (min-width:860px){.mode-chip{left:calc(var(--panel-w) + 12px)}}
-.follow-chip{position:fixed;z-index:960;top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;max-width:calc(100vw - 150px);border:0;border-radius:999px;padding:9px 14px;background:#1d4ed8;color:#fff;font:600 13px/1.2 var(--font-body);box-shadow:var(--shadow);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.follow-chip{position:fixed;z-index:960;top:calc(12px + var(--sat));left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;max-width:calc(100vw - 150px);border:0;border-radius:999px;padding:9px 14px;background:#1d4ed8;color:#fff;font:600 13px/1.2 var(--font-body);box-shadow:var(--shadow);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .follow-chip[hidden]{display:none}.follow-chip .fc-x{text-decoration:underline;font-weight:700}
 @media (min-width:860px){.follow-chip{left:calc(50% + var(--panel-w) / 2);top:56px}}
 .pos-chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}.pos-chips:empty{display:none}
 .pos-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 10px 3px 3px;background:var(--surface);color:var(--fg);font:inherit;font-size:13px;cursor:pointer}
 .pos-chip.on{border-color:#1d4ed8;box-shadow:0 0 0 2px rgba(29,78,216,.25)}.pos-chip .muted{font-size:12px}
 .pc-dot{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;color:#fff;font:700 10px/1 var(--font-body)}
-.fab{position:fixed;z-index:950;right:calc(14px + env(safe-area-inset-right,0px));bottom:calc(var(--sheet-b) + 14px);width:56px;height:56px;border-radius:18px;border:0;background:var(--accent);color:var(--accent-fg);box-shadow:0 6px 18px rgba(0,0,0,.3);display:grid;place-items:center;transition:bottom .25s ease}
+.fab{position:fixed;z-index:950;right:calc(14px + var(--sar));bottom:calc(var(--sheet-b) + 14px);width:56px;height:56px;border-radius:18px;border:0;background:var(--accent);color:var(--accent-fg);box-shadow:0 6px 18px rgba(0,0,0,.3);display:grid;place-items:center;transition:bottom .25s ease}
 .fab svg{width:28px;height:28px}
 @media (min-width:860px){.fab{bottom:28px}}
 
-.layer-pop{position:fixed;z-index:1200;top:calc(64px + env(safe-area-inset-top,0px));right:calc(64px + env(safe-area-inset-right,0px));width:min(290px,calc(100vw - 88px));background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:10px;max-height:calc(100vh - 80px - env(safe-area-inset-top,0px));max-height:calc(100dvh - 80px - env(safe-area-inset-top,0px));overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+.layer-pop{position:fixed;z-index:1200;top:calc(64px + var(--sat));right:calc(64px + var(--sar));width:min(290px,calc(100vw - 88px));background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:10px;max-height:calc(100vh - 80px - var(--sat));max-height:calc(100dvh - 80px - var(--sat));overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y}
 .layer-pop h3{margin:4px 6px 8px}
 .shot-pick{position:relative;overflow:auto;max-height:55vh;max-height:55dvh;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);-webkit-overflow-scrolling:touch}
 .shot-inner{position:relative;width:100%}
@@ -812,7 +819,7 @@ a{color:var(--accent)}
 .doc-imgs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
 .doc-imgw{position:relative}.doc-imgw img{width:96px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block}
 .doc-imgw .x{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:0;background:#111;color:#fff;font-size:14px;line-height:1;cursor:pointer}
-.drivebar{position:fixed;z-index:1340;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top,0px));max-width:min(480px,calc(100vw - 32px));padding:8px 10px 8px 12px;border-radius:12px;background:#1e3a8a;color:#fff;font:500 14px/1.5 var(--font-body);box-shadow:var(--shadow);display:flex;gap:8px;align-items:center}
+.drivebar{position:fixed;z-index:1340;left:50%;transform:translateX(-50%);top:calc(10px + var(--sat));max-width:min(480px,calc(100vw - 32px));padding:8px 10px 8px 12px;border-radius:12px;background:#1e3a8a;color:#fff;font:500 14px/1.5 var(--font-body);box-shadow:var(--shadow);display:flex;gap:8px;align-items:center}
 .drivebar[hidden]{display:none}
 .drivebar.stop{background:#b45309}.drivebar.call{background:#14532d}
 .drivebar a{color:#fff;font-weight:700;display:inline-flex;gap:4px;align-items:center}.drivebar a svg{width:16px;height:16px}
@@ -875,7 +882,7 @@ a{color:var(--accent)}
 .plan-lbl.route span{top:-14px;background:#fff;color:#16231c}
 .plan-lbl.route.hund span{border:1px solid #db2777}.plan-lbl.route.drev span{border:1px solid #6d28d9}
 /* Kompass uppe till vänster: rosen vrids, markeringen överst visar åt vilket håll telefonen pekar */
-.compass{position:fixed;z-index:900;top:calc(12px + env(safe-area-inset-top,0px));left:calc(12px + env(safe-area-inset-left,0px));width:76px;padding:0;border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
+.compass{position:fixed;z-index:900;top:calc(12px + var(--sat));left:calc(12px + var(--sal));width:76px;padding:0;border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
 .compass[hidden]{display:none}
 .cmp-dial{width:70px;height:70px;border-radius:50%;background:var(--surface);box-shadow:0 2px 10px rgba(0,0,0,.25);transition:transform .15s linear}
 .compass.off .cmp-dial{opacity:.7}
@@ -893,6 +900,11 @@ a{color:var(--accent)}
 @media (min-width:900px){.compass{left:calc(var(--panel-w) + 12px)}}
 /* Meddelanden */
 .msg-list{display:grid;gap:6px;max-height:320px;overflow:auto;margin:4px 0}
+/* Chatt-fliken: listan rullar med panelen, och skrivfältet ligger kvar längst ned */
+.chat .msg-list{max-height:none;overflow:visible}
+.chat-bar{position:sticky;bottom:-24px;z-index:2;display:flex;align-items:flex-end;gap:6px;margin:8px -4px -24px;padding:8px 4px 24px;background:var(--bg)}
+.chat-bar textarea.input{flex:1;height:40px;min-height:40px;max-height:120px;resize:none;padding:8px 10px;font-size:15px;line-height:1.4}
+.chat-bar .btn,.chat-bar .iconbtn{flex:none;height:40px}
 .msg{padding:8px 10px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line)}
 .msg.me{background:var(--surface);border-style:dashed}
 .msg-h{font-size:13px}
@@ -900,7 +912,7 @@ a{color:var(--accent)}
 .tab.has-news::after{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-left:4px;vertical-align:top}
 .sunbox{display:grid;gap:3px;margin:8px 0;padding:8px 10px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line)}
 .sun-i{display:inline-block;width:1.3em}
-.powerchip{position:fixed;z-index:950;left:calc(96px + env(safe-area-inset-left,0px));top:calc(14px + env(safe-area-inset-top,0px));padding:5px 10px;border-radius:999px;border:1px solid #15803d;background:var(--surface);color:#15803d;font:600 12px/1 var(--font-body);box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.powerchip{position:fixed;z-index:950;left:calc(96px + var(--sal));top:calc(14px + var(--sat));padding:5px 10px;border-radius:999px;border:1px solid #15803d;background:var(--surface);color:#15803d;font:600 12px/1 var(--font-body);box-shadow:0 1px 4px rgba(0,0,0,.2)}
 .powerchip::before{content:'🔋 '}
 .powerchip[hidden]{display:none}
 @media (min-width:900px){.powerchip{left:calc(var(--panel-w) + 96px)}}
@@ -909,19 +921,19 @@ a{color:var(--accent)}
 @keyframes sospulse{50%{box-shadow:0 0 0 8px rgba(185,28,28,.35)}}
 .sos-h{color:#b91c1c}
 .btn.sos-btn{background:#b91c1c;border-color:#7f1d1d;color:#fff}
-.sosbar{position:fixed;z-index:1350;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top,0px));max-width:min(460px,calc(100vw - 32px));padding:8px 12px;border-radius:12px;background:#b91c1c;color:#fff;font:500 13px/1.4 var(--font-body);box-shadow:var(--shadow);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sosbar{position:fixed;z-index:1350;left:50%;transform:translateX(-50%);top:calc(10px + var(--sat));max-width:min(460px,calc(100vw - 32px));padding:8px 12px;border-radius:12px;background:#b91c1c;color:#fff;font:500 13px/1.4 var(--font-body);box-shadow:var(--shadow);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .sosbar[hidden]{display:none}
 .sosbar a{color:#fff;font-weight:700}
 .sosbar button{border:1px solid #fff;background:none;color:#fff;border-radius:8px;padding:4px 8px;font:600 13px/1 var(--font-body)}
 .sos-icon{background:none;border:0;overflow:visible}
 .sos-dot{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:#b91c1c;color:#fff;font:800 11px/1 var(--font-body);border:3px solid #fff;box-shadow:0 0 0 0 rgba(185,28,28,.6);animation:sospulse 1s infinite}
 .sos-name{position:absolute;left:50%;top:44px;transform:translateX(-50%);white-space:nowrap;background:#b91c1c;color:#fff;font:700 11px/1.3 var(--font-body);padding:1px 6px;border-radius:6px}
-.netbar{position:fixed;z-index:1300;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top,0px));max-width:min(420px,calc(100vw - 200px));padding:6px 12px;border-radius:12px;background:#7c2d12;color:#fff;font:600 12px/1.35 var(--font-body);box-shadow:var(--shadow);text-align:center}
+.netbar{position:fixed;z-index:1300;left:50%;transform:translateX(-50%);top:calc(10px + var(--sat));max-width:min(420px,calc(100vw - 200px));padding:6px 12px;border-radius:12px;background:#7c2d12;color:#fff;font:600 12px/1.35 var(--font-body);box-shadow:var(--shadow);text-align:center}
 .netbar[hidden]{display:none}
 .updbar{background:#14532d;display:flex;align-items:center;gap:8px;z-index:1310}
 .updbar button{border:1px solid #fff;background:none;color:#fff;border-radius:8px;padding:4px 10px;font:700 12px/1 var(--font-body);cursor:pointer}
 @media (max-width:520px){.netbar{top:auto;bottom:calc(var(--sheet-b) + 70px);max-width:calc(100vw - 32px)}}
-@media (max-width:520px){.updbar{top:calc(10px + env(safe-area-inset-top,0px));bottom:auto;left:16px;transform:none;max-width:calc(100vw - 92px)}}
+@media (max-width:520px){.updbar{top:calc(10px + var(--sat));bottom:auto;left:16px;transform:none;max-width:calc(100vw - 92px)}}
 .check-row{margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .check-ok{color:#15803d;font-weight:600}
 .check-out{color:var(--muted)}
@@ -947,7 +959,7 @@ a{color:var(--accent)}
 .obs-menu button{display:flex;gap:10px;align-items:center;min-height:44px;padding:6px 12px 6px 6px;border:0;border-radius:10px;background:none;color:var(--fg);font:600 15px/1 var(--font-body);white-space:nowrap;cursor:pointer}
 .obs-menu button:hover,.obs-menu button:focus-visible{background:var(--surface-2)}
 .obs-row{display:flex;gap:8px;align-items:flex-start;width:100%;text-align:left;border:0;background:none;padding:6px 0;border-bottom:1px solid var(--line);color:inherit;font:inherit}
-.wind-chip{position:fixed;z-index:900;left:calc(14px + env(safe-area-inset-left,0px));bottom:calc(var(--sheet-b) + 14px);display:flex;align-items:center;gap:6px;padding:8px 12px 8px 8px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg);box-shadow:0 2px 10px rgba(0,0,0,.18);font:500 14px/1 var(--font-body)}
+.wind-chip{position:fixed;z-index:900;left:calc(14px + var(--sal));bottom:calc(var(--sheet-b) + 14px);display:flex;align-items:center;gap:6px;padding:8px 12px 8px 8px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg);box-shadow:0 2px 10px rgba(0,0,0,.18);font:500 14px/1 var(--font-body)}
 .wind-chip svg{width:22px;height:22px;color:#1a73e8;flex:none}
 @media (min-width:860px){.wind-chip{left:calc(var(--panel-w) + 14px)}}
 .wind-arrows{position:absolute;left:0;top:0;pointer-events:none;opacity:.55}
@@ -984,7 +996,7 @@ a{color:var(--accent)}
 #panel.peek:not(.dragging) .p-body{visibility:hidden}
 .handle{flex:none;height:22px;display:grid;place-items:center;touch-action:none;cursor:grab;border:0;background:none;width:100%;padding:0}
 .handle span{width:42px;height:5px;border-radius:3px;background:var(--line)}
-.p-head{flex:none;display:flex;align-items:center;gap:4px;padding:0 max(10px,env(safe-area-inset-right,0px)) 4px max(6px,env(safe-area-inset-left,0px));touch-action:none;min-height:48px}
+.p-head{flex:none;display:flex;align-items:center;gap:4px;padding:0 max(10px,var(--sar)) 4px max(6px,var(--sal));touch-action:none;min-height:48px}
 .p-title{flex:1;min-width:0;margin:0;font:700 21px/1.15 var(--font-display);letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .p-head .iconbtn{flex:none;width:44px;height:44px;border-radius:12px}
 .p-head .iconbtn svg{width:24px;height:24px}
@@ -992,14 +1004,14 @@ a{color:var(--accent)}
 .brand{font:700 22px/1.1 var(--font-display);letter-spacing:.02em;margin:0;color:var(--spruce)}
 .brand b{color:var(--accent)}
 .p-stat{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
-.tabs{flex:none;display:flex;gap:2px;padding:0 max(10px,env(safe-area-inset-right,0px)) 0 max(10px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--line)}
+.tabs{flex:none;display:flex;gap:2px;padding:0 max(10px,var(--sar)) 0 max(10px,var(--sal));border-bottom:1px solid var(--line)}
 .tabs[hidden]{display:none}
 .stab{flex:1;border:0;background:none;padding:10px 2px 9px;font:600 13px/1 var(--font-display);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-1px;cursor:pointer;white-space:nowrap}
 .stab[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
 /* Sidomenyn */
 .drawer-back{position:fixed;inset:0;z-index:1480;background:var(--scrim)}
 .drawer-back[hidden],.drawer[hidden]{display:none}
-.drawer{position:fixed;z-index:1490;top:0;bottom:0;left:0;width:min(300px,84vw);background:var(--surface);box-shadow:var(--shadow);display:flex;flex-direction:column;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);overflow:auto;animation:drawerin .18s ease-out}
+.drawer{position:fixed;z-index:1490;top:0;bottom:0;left:0;width:min(300px,84vw);background:var(--surface);box-shadow:var(--shadow);display:flex;flex-direction:column;padding:var(--sat) 0 var(--sab) var(--sal);overflow:auto;animation:drawerin .18s ease-out}
 @keyframes drawerin{from{transform:translateX(-100%)}to{transform:none}}
 .dr-head{display:flex;align-items:center;justify-content:space-between;padding:14px 10px 10px 18px;border-bottom:1px solid var(--line)}
 .dr-head .iconbtn{font-size:24px;width:44px;height:44px}
@@ -1023,9 +1035,9 @@ a{color:var(--accent)}
 .ar-pins{display:grid;gap:2px}
 .ar-pin{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;padding:8px 2px;color:var(--fg);font:400 15px/1.3 var(--font-body);cursor:pointer}
 .ar-pin .fname{flex:1;min-width:0}
-.p-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:14px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px))}
+.p-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:14px max(16px,var(--sar)) 24px max(16px,var(--sal))}
 @media (min-width:860px){
-  #panel{top:0;right:auto;width:var(--panel-w);height:auto;border-radius:0;box-shadow:none;border-right:1px solid var(--line);padding-top:env(safe-area-inset-top,0px)}
+  #panel{top:0;right:auto;width:var(--panel-w);height:auto;border-radius:0;box-shadow:none;border-right:1px solid var(--line);padding-top:var(--sat)}
   .handle{display:none}
   .p-head{padding-top:16px}
 }
@@ -1172,7 +1184,7 @@ textarea.input{min-height:84px;resize:vertical}
 
 /* Modal */
 .modal-back{position:fixed;inset:0;background:var(--scrim);z-index:2000;display:flex;align-items:flex-end;justify-content:center}
-.modal{background:var(--surface);width:100%;max-width:520px;max-height:92dvh;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:18px max(16px,env(safe-area-inset-right,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));box-shadow:var(--shadow)}
+.modal{background:var(--surface);width:100%;max-width:520px;max-height:92dvh;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:18px max(16px,var(--sar)) calc(18px + var(--sab)) max(16px,var(--sal));box-shadow:var(--shadow)}
 @supports (max-height:92dvh){.modal{max-height:92dvh}}
 @media (min-width:600px){.modal-back{align-items:center}.modal{border-radius:18px;padding:22px}}
 .modal h2{font:700 24px/1.1 var(--font-display);letter-spacing:.02em;margin:0 0 14px;text-wrap:balance}
@@ -1901,7 +1913,7 @@ function renderNav(){
   if(st.hidden === tabs){ st.hidden = !tabs; if(!isDesktop()) setSheet(sheet, true); }   // höjden i nedfällt läge ändras
   if(typeof renderDrawerTeams === 'function') renderDrawerTeams();
 }
-$('#subTabs').addEventListener('click', e => { const b = e.target.closest('[data-sub]'); if(!b) return; nav.sub = b.dataset.sub; renderJakt(); renderNav(); $('#pBody').scrollTop = 0; if(!isDesktop() && (sheet === 'peek' || sheet === 'min')) setSheet('half'); });
+$('#subTabs').addEventListener('click', e => { const b = e.target.closest('[data-sub]'); if(!b) return; nav.sub = b.dataset.sub; $('#pBody').scrollTop = 0; renderJakt(); renderNav(); if(!isDesktop() && nav.sub === 'chat') setSheet('full'); else if(!isDesktop() && (sheet === 'peek' || sheet === 'min')) setSheet('half'); });
 $('#pBack').addEventListener('click', navBack);
 /* Sidomenyn */
 function drawerOpen(open){
@@ -2823,7 +2835,9 @@ let viltDay = null;
 /* ---------- Jaktkartan som app på Android (Capacitor) ----------
    Appen är ett tunt skal som öppnar samma sida som webben. Skalet lägger in window.Capacitor, med anrop till
    telefonens egna funktioner (insticksprogram):
-   - BackgroundGeolocation: positionen även med släckt skärm, via en tjänst i förgrunden med en fast avisering.
+   - JaktGps (appens eget, android/.../JaktGpsPlugin.java): positionen även med släckt skärm, via en tjänst i förgrunden
+     med en fast avisering. Mäter var 10:e sekund när man rör sig och varje minut när man är incheckad på passet.
+     Appar byggda före JaktGps använder BackgroundGeolocation, som mäter varje sekund.
    - CapacitorHttp: positionen skickas med telefonens egen HTTP till Firebase REST. Webbvyn får sämre nät i bakgrunden
      (Android stryper dess anrop efter några minuter), och Firebase tar då inte bort positionen när anslutningen bryts.
    - FirebaseAuthentication: inloggning med Google i telefonens eget system. Google tillåter inte inloggning i webbvyer.
@@ -2875,31 +2889,58 @@ function natNotify(key, title, body, channelId){
   NAT.call('LocalNotifications', 'schedule', {notifications:[{id:natId(key), title, body, channelId:channelId || 'sos'}]}).catch(() => {});
 }
 
-/* ---------- Position i bakgrunden ---------- */
-/* Telefonen ger en position i sekunden, även när man står still (distanceFilter 0). Står man på passet skulle man
-   annars inte skicka något, och försvinna från kartan efter 30 minuter. gpsPos glesar ut sändningen som på webben
-   (var 8:e sekund, i sparläget varje minut). GPS:en är ändå på hela tiden, så batteriet påverkas inte av det. */
+/* ---------- Position i bakgrunden ----------
+   JaktGps mäter med ett intervall som sidan väljer (natGpsWant), och GPS:en vilar mellan mätningarna:
+   var 10:e sekund när man rör sig, varje minut när man är incheckad på passet, var 30:e sekund i sparläget.
+   Under ett eget nödlarm alltid var 10:e sekund. Intervallet byts med setInterval när läget ändras (natGpsMode).
+   Äldre appar har bara BackgroundGeolocation: en position i sekunden, även när man står still (distanceFilter 0),
+   och gpsPos glesar ut sändningen. */
+const NAT_GPS_MS = 10000, NAT_GPS_PASS_MS = 60000, NAT_GPS_SAVE_MS = 30000;
+function natGpsWant(){
+  if(typeof mySos === 'function' && mySos()) return NAT_GPS_MS;
+  if(typeof checkedIn === 'function' && checkedIn()) return NAT_GPS_PASS_MS;
+  return typeof powerOn === 'function' && powerOn() ? NAT_GPS_SAVE_MS : NAT_GPS_MS;
+}
+function natGpsMode(){
+  if(!NAT.gps || NAT.watch == null) return;
+  const ms = natGpsWant(); if(ms === NAT.gpsMs) return;
+  NAT.gpsMs = ms; NAT.call('JaktGps', 'setInterval', {interval:ms}).catch(() => {});
+}
 function natGpsStart(){
   natGpsStop();
   if(NAT.notif !== 'granted') natNotifPerm(true);
-  const opts = {backgroundTitle:'Jaktkartan delar din position', backgroundMessage:'Under jakten. Stoppa delningen i appen.', requestPermissions:true, stale:false, distanceFilter:0};
-  NAT.watch = NAT.listen('BackgroundGeolocation', 'addWatcher', opts, (loc, err) => {
+  NAT.gps = NAT.has('JaktGps'); NAT.gpsRetry = false;
+  const plugin = NAT.gps ? 'JaktGps' : 'BackgroundGeolocation';
+  const onLoc = (loc, err) => {
     if(err){
       if(err.code === 'NOT_AUTHORIZED'){
         gpsErr({code:1});
-        NAT.call('BackgroundGeolocation', 'openSettings').catch(() => {});
-      } else gpsErr({code:2});
+        NAT.call(plugin, 'openSettings').catch(() => {});
+      } else if(err.code === 'BACKGROUND'){ NAT.watch = null; NAT.gpsRetry = true; }   // startas igen när appen syns
+      else gpsErr({code:2});
       return;
     }
     if(loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number')
       gpsPos({coords:{latitude:loc.latitude, longitude:loc.longitude, accuracy:loc.accuracy || 0}});
-  });
+  };
+  if(NAT.gps){
+    NAT.gpsMs = natGpsWant();
+    NAT.watch = NAT.listen('JaktGps', 'start', {interval:NAT.gpsMs, title:'Jaktkartan delar din position', text:'Under jakten. Stoppa delningen i appen.'}, onLoc);
+    return;
+  }
+  const opts = {backgroundTitle:'Jaktkartan delar din position', backgroundMessage:'Under jakten. Stoppa delningen i appen.', requestPermissions:true, stale:false, distanceFilter:0};
+  NAT.watch = NAT.listen('BackgroundGeolocation', 'addWatcher', opts, onLoc);
 }
 function natGpsStop(){
+  NAT.gpsRetry = false;
   if(NAT.watch == null) return;
-  NAT.call('BackgroundGeolocation', 'removeWatcher', {id:NAT.watch}).catch(() => {});
-  NAT.watch = null;
+  if(NAT.gps) NAT.call('JaktGps', 'stop', {id:NAT.watch}).catch(() => {});
+  else NAT.call('BackgroundGeolocation', 'removeWatcher', {id:NAT.watch}).catch(() => {});
+  NAT.watch = null; NAT.gpsMs = 0;
 }
+/* Delningen startade medan appen låg i bakgrunden (till exempel när jakten började): Android tillåter inte att
+   positionen startas då. Den startas när appen syns igen. */
+document.addEventListener('visibilitychange', () => { if(!document.hidden && NAT.gpsRetry && cloud.sharing) natGpsStart(); });
 
 /* ---------- Sändning till Firebase REST med telefonens egen HTTP ----------
    ID-token gäller en timme. När sidan syns hämtas den från Firebase-biblioteket. När skärmen är släckt förnyas den
@@ -3191,7 +3232,7 @@ function subGroup(gid, kind){
   on('meta', v => { g.meta = v; if(!v){ forgetGroup(gid); toast('Du har inte längre åtkomst till ett jaktlag eller en jakt.'); return; } scheduleRender(); });
   on('types', v => { g.types = v || {}; applyRemote(gid); });
   on('msgKeys', v => { g.msgKeys = v || {}; msgPublish(g); scheduleRender(); });
-  if(kind === 'member') on('sos', v => { const prev = g.sosLoaded ? g.sos : undefined; g.sos = v || {}; g.sosLoaded = true; sosOnData(g, prev); });
+  if(kind === 'member') on('sos', v => { const prev = g.sosLoaded ? g.sos : undefined; g.sos = v || {}; g.sosLoaded = true; sosOnData(g, prev); natGpsMode(); });
   if(kind === 'member'){
     on('members', v => { g.members = v || {}; msgPublish(g); scheduleRender(); if(canLeadGroup(g) && !g.gearRef) g.gearRef = on('gear', (gv, err) => { if(err){ g.gearRef = null; return; } g.gear = gv || {}; scheduleRender(); });
       if(isAdminGroup(g) && !g.reqRef){
@@ -3212,7 +3253,7 @@ function subGroup(gid, kind){
       if(!v) return;
       msgPublish(g);
       if(g.huntRef) return;
-      on('sos', sv => { const prev = g.sosLoaded ? g.sos : undefined; g.sos = sv || {}; g.sosLoaded = true; sosOnData(g, prev); });
+      on('sos', sv => { const prev = g.sosLoaded ? g.sos : undefined; g.sos = sv || {}; g.sosLoaded = true; sosOnData(g, prev); natGpsMode(); });
       on('huntPlan/' + v.hid, pv => { const prev = g.planLoaded ? g.huntPlan : undefined; g.huntPlan = pv ? {[v.hid]: pv} : {}; g.planLoaded = true; planOnData(g, prev); scheduleRender(); });
       // Nekas en läsning (t.ex. om den hinner före gästposten i databasen) försöker vi igen efter en stund,
       // annars skulle gästen sakna jaktens områden och nålar tills sidan laddas om.
@@ -3356,7 +3397,7 @@ function syncHuntPos(){
       }
       if(!g.checkRefs[hid]){
         const cr = fb.db.ref(`groups/${g.id}/huntCheck/${hid}`);
-        cr.on('value', s => { if(g.checkRefs[hid] === cr){ const prev = g.huntCheck[hid]; g.huntCheck[hid] = s.val() || {}; checkNotify(g, hid, prev); scheduleRender(); } }, () => { if(g.checkRefs[hid] === cr){ delete g.checkRefs[hid]; delete g.huntCheck[hid]; } });
+        cr.on('value', s => { if(g.checkRefs[hid] === cr){ const prev = g.huntCheck[hid]; g.huntCheck[hid] = s.val() || {}; checkNotify(g, hid, prev); natGpsMode(); scheduleRender(); } }, () => { if(g.checkRefs[hid] === cr){ delete g.checkRefs[hid]; delete g.huntCheck[hid]; } });
         g.checkRefs[hid] = cr;
       }
       if(!g.msgRefs[hid] && msgCryptoOk()){
@@ -3639,19 +3680,21 @@ function startSharing(){
   renderJakt();
 }
 /* GPS: i vanligt läge följs positionen hela tiden. I sparläget görs en mätning var 30:e sekund (fortfarande med hög
-   noggrannhet, så att utcheckningen från passet blir rätt). Positionen skickas var 8:e sekund, i sparläget var 60:e
-   sekund eller direkt om man har rört sig mer än 15 m. */
-const GPS_SAVE_MS = 30000, SEND_MS = 8000, SEND_SAVE_MS = 60000, SEND_MOVE_M = 15, SEND_BG_MS = 20000, SEND_BG_MOVE_M = 20;
-/* I appen med släckt skärm skickas positionen var 20:e sekund, eller direkt när man rört sig 20 m (men högst var 8:e sekund).
-   Ingen tittar då på kartan, och varje sändning väcker telefonens radio. */
+   noggrannhet, så att utcheckningen från passet blir rätt). Positionen skickas var 8:e sekund. Incheckad på passet och
+   i sparläget skickas den varje minut, eller direkt om man har rört sig mer än 40 m (mindre än så är oftast GPS:en
+   som hoppar). I appen mäter telefonen själv var 10:e sekund, och varje mätning skickas (se natGpsWant). */
+const GPS_SAVE_MS = 30000, SEND_MS = 8000, SEND_SAVE_MS = 60000, SEND_MOVE_M = 40, SEND_BG_MS = 20000;
+/* Äldre appar (BackgroundGeolocation, en mätning i sekunden): med släckt skärm skickas positionen var 20:e sekund,
+   eller direkt när man rört sig 40 m (men högst var 8:e sekund). */
 function gpsPos(pos){
   const la = pos.coords.latitude, lo = pos.coords.longitude, ac = pos.coords.accuracy || 0;
   // Med släckt skärm i appen: bara det som behövs (spår, incheckning på passet, nödlarmets position), inte kartan
   if(!document.hidden || !NAT.on) showMe(la, lo, ac);
   else { myPos = {lat:la, lng:lo, acc:ac}; renderDirty = true; trailAdd(la, lo, ac); if(typeof checkPass === 'function') checkPass(); if(typeof sosTrack === 'function') sosTrack(); }
-  const save = powerOn(), bg = NAT.on && document.hidden, moved = cloud.sentAt && myPos ? distM(cloud.sentAt, myPos) : Infinity;
-  const every = save ? SEND_SAVE_MS : bg ? SEND_BG_MS : SEND_MS, moveM = save ? SEND_MOVE_M : SEND_BG_MOVE_M;
-  if(Date.now() - cloud.lastSent < every && !((save || bg) && moved > moveM && Date.now() - cloud.lastSent >= SEND_MS)) return;
+  natGpsMode();
+  const save = powerOn() || (typeof checkedIn === 'function' && checkedIn()), bg = NAT.on && document.hidden && !NAT.gps;
+  const moved = cloud.sentAt && myPos ? distM(cloud.sentAt, myPos) : Infinity, every = save ? SEND_SAVE_MS : bg ? SEND_BG_MS : SEND_MS;
+  if(Date.now() - cloud.lastSent < every && !((save || bg) && moved > SEND_MOVE_M && Date.now() - cloud.lastSent >= SEND_MS)) return;
   cloud.lastSent = Date.now(); cloud.sentAt = myPos ? {lat:myPos.lat, lng:myPos.lng} : null; sendPos();
 }
 /* Bara nekad platsåtkomst stänger av delningen. Tillfälliga fel (ingen GPS-signal, för långsamt svar) är vanliga i skogen:
@@ -3675,7 +3718,7 @@ function gpsStart(save){
 }
 /* Byt GPS-läge när sparläget slås på eller av (bara medan positionen delas). */
 function gpsSync(){
-  if(NAT.on){ cloud.gpsSave = powerOn(); return; }   // appen: samma GPS i båda lägena, bara sändningen glesas ut (gpsPos)
+  if(NAT.on){ cloud.gpsSave = powerOn(); natGpsMode(); return; }   // appen: intervallet väljs av natGpsWant
   if(cloud.sharing && cloud.gpsSave !== powerOn()) gpsStart(powerOn());
 }
 function stopSharing(silent){
@@ -3932,7 +3975,7 @@ function teamTabs(g){
 function chatHtml(g){
   const live = liveHunts(g);
   if(!live.length) return '<div class="empty">Chatten finns medan en jakt pågår.</div>';
-  return live.map(hid => `${live.length > 1 ? `<h3 class="sec">${esc(((g.hunts || {})[hid] || {}).name || 'Jakt')}</h3>` : ''}${msgHtml(g, hid)}`).join('');
+  return `<div class="chat">${live.map(hid => `${live.length > 1 ? `<h3 class="sec">${esc(((g.hunts || {})[hid] || {}).name || 'Jakt')}</h3>` : ''}${msgHtml(g, hid, true)}${chatBarHtml(g, hid)}`).join('')}</div>`;
 }
 /* Jaktlagen i den ordning användaren har valt (state.settings.teamOrder, sparas bara på enheten). Nya lag hamnar sist. */
 function teamGroups(){
@@ -3975,7 +4018,12 @@ function renderJakt(){
       <div class="btnrow">${canCreate() ? '<button class="btn sm" type="button" data-j="group-new">Skapa jaktlag</button>' : ''}<button class="btn sm" type="button" data-j="join">Gå med med kod</button></div>
       ${u.isAnonymous ? '<p class="note">Som gäst kan du gå med i jakter. Logga in med Google för att bli medlem i ett jaktlag.</p>' : canCreate() ? '' : '<p class="note">Bara ägaren av den här Jaktkartan kan skapa jaktlag. Du går med i ett lag eller en jakt med en kod.</p>'}`;
   }
+  const body = $('#pBody'), chatNow = nav.tab === 'jakt' && nav.sub === 'chat' && !!nav.team;
+  // Chatten: längst ned när den öppnas, efter att man skickat, och när något nytt kommer om man redan var längst ned
+  if(chatNow) chatStick = chatStick === 'send' || !pane.querySelector('.chat') || !body || body.scrollHeight - body.scrollTop - body.clientHeight <= 80;
   pane.innerHTML = html;
+  if(chatNow) pane.querySelectorAll('.chat-bar textarea').forEach(t => { if(t.value) chatGrow(t); });
+  if(chatNow && chatStick && body) body.scrollTop = body.scrollHeight;
   if(st === 'in' && nav.team && cloud.groups[nav.team] && chatOpen(cloud.groups[nav.team])) msgMarkRead(cloud.groups[nav.team]);
   msgBell();
   renderDrawerTeams(); if(typeof renderNav === 'function') renderNav();
@@ -4246,6 +4294,7 @@ function jaktClick(e){
   else if(act === 'msg-new') openMsgForm(g, hid);
   else if(act === 'msg-reply') openMsgForm(g, hid, u, b.dataset.m);
   else if(act === 'msg-goto') msgGoto(b.dataset.m);
+  else if(act === 'chat-send') chatSend(g, hid, b);
   else if(act === 'rsvp') rsvpSet(g, hid, true);
   else if(act === 'rsvp-no') rsvpSet(g, hid, false);
   else if(act === 'cal-go') calGo(g.id, hid);
@@ -5689,6 +5738,8 @@ function myStands(){
   }
   return out;
 }
+/* Incheckad på ett pass i en pågående jakt: positionen mäts och skickas då glesare (natGpsWant, gpsPos). */
+const checkedIn = () => planHunts().some(({g, hid, hunt}) => huntLive(hunt) && !!(checkOf(g, hid) || {}).in);
 function checkSet(g, hid, pid, inside, manual){
   setTimeout(() => { if(typeof powerUpdate === 'function') powerUpdate(); }, 1500);
   const p = pinById(pid), key = g.id + '/' + hid;
@@ -6372,10 +6423,10 @@ function msgMine(g, hid){
   return Object.entries((g.huntMsg || {})[hid] || {}).filter(([, m]) => m && (m.from === me || m.all || (m.to && m.to[me]))).sort((a, b) => a[1].t - b[1].t);
 }
 const msgToText = (g, hid, m) => m.all ? 'alla' : Object.keys(m.to || {}).map(u => u === myUid() ? 'dig' : ((msgPeople(g, hid).find(p => p.uid === u) || {}).name || 'deltagare')).join(', ');
-function msgHtml(g, hid){
+function msgHtml(g, hid, chat){
   if(!msgCryptoOk()) return `<div class="lbl">Meddelanden</div><p class="note" style="margin-top:0">Den här webbläsaren kan inte kryptera meddelanden.</p>`;
-  const list = msgMine(g, hid).slice(-30);
-  let h = `<div class="lbl">Meddelanden</div>`;
+  const list = msgMine(g, hid).slice(chat ? -100 : -30);
+  let h = chat ? '' : `<div class="lbl">Meddelanden</div>`;
   if(!list.length) h += '<p class="note" style="margin-top:0">Inga meddelanden ännu. De är krypterade: bara mottagarna kan läsa dem.</p>';
   else h += `<div class="msg-list">${list.map(([mid, m]) => {
     const p = msgPlain[mid], mine = m.from === myUid();
@@ -6383,9 +6434,37 @@ function msgHtml(g, hid){
     return `<div class="msg${mine ? ' me' : ''}${msgFlash.mid === mid && Date.now() < msgFlash.until ? ' flash' : ''}" id="msg-${esc(mid)}"><div class="msg-h"><b>${esc(mine ? 'Du' : m.name || 'Deltagare')}</b> till ${esc(msgToText(g, hid, m))} <span class="muted">· ${esc(fmtClock(m.t))}</span></div>
       ${m.re ? msgQuote(g, hid, m.re) : ''}<div class="msg-t">${p ? (p.text != null ? esc(p.text) : `<span class="muted">${esc(p.err)}</span>`) : '<span class="muted">Låser upp …</span>'}</div>
       ${!mine ? `<button class="linkbtn" type="button" data-j="msg-reply" data-g="${esc(g.id)}" data-h="${esc(hid)}" data-u="${esc(m.from)}" data-m="${esc(mid)}">Svara</button>` : ''}</div>`; }).join('')}</div>`;
+  if(chat) return h;
   h += `<div class="btnrow" style="margin-top:6px"><button class="btn sm primary" type="button" data-j="msg-new" data-g="${esc(g.id)}" data-h="${esc(hid)}">Nytt meddelande</button></div>`;
   return h;
 }
+/* Skrivfältet längst ned i chatten: Skicka går till alla i jakten. Knappen bredvid väljer mottagare. */
+function chatBarHtml(g, hid){
+  if(!msgCryptoOk()) return '';
+  const id = `chatText-${g.id}-${hid}`;
+  return `<div class="chat-bar"><textarea class="input" id="${esc(id)}" rows="1" maxlength="${MSG_MAX}" placeholder="Skriv till alla i jakten" aria-label="Meddelande till alla i jakten">${esc(chatDraft[id] || '')}</textarea>
+    <button class="btn sm primary" type="button" data-j="chat-send" data-g="${esc(g.id)}" data-h="${esc(hid)}">Skicka</button>
+    <button class="iconbtn" type="button" data-j="msg-new" data-g="${esc(g.id)}" data-h="${esc(hid)}" title="Välj mottagare" aria-label="Skriv till valda mottagare"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19.5c.6-3.3 3-5.2 6-5.2s5.4 1.9 6 5.2"/><circle cx="17" cy="9" r="2.4"/><path d="M16.5 14.2c2.3.2 4 1.8 4.5 4.3"/></svg></button></div>`;
+}
+async function chatSend(g, hid, b){
+  const ta = document.getElementById(`chatText-${g.id}-${hid}`), text = ta ? ta.value.trim().slice(0, MSG_MAX) : '';
+  if(!text){ toast('Skriv ett meddelande.'); if(ta) ta.focus(); return; }
+  b.disabled = true;
+  try {
+    const r = await msgSend(g, hid, text, msgPeople(g, hid), true);
+    const id = `chatText-${g.id}-${hid}`, t2 = document.getElementById(id); if(t2) t2.value = ''; delete chatDraft[id];
+    chatStick = 'send'; scheduleRender();
+    if(r === 'queued') toast('Ingen täckning: meddelandet skickas när täckningen kommer tillbaka. Håll appen öppen.', 6000);
+  } catch(e){ toast('Kunde inte skicka meddelandet. Kontrollera nätverket.', 5000); }
+  finally { b.disabled = false; }
+}
+/* Chatten rullar till det senaste meddelandet när den öppnas, och när något nytt kommer om man redan är längst ned. */
+let chatStick = true;
+// Det man håller på att skriva finns kvar när chatten ritas om (till exempel när ett nytt meddelande kommer)
+const chatDraft = {};
+/* Skrivfältet växer med texten, upp till några rader */
+function chatGrow(ta){ ta.style.height = ''; if(ta.scrollHeight > ta.clientHeight) ta.style.height = Math.min(ta.scrollHeight + 2, 120) + 'px'; }
+document.addEventListener('input', e => { if(e.target.id && e.target.id.startsWith('chatText-')){ chatDraft[e.target.id] = e.target.value; chatGrow(e.target); } });
 /* Olästa meddelanden: de som kommit till mig och inte visats i Chatt-fliken. Vilka som är lästa sparas på enheten. */
 let msgRead = null;
 function msgReadMap(){
@@ -6420,7 +6499,7 @@ function msgBell(){
 function msgBellOpen(){
   const gs = Object.values(cloud.groups).filter(g => liveHunts(g).length);
   const g = gs.find(x => msgUnread(x)) || gs[0]; if(!g) return;
-  openTeam(g.id, 'chat'); if(!isDesktop()) setSheet('half');
+  openTeam(g.id, 'chat'); if(!isDesktop()) setSheet('full');
 }
 /* Avisering i telefonen när appen ligger i bakgrunden: i appen via telefonens egna aviseringar, på webben via
    service workern (om aviseringar är tillåtna). */
@@ -7139,7 +7218,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {NAT, natTok, natId, joinByCode, renderPositions, follow, posFocus, pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {NAT, natTok, natId, natGpsStart, checkedIn, joinByCode, renderPositions, follow, posFocus, pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

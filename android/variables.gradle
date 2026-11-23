@@ -16,4 +16,6 @@ ext {
     // Inloggning med Google i telefonens eget system (@capacitor-firebase/authentication)
     rgcfaIncludeGoogle = true
     androidxCredentialsVersion = '1.3.0'
+    // Positionen under jakten (appens JaktGpsService och @capacitor-community/background-geolocation)
+    playServicesLocationVersion = '21.0.1'
 }

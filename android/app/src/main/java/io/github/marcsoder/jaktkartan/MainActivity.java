@@ -7,8 +7,9 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        // Appens egna insticksprogram (uppdatering från GitHub Releases) registreras före Capacitor startar
+        // Appens egna insticksprogram (uppdatering från GitHub Releases, positionen under jakten) registreras före Capacitor startar
         registerPlugin(AppUpdatePlugin.class);
+        registerPlugin(JaktGpsPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

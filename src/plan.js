@@ -185,6 +185,8 @@ function myStands(){
   }
   return out;
 }
+/* Incheckad på ett pass i en pågående jakt: positionen mäts och skickas då glesare (natGpsWant, gpsPos). */
+const checkedIn = () => planHunts().some(({g, hid, hunt}) => huntLive(hunt) && !!(checkOf(g, hid) || {}).in);
 function checkSet(g, hid, pid, inside, manual){
   setTimeout(() => { if(typeof powerUpdate === 'function') powerUpdate(); }, 1500);
   const p = pinById(pid), key = g.id + '/' + hid;

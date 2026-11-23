@@ -1,7 +1,9 @@
 /* ---------- Jaktkartan som app på Android (Capacitor) ----------
    Appen är ett tunt skal som öppnar samma sida som webben. Skalet lägger in window.Capacitor, med anrop till
    telefonens egna funktioner (insticksprogram):
-   - BackgroundGeolocation: positionen även med släckt skärm, via en tjänst i förgrunden med en fast avisering.
+   - JaktGps (appens eget, android/.../JaktGpsPlugin.java): positionen även med släckt skärm, via en tjänst i förgrunden
+     med en fast avisering. Mäter var 10:e sekund när man rör sig och varje minut när man är incheckad på passet.
+     Appar byggda före JaktGps använder BackgroundGeolocation, som mäter varje sekund.
    - CapacitorHttp: positionen skickas med telefonens egen HTTP till Firebase REST. Webbvyn får sämre nät i bakgrunden
      (Android stryper dess anrop efter några minuter), och Firebase tar då inte bort positionen när anslutningen bryts.
    - FirebaseAuthentication: inloggning med Google i telefonens eget system. Google tillåter inte inloggning i webbvyer.
@@ -53,31 +55,58 @@ function natNotify(key, title, body, channelId){
   NAT.call('LocalNotifications', 'schedule', {notifications:[{id:natId(key), title, body, channelId:channelId || 'sos'}]}).catch(() => {});
 }
 
-/* ---------- Position i bakgrunden ---------- */
-/* Telefonen ger en position i sekunden, även när man står still (distanceFilter 0). Står man på passet skulle man
-   annars inte skicka något, och försvinna från kartan efter 30 minuter. gpsPos glesar ut sändningen som på webben
-   (var 8:e sekund, i sparläget varje minut). GPS:en är ändå på hela tiden, så batteriet påverkas inte av det. */
+/* ---------- Position i bakgrunden ----------
+   JaktGps mäter med ett intervall som sidan väljer (natGpsWant), och GPS:en vilar mellan mätningarna:
+   var 10:e sekund när man rör sig, varje minut när man är incheckad på passet, var 30:e sekund i sparläget.
+   Under ett eget nödlarm alltid var 10:e sekund. Intervallet byts med setInterval när läget ändras (natGpsMode).
+   Äldre appar har bara BackgroundGeolocation: en position i sekunden, även när man står still (distanceFilter 0),
+   och gpsPos glesar ut sändningen. */
+const NAT_GPS_MS = 10000, NAT_GPS_PASS_MS = 60000, NAT_GPS_SAVE_MS = 30000;
+function natGpsWant(){
+  if(typeof mySos === 'function' && mySos()) return NAT_GPS_MS;
+  if(typeof checkedIn === 'function' && checkedIn()) return NAT_GPS_PASS_MS;
+  return typeof powerOn === 'function' && powerOn() ? NAT_GPS_SAVE_MS : NAT_GPS_MS;
+}
+function natGpsMode(){
+  if(!NAT.gps || NAT.watch == null) return;
+  const ms = natGpsWant(); if(ms === NAT.gpsMs) return;
+  NAT.gpsMs = ms; NAT.call('JaktGps', 'setInterval', {interval:ms}).catch(() => {});
+}
 function natGpsStart(){
   natGpsStop();
   if(NAT.notif !== 'granted') natNotifPerm(true);
-  const opts = {backgroundTitle:'Jaktkartan delar din position', backgroundMessage:'Under jakten. Stoppa delningen i appen.', requestPermissions:true, stale:false, distanceFilter:0};
-  NAT.watch = NAT.listen('BackgroundGeolocation', 'addWatcher', opts, (loc, err) => {
+  NAT.gps = NAT.has('JaktGps'); NAT.gpsRetry = false;
+  const plugin = NAT.gps ? 'JaktGps' : 'BackgroundGeolocation';
+  const onLoc = (loc, err) => {
     if(err){
       if(err.code === 'NOT_AUTHORIZED'){
         gpsErr({code:1});
-        NAT.call('BackgroundGeolocation', 'openSettings').catch(() => {});
-      } else gpsErr({code:2});
+        NAT.call(plugin, 'openSettings').catch(() => {});
+      } else if(err.code === 'BACKGROUND'){ NAT.watch = null; NAT.gpsRetry = true; }   // startas igen när appen syns
+      else gpsErr({code:2});
       return;
     }
     if(loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number')
       gpsPos({coords:{latitude:loc.latitude, longitude:loc.longitude, accuracy:loc.accuracy || 0}});
-  });
+  };
+  if(NAT.gps){
+    NAT.gpsMs = natGpsWant();
+    NAT.watch = NAT.listen('JaktGps', 'start', {interval:NAT.gpsMs, title:'Jaktkartan delar din position', text:'Under jakten. Stoppa delningen i appen.'}, onLoc);
+    return;
+  }
+  const opts = {backgroundTitle:'Jaktkartan delar din position', backgroundMessage:'Under jakten. Stoppa delningen i appen.', requestPermissions:true, stale:false, distanceFilter:0};
+  NAT.watch = NAT.listen('BackgroundGeolocation', 'addWatcher', opts, onLoc);
 }
 function natGpsStop(){
+  NAT.gpsRetry = false;
   if(NAT.watch == null) return;
-  NAT.call('BackgroundGeolocation', 'removeWatcher', {id:NAT.watch}).catch(() => {});
-  NAT.watch = null;
+  if(NAT.gps) NAT.call('JaktGps', 'stop', {id:NAT.watch}).catch(() => {});
+  else NAT.call('BackgroundGeolocation', 'removeWatcher', {id:NAT.watch}).catch(() => {});
+  NAT.watch = null; NAT.gpsMs = 0;
 }
+/* Delningen startade medan appen låg i bakgrunden (till exempel när jakten började): Android tillåter inte att
+   positionen startas då. Den startas när appen syns igen. */
+document.addEventListener('visibilitychange', () => { if(!document.hidden && NAT.gpsRetry && cloud.sharing) natGpsStart(); });
 
 /* ---------- Sändning till Firebase REST med telefonens egen HTTP ----------
    ID-token gäller en timme. När sidan syns hämtas den från Firebase-biblioteket. När skärmen är släckt förnyas den
