@@ -99,6 +99,8 @@ with sync_playwright() as p:
 
     # Ny typ med egen text-symbol
     pg.click('[data-act="type-new"]'); pg.wait_for_timeout(150)
+    icons = pg.eval_on_selector_all('#tfIcons .icon-opt', 'els => els.map(e => e.dataset.i)')
+    check(all(k in icons for k in ('bridge', 'cube', 'gate', 'passfan', 'stool', 'hunter', 'cartridge', 'crosshair')), f'symbolerna bro, saltsten, grind och fyra pass-symboler finns att välja ({len(icons)} symboler)')
     pg.fill('#tfName', 'Saltsten'); pg.click('.color-opt[data-c="#0f766e"]'); pg.click('.icon-opt[data-i="text"]'); pg.fill('#tfText', 'S')
     pg.screenshot(path=f'{SHOTS}/d2_typeform.png')
     pg.click('#tfForm button[type=submit]'); pg.wait_for_timeout(150)
