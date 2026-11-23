@@ -20,16 +20,33 @@ const huntLive = `(${hunt}.child('expires').val() > now && (!${hunt}.child('star
 // Nycklar som deltagare själva väljer: bara bokstäver, siffror, - och _. Då kan en nyckel aldrig bära med sig kod in i sidan.
 const KEY = v => `(${v}.matches(/^[A-Za-z0-9_-]+$/) && ${v}.length <= 64)`;
 const hcode = `root.child('huntCodes/'+newData.child('code').val())`;
+// Databasen som den blir efter skrivningen, sett från groups/$gid/<nod>/$uid (fyra nivåer upp). Används när flera ställen
+// skrivs i samma uppdatering: en engångskod måste markeras som använd (invites/<kod>/usedBy) i samma skrivning som man går med.
+const newRoot = 'newData.parent().parent().parent().parent()';
+const inviteOk = role => `${invite}.child('gid').val() === $gid && ${invite}.child('expires').val() > now && ${role} === ${invite}.child('role').val()` +
+  ` && (${invite}.child('once').val() !== true || (!${invite}.child('usedBy').exists() && ${newRoot}.child('invites/'+newData.child('code').val()+'/usedBy').val() === auth.uid))`;
 
 const rules = { rules: {
   '.read': false, '.write': false,
   owner: { '.read': signed, '.write': `${signed} && !data.exists() && newData.val() === auth.uid && auth.token.firebase.sign_in_provider !== 'anonymous'` },
   creators: { '$uid': { '.read': `${signed} && (auth.uid === $uid || root.child('owner').val() === auth.uid)`, '.write': `${signed} && root.child('owner').val() === auth.uid`, '.validate': 'newData.isBoolean()' } },
   userGroups: { '$uid': { '.read': `${signed} && auth.uid === $uid`, '.write': `${signed} && auth.uid === $uid` } },
+  // Inbjudningar till ett jaktlag. Admin skapar och återkallar. once: engångskod, approve: admin godkänner den som går med.
   invites: { '$code': {
     '.read': signed,
     '.write': `${signed} && ((!data.exists() && ${adminOf("newData.child('gid').val()")}) || (data.exists() && !newData.exists() && ${adminOf("data.child('gid').val()")}))`,
-    '.validate': `$code.length >= 8 && newData.hasChildren(['gid','role','expires']) && newData.child('expires').isNumber() && (newData.child('role').val() === 'leader' || newData.child('role').val() === 'editor' || newData.child('role').val() === 'viewer')`
+    '.validate': `$code.length >= 8 && newData.hasChildren(['gid','role','expires']) && newData.child('expires').isNumber() && (newData.child('role').val() === 'leader' || newData.child('role').val() === 'editor' || newData.child('role').val() === 'viewer')`,
+    gid: {'.validate': 'newData.isString()'}, role: {'.validate': true}, expires: {'.validate': true}, by: {'.validate': 'newData.isString()'},
+    once: {'.validate': 'newData.isBoolean()'}, approve: {'.validate': 'newData.isBoolean()'},
+    team: {'.validate': 'newData.isString() && newData.val().length <= 80'},
+    // En engångskod markeras som använd av den som går med, i samma skrivning som medlemskapet eller förfrågan.
+    usedBy: {
+      '.write': `${signed} && !data.exists() && newData.val() === auth.uid && data.parent().child('once').val() === true && data.parent().child('expires').val() > now` +
+        ` && (newData.parent().parent().parent().child('groups/'+data.parent().child('gid').val()+'/members/'+auth.uid+'/code').val() === $code` +
+        ` || newData.parent().parent().parent().child('groups/'+data.parent().child('gid').val()+'/requests/'+auth.uid+'/code').val() === $code)`,
+      '.validate': 'newData.isString()'
+    },
+    '$other': {'.validate': false}
   } },
   huntCodes: { '$code': {
     '.read': signed,
@@ -50,11 +67,38 @@ const rules = { rules: {
         '.write': `${signed} && (` +
           `(${isAdmin} && ($uid !== ${owner} || newData.child('role').val() === 'admin'))` +
           ` || ($uid === auth.uid && !data.exists() && !${owner.replace(".child('meta/owner').val()", ".child('meta').exists()")} && newData.parent().parent().child('meta/owner').val() === auth.uid && newData.child('role').val() === 'admin')` +
-          ` || ($uid === auth.uid && !data.exists() && newData.exists() && ${invite}.child('gid').val() === $gid && ${invite}.child('expires').val() > now && newData.child('role').val() === ${invite}.child('role').val())` +
+          ` || ($uid === auth.uid && !data.exists() && newData.exists() && ${invite}.child('approve').val() !== true && ${inviteOk("newData.child('role').val()")})` +
           ` || ($uid === auth.uid && data.exists() && $uid !== ${owner} && (!newData.exists() || newData.child('role').val() === data.child('role').val()))` +
           ` || ($uid === auth.uid && data.exists() && $uid === ${owner} && newData.child('role').val() === 'admin')` +
           `)`,
         '.validate': `newData.hasChildren(['role','name']) && newData.child('name').isString() && newData.child('name').val().length <= 60 && (newData.child('role').val() === 'admin' || newData.child('role').val() === 'leader' || newData.child('role').val() === 'editor' || newData.child('role').val() === 'viewer')`
+      }
+    },
+    // Förfrågningar från den som gått med med en kod som kräver godkännande. Admin ser dem och godkänner (skriver
+    // medlemmen) eller nekar (tar bort förfrågan). Den som frågar ser sin egen förfrågan och kan dra tillbaka den.
+    requests: {
+      '.read': isAdmin,
+      '$uid': {
+        '.read': `${signed} && auth.uid === $uid`,
+        '.write': `${signed} && ((${isAdmin} && !newData.exists()) || ($uid === auth.uid && !newData.exists())` +
+          ` || ($uid === auth.uid && !data.exists() && newData.exists() && !${me}.exists() && ${invite}.child('approve').val() === true && ${inviteOk("newData.child('role').val()")}))`,
+        '.validate': `newData.hasChildren(['name','role','code','t']) && newData.child('name').isString() && newData.child('name').val().length <= 60 && (newData.child('role').val() === 'leader' || newData.child('role').val() === 'editor' || newData.child('role').val() === 'viewer') && newData.child('code').isString() && newData.child('t').isNumber()`,
+        name: {'.validate': true}, role: {'.validate': true}, code: {'.validate': true}, t: {'.validate': true},
+        team: {'.validate': 'newData.isString() && newData.val().length <= 80'},
+        '$other': {'.validate': false}
+      }
+    },
+    // Lagets inbjudningar, så att admin kan se och återkalla dem (koderna i invites går inte att lista).
+    inviteList: {
+      '.read': isAdmin,
+      '$code': {
+        '.write': isAdmin,
+        '.validate': `${KEY('$code')} && newData.hasChildren(['role','expires','t']) && newData.child('expires').isNumber() && newData.child('t').isNumber()`,
+        role: {'.validate': "newData.val() === 'leader' || newData.val() === 'editor' || newData.val() === 'viewer'"},
+        expires: {'.validate': true}, t: {'.validate': true},
+        once: {'.validate': 'newData.isBoolean()'}, approve: {'.validate': 'newData.isBoolean()'},
+        to: {'.validate': 'newData.isString() && newData.val().length <= 40'},
+        '$other': {'.validate': false}
       }
     },
     areas: {

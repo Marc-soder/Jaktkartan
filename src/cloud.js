@@ -5,7 +5,7 @@ const RULES_TEXT = /*RULES_JSON*/'';
 const ROLES = {admin:'Admin', leader:'Jaktledare', editor:'Medlem', viewer:'Läsare'};
 const ROLE_HELP = {admin:'Allt, även medlemmar och rättigheter', leader:'Skapa jakter, ändra nålar', editor:'Lägga till och ändra nålar', viewer:'Bara titta'};
 let fb = null;
-const cloud = {autoOff:{}, autoShared:false, cleanAfter:3600000, cleaning:{}, owner:undefined, creator:false, ownRef:null, cfg:null, status:'off', user:null, groups:{}, ugRef:null, sharing:false, watchId:null, lastSent:0, err:'', pending:null};
+const cloud = {autoOff:{}, autoShared:false, cleanAfter:3600000, cleaning:{}, owner:undefined, creator:false, ownRef:null, cfg:null, status:'off', user:null, groups:{}, ugRef:null, sharing:false, watchId:null, lastSent:0, err:'', pending:null, pend:{}};
 const newCode = n => { const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', a = new Uint32Array(n); crypto.getRandomValues(a); return Array.from(a, x => abc[x % 32]).join(''); };
 const canon = o => JSON.stringify(o, (k, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.keys(v).sort().reduce((r, key) => { r[key] = v[key]; return r; }, {}) : v);
 const lsGet = k => { try { return localStorage.getItem(k); } catch(e){ return null; } };
@@ -56,6 +56,7 @@ function scheduleRender(){
 
 function onAuth(user){
   for(const gid of Object.keys(cloud.groups)) dropGroup(gid);
+  for(const gid of Object.keys(cloud.pend)) pendStop(gid);
   if(cloud.ugRef){ cloud.ugRef.off(); cloud.ugRef = null; }
   if(cloud.ownRef){ cloud.ownRef.off(); cloud.ownRef = null; }
   cloud.owner = undefined; cloud.creator = false;
@@ -65,8 +66,9 @@ function onAuth(user){
     cloud.ugRef = fb.db.ref('userGroups/' + user.uid);
     cloud.ugRef.on('value', s => {
       const v = s.val() || {};
-      for(const gid of Object.keys(cloud.groups)) if(!v[gid]) dropGroup(gid);
-      for(const gid of Object.keys(v)) if(!cloud.groups[gid]) subGroup(gid, v[gid] === 'guest' ? 'guest' : 'member');
+      for(const gid of Object.keys(cloud.groups)) if(!v[gid] || v[gid] === 'pending') dropGroup(gid);
+      for(const gid of Object.keys(cloud.pend)) if(v[gid] !== 'pending') pendStop(gid);
+      for(const gid of Object.keys(v)) if(v[gid] === 'pending') pendWatch(gid); else if(!cloud.groups[gid]) subGroup(gid, v[gid] === 'guest' ? 'guest' : 'member');
       scheduleRender();
     }, () => {});
     // Den första som loggar in med Google blir ägare. Bara ägaren (och de ägaren godkänt) kan skapa jaktlag.
@@ -100,7 +102,13 @@ function subGroup(gid, kind){
   on('msgKeys', v => { g.msgKeys = v || {}; msgPublish(g); scheduleRender(); });
   if(kind === 'member') on('sos', v => { const prev = g.sosLoaded ? g.sos : undefined; g.sos = v || {}; g.sosLoaded = true; sosOnData(g, prev); });
   if(kind === 'member'){
-    on('members', v => { g.members = v || {}; msgPublish(g); scheduleRender(); if(canLeadGroup(g) && !g.gearRef) g.gearRef = on('gear', (gv, err) => { if(err){ g.gearRef = null; return; } g.gear = gv || {}; scheduleRender(); }); });
+    on('members', v => { g.members = v || {}; msgPublish(g); scheduleRender(); if(canLeadGroup(g) && !g.gearRef) g.gearRef = on('gear', (gv, err) => { if(err){ g.gearRef = null; return; } g.gear = gv || {}; scheduleRender(); });
+      if(isAdminGroup(g) && !g.reqRef){
+        g.reqRef = on('requests', (rv, err) => { if(err){ g.reqRef = null; return; } const prev = g.requests; g.requests = rv || {};
+          if(prev) for(const [ru, r] of Object.entries(g.requests)) if(!prev[ru] && r) toast(`${r.name || 'Någon'} vill gå med i ${gname(g)}. Godkänn under Medlemmar.`, 7000);
+          scheduleRender(); });
+        g.invRef = on('inviteList', (iv, err) => { if(err){ g.invRef = null; return; } g.inviteList = iv || {}; invitesClean(g); scheduleRender(); });
+      } });
     on('areas', v => { g.areas = v || {}; applyRemote(gid); });
     on('pins', v => { g.pins = v || {}; applyRemote(gid); });
     on('hunts', v => { g.hunts = v || {}; scheduleRender(); syncHuntPos(); });
@@ -545,6 +553,41 @@ function createGroup(name){
   up[`userGroups/${u}/${gid}`] = 'member';
   return fb.db.ref().update(up).then(() => toast(`Jaktlaget ”${name}” skapades`)).catch(fail());
 }
+/* Förfrågan som väntar på godkännande (userGroups = 'pending'). Den som frågat ser sin egen förfrågan. När den
+   försvinner har admin antingen godkänt (då finns medlemskapet) eller nekat. */
+function pendWatch(gid){
+  if(cloud.pend[gid]) return;
+  const u = myUid(), ref = fb.db.ref(`groups/${gid}/requests/${u}`), p = cloud.pend[gid] = {ref, req:null, seen:false};
+  ref.on('value', s => {
+    if(cloud.pend[gid] !== p) return;
+    const v = s.val();
+    if(v){ p.req = v; p.seen = true; scheduleRender(); return; }
+    const team = (p.req && p.req.team) || 'jaktlaget';
+    fb.db.ref(`groups/${gid}/members/${u}`).get().then(ms => ms.exists(), () => false).then(ok => {
+      if(cloud.pend[gid] !== p) return;
+      pendStop(gid);
+      if(ok){ fb.db.ref(`userGroups/${u}/${gid}`).set('member').catch(() => {}); toast(`Du är godkänd och nu med i ${team}.`, 6000); }
+      else { fb.db.ref(`userGroups/${u}/${gid}`).remove().catch(() => {}); if(p.seen) toast(`Din förfrågan till ${team} godkändes inte.`, 6000); }
+      scheduleRender();
+    });
+  }, () => { if(cloud.pend[gid] === p){ pendStop(gid); scheduleRender(); } });
+}
+function pendStop(gid){ const p = cloud.pend[gid]; if(!p) return; try { p.ref.off(); } catch(e){} delete cloud.pend[gid]; }
+function pendCancel(gid){
+  const u = myUid(), up = {}; up[`groups/${gid}/requests/${u}`] = null; up[`userGroups/${u}/${gid}`] = null;
+  fb.db.ref().update(up).then(() => toast('Förfrågan är tillbakadragen.')).catch(fail());
+}
+/* Utgångna inbjudningar tas bort av admin. */
+function invitesClean(g){
+  if(!isAdminGroup(g)) return;
+  const up = {};
+  for(const [c, i] of Object.entries(g.inviteList || {})) if(i && i.expires < Date.now()){ up[`invites/${c}`] = null; up[`groups/${g.id}/inviteList/${c}`] = null; }
+  if(Object.keys(up).length) fb.db.ref().update(up).catch(() => {});
+}
+function inviteRevoke(g, c){
+  const up = {}; up[`invites/${c}`] = null; up[`groups/${g.id}/inviteList/${c}`] = null;
+  return fb.db.ref().update(up);
+}
 async function joinByCode(raw){
   const c = String(raw || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, ''); if(!c) return;
   if(!fb || !cloud.user){ cloud.pending = c; renderJakt(); return; }
@@ -554,9 +597,21 @@ async function joinByCode(raw){
     if(inv){
       if(inv.expires < Date.now()){ toast('Inbjudan har gått ut. Be om en ny.'); return; }
       if(cloud.groups[inv.gid] && cloud.groups[inv.gid].kind === 'member'){ toast('Du är redan med i det jaktlaget.'); return; }
+      if(cloud.pend[inv.gid]){ toast('Du väntar redan på att bli godkänd i det jaktlaget.'); return; }
+      if(inv.once && inv.usedBy){ toast('Koden har redan använts. Den kan bara användas en gång. Be om en ny.', 6000); return; }
       if(cloud.groups[inv.gid]){ await fb.db.ref(`groups/${inv.gid}/guests/${u}`).remove().catch(() => {}); dropGroup(inv.gid); }
-      await fb.db.ref(`groups/${inv.gid}/members/${u}`).set({role:inv.role, name:myName(), code:c, joined:Date.now()});
-      await fb.db.ref(`userGroups/${u}/${inv.gid}`).set('member');
+      // Allt i samma skrivning: medlemskap (eller förfrågan), lagets rad hos användaren och att engångskoden är använd
+      const up = {};
+      if(inv.once) up[`invites/${c}/usedBy`] = u;
+      if(inv.approve){
+        up[`groups/${inv.gid}/requests/${u}`] = Object.assign({name:myName(), role:inv.role, code:c, t:Date.now()}, inv.team ? {team:String(inv.team).slice(0, 80)} : {});
+        up[`userGroups/${u}/${inv.gid}`] = 'pending';
+        await fb.db.ref().update(up);
+        toast(`Förfrågan är skickad${inv.team ? ' till ' + inv.team : ''}. Du får tillgång när en admin har godkänt dig.`, 7000); return;
+      }
+      up[`groups/${inv.gid}/members/${u}`] = {role:inv.role, name:myName(), code:c, joined:Date.now()};
+      up[`userGroups/${u}/${inv.gid}`] = 'member';
+      await fb.db.ref().update(up);
       toast(`Du är nu med som ${ROLES[inv.role].toLowerCase()}.`); return;
     }
     const hc = (await fb.db.ref('huntCodes/' + c).get()).val();
@@ -692,16 +747,20 @@ function renderJakt(){
   if(NAT.on) natReminders();
   const pane = $('#paneJakt'); if(!pane) return;
   const st = cloud.status;
-  if(nav.team && !(cloud.groups[nav.team] && cloud.groups[nav.team].meta)) nav.team = null;
+  // Lagets vy stängs bara om laget är borta. Är det kvar men inte laddat än (meta saknas en kort stund efter att man
+  // gått med) visas "laddas", annars hamnade man på listan över jaktlag om vyn ritades innan namnet kom fram.
+  if(nav.team && !cloud.groups[nav.team]) nav.team = null;
   let html = '';
   if(st !== 'in'){
     html += st === 'loading' ? '<div class="empty">Ansluter …</div>'
       : `<p class="note" style="margin-top:0">Logga in för att se dina jaktlag och jakter, eller gå med som gäst med en jaktkod.</p><div class="btnrow"><button class="btn primary sm" type="button" data-j="go-konto">Logga in under Mitt konto</button></div>`;
   } else if(nav.team){
-    html += teamHtml(cloud.groups[nav.team]);
+    html += cloud.groups[nav.team].meta ? teamHtml(cloud.groups[nav.team]) : '<div class="empty">Jaktlaget laddas …</div>';
   } else {
     const u = cloud.user, gs = teamGroups();
     html += calAgendaHtml();
+    const pend = Object.entries(cloud.pend).filter(([, p]) => p.req);
+    if(pend.length) html += `<h3 class="sec">Väntar på godkännande</h3>` + pend.map(([pg, p]) => `<div class="frow"><span class="fname">${esc(p.req.team || 'Jaktlag')}<br><span class="small muted">Som ${esc((ROLES[p.req.role] || '').toLowerCase())}. En admin i laget godkänner dig.</span></span><button class="btn sm ghost" type="button" data-j="req-cancel" data-g="${esc(pg)}">Dra tillbaka</button></div>`).join('');
     html += `<h3 class="sec">Jaktlag</h3>${gs.length ? `<div class="team-list">${gs.map((g, i) => teamRowHtml(g, i, gs.length)).join('')}</div>${gs.length > 1 ? '<p class="note" style="margin:6px 0 0">Ordningen gäller också i menyn. Den sparas på den här enheten.</p>' : ''}` : '<p class="note" style="margin-top:0">Du är inte med i något jaktlag ännu.</p>'}
       <div class="btnrow">${canCreate() ? '<button class="btn sm" type="button" data-j="group-new">Skapa jaktlag</button>' : ''}<button class="btn sm" type="button" data-j="join">Gå med med kod</button></div>
       ${u.isAnonymous ? '<p class="note">Som gäst kan du gå med i jakter. Logga in med Google för att bli medlem i ett jaktlag.</p>' : canCreate() ? '' : '<p class="note">Bara ägaren av den här Jaktkartan kan skapa jaktlag. Du går med i ett lag eller en jakt med en kod.</p>'}`;
@@ -757,7 +816,18 @@ function teamHtml(g){
       const isOwner = g.meta.owner === mu;
       html += `<div class="frow"><span class="fname">${esc(m.name || 'Medlem')}${mu === u.uid ? ' <span class="muted">(du)</span>' : ''}</span>${adm && !isOwner ? `<select class="input rolesel" data-j="role" data-g="${esc(g.id)}" data-u="${esc(mu)}" aria-label="Rättighet för ${esc(m.name)}">${Object.entries(ROLES).map(([k, l]) => `<option value="${esc(k)}"${m.role === k ? ' selected' : ''}>${l}</option>`).join('')}</select><button class="iconbtn" type="button" data-j="member-del" data-g="${esc(g.id)}" data-u="${esc(mu)}" aria-label="Ta bort ${esc(m.name)}">${ICON_TRASH}</button>` : `<span class="tag">${isOwner ? 'Ägare' : esc(ROLES[m.role] || '')}</span>`}</div>`;
     }
-    if(adm) html += `<p class="note">${Object.entries(ROLES).map(([k, l]) => `<b>${l}</b>: ${ROLE_HELP[k].toLowerCase()}`).join(' · ')}.</p><div class="btnrow"><button class="btn sm" type="button" data-j="invite" data-g="${esc(g.id)}">Bjud in medlem</button></div>`;
+    if(adm){
+      const reqs = Object.entries(g.requests || {}).filter(([, r]) => r).sort((a, b) => (a[1].t || 0) - (b[1].t || 0));
+      if(reqs.length) html += `<div class="lbl">Vill gå med (${reqs.length})</div>` + reqs.map(([ru, r]) => { const inv = (g.inviteList || {})[r.code] || {};
+        return `<div class="frow req-row"><span class="fname">${esc(r.name || 'Okänd')}<br><span class="small muted">${esc(ROLES[r.role] || '')}${inv.to ? ` · kod till ${esc(inv.to)}` : ''}</span></span><button class="btn sm primary" type="button" data-j="req-ok" data-g="${esc(g.id)}" data-u="${esc(ru)}">Godkänn</button><button class="btn sm ghost" type="button" data-j="req-no" data-g="${esc(g.id)}" data-u="${esc(ru)}">Neka</button></div>`; }).join('');
+      const invs = Object.entries(g.inviteList || {}).filter(([, i]) => i && i.expires > Date.now()).sort((a, b) => (b[1].t || 0) - (a[1].t || 0));
+      if(invs.length){
+        const usedBy = c => { const m = Object.values(g.members || {}).find(x => x && x.code === c) || Object.values(g.requests || {}).find(x => x && x.code === c); return m ? m.name || 'någon' : ''; };
+        html += `<div class="lbl">Inbjudningar (${invs.length})</div>` + invs.map(([c, i]) => { const by = usedBy(c);
+          return `<div class="frow inv-row"><span class="fname">${esc(i.to || 'Inbjudan')} <span class="muted">${esc(c)}</span><br><span class="small muted">${esc(ROLES[i.role] || '')}${i.once ? ' · engångskod' : ' · flera kan använda'}${i.approve ? ' · godkänns av admin' : ''} · gäller till ${esc(fmtTime(i.expires))}${by ? ` · använd av ${esc(by)}` : ''}</span></span><button class="btn sm ghost" type="button" data-j="inv-del" data-g="${esc(g.id)}" data-c="${esc(c)}">Återkalla</button></div>`; }).join('');
+      }
+      html += `<p class="note">${Object.entries(ROLES).map(([k, l]) => `<b>${l}</b>: ${ROLE_HELP[k].toLowerCase()}`).join(' · ')}.</p><div class="btnrow"><button class="btn sm" type="button" data-j="invite" data-g="${esc(g.id)}">Bjud in medlem</button></div>`;
+    }
     html += `<div class="btnrow" style="margin-top:8px">${g.meta.owner === u.uid ? `<button class="btn sm danger" type="button" data-j="group-del" data-g="${esc(g.id)}">Ta bort jaktlaget</button>` : `<button class="btn sm" type="button" data-j="group-leave" data-g="${esc(g.id)}">Lämna jaktlaget</button>`}</div>`;
   }
   return html;
@@ -952,7 +1022,18 @@ function jaktClick(e){
   else if(act === 'hunt-link'){ const hunt = g.hunts[hid]; copyText(`${hunt.name}: gå med i jakten med kod ${hunt.code}\n${shareLink('j', hunt.code)}`, 'Länken är kopierad'); }
   else if(act === 'hunt-end') confirmClick(b, 'Bekräfta', () => endHunt(g, hid));
   else if(act === 'guest-del') fb.db.ref(`groups/${g.id}/guests/${u}`).remove().catch(fail());
-  else if(act === 'member-del') confirmClick(b, 'Bekräfta', () => fb.db.ref(`groups/${g.id}/members/${u}`).remove().then(() => toast('Medlemmen är borttagen')).catch(fail()));
+  else if(act === 'member-del') confirmClick(b, 'Bekräfta', () => {
+    // Koden som medlemmen gick med med återkallas också, så att hen inte kan gå med igen med den
+    const code = ((g.members || {})[u] || {}).code, up = {}; up[`groups/${g.id}/members/${u}`] = null;
+    if(code && (g.inviteList || {})[code]){ up[`invites/${code}`] = null; up[`groups/${g.id}/inviteList/${code}`] = null; }
+    fb.db.ref().update(up).then(() => toast(code && (g.inviteList || {})[code] ? 'Medlemmen är borttagen, och koden hen använde är återkallad.' : 'Medlemmen är borttagen')).catch(fail());
+  });
+  else if(act === 'req-ok'){ const r = (g.requests || {})[u]; if(!r) return; const up = {};
+    up[`groups/${g.id}/members/${u}`] = {role:r.role, name:String(r.name || 'Medlem').slice(0, 60), code:r.code, joined:Date.now()}; up[`groups/${g.id}/requests/${u}`] = null;
+    fb.db.ref().update(up).then(() => toast(`${r.name || 'Medlemmen'} är godkänd.`)).catch(fail()); }
+  else if(act === 'req-no') confirmClick(b, 'Bekräfta', () => { const r = (g.requests || {})[u] || {}; fb.db.ref(`groups/${g.id}/requests/${u}`).remove().then(() => toast(`${r.name || 'Förfrågan'} är nekad.`)).catch(fail()); });
+  else if(act === 'req-cancel') pendCancel(b.dataset.g);
+  else if(act === 'inv-del') confirmClick(b, 'Bekräfta', () => inviteRevoke(g, b.dataset.c).then(() => toast('Inbjudan är återkallad. Koden fungerar inte längre.')).catch(fail()));
   else if(act === 'invite') openInvite(g);
   else if(act === 'group-leave') confirmClick(b, 'Tryck igen för att lämna', () => { stopSharing(); fb.db.ref(`groups/${g.id}/members/${myUid()}`).remove().then(() => forgetGroup(g.id)).catch(fail()); });
   else if(act === 'guest-leave'){ stopSharing(); fb.db.ref(`groups/${g.id}/guests/${myUid()}`).remove().catch(() => {}).then(() => forgetGroup(g.id)); }
@@ -967,12 +1048,19 @@ $('#paneJakt').addEventListener('change', e => {
 });
 function openInvite(g){
   openModal(`<h2>Bjud in till ${esc(gname(g))}</h2><label class="field"><span>Rättighet</span><select class="input" id="ivRole">${['editor','viewer','leader'].map(k => `<option value="${esc(k)}">${ROLES[k]} – ${ROLE_HELP[k].toLowerCase()}</option>`).join('')}</select></label>
-    <p class="note" style="margin-top:0">Länken gäller i sju dagar och kan användas av flera. Du kan ändra rättigheten efteråt.</p>
+    <label class="field"><span>Till (valfritt, syns bara för admin)</span><input class="input" id="ivTo" maxlength="40" autocomplete="off" placeholder="Till exempel Kalle"></label>
+    <label class="checkline"><input type="checkbox" id="ivOnce" checked><span>Engångskod<br><span class="small muted">Bara en person kan använda koden. Skicka en kod till varje person.</span></span></label>
+    <label class="checkline"><input type="checkbox" id="ivApprove" checked><span>Jag godkänner den som går med<br><span class="small muted">Den som använder koden ser ingenting förrän du har godkänt hen under Medlemmar.</span></span></label>
+    <p class="note" style="margin-top:6px">Koden gäller i sju dagar. Du kan återkalla den under Medlemmar, och ändra rättigheten efteråt.</p>
     <div class="actions"><button class="btn primary grow" type="button" id="ivOk">Skapa inbjudan</button><button class="btn ghost" type="button" id="ivCancel">Avbryt</button></div>`, m => {
     m.querySelector('#ivCancel').addEventListener('click', closeModal);
     m.querySelector('#ivOk').addEventListener('click', () => {
-      const role = m.querySelector('#ivRole').value, c = newCode(10);
-      fb.db.ref('invites/' + c).set({gid:g.id, role, expires:Date.now() + 7 * 864e5, by:myUid()}).then(() => { closeModal(); copyText(`Gå med i ${gname(g)} i Jaktkartan med kod ${c}\n${shareLink('l', c)}`, 'Inbjudan är kopierad'); }).catch(fail());
+      const role = m.querySelector('#ivRole').value, c = newCode(10), to = m.querySelector('#ivTo').value.trim().slice(0, 40);
+      const once = m.querySelector('#ivOnce').checked, approve = m.querySelector('#ivApprove').checked, expires = Date.now() + 7 * 864e5, up = {};
+      up[`invites/${c}`] = {gid:g.id, role, expires, by:myUid(), once, approve, team:gname(g).slice(0, 80)};
+      up[`groups/${g.id}/inviteList/${c}`] = Object.assign({role, expires, t:Date.now(), once, approve}, to ? {to} : {});
+      fb.db.ref().update(up).then(() => { closeModal();
+        copyText(`Gå med i ${gname(g)} i Jaktkartan med kod ${c}${once ? ' (kan bara användas av en person)' : ''}.\nI appen: menyn, Jakt, Gå med med kod.\n${shareLink('l', c)}`, 'Inbjudan är kopierad'); }).catch(fail());
     });
   });
 }
