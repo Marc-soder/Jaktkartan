@@ -8,7 +8,7 @@ const HTML = fs.readFileSync(path.join(__dirname, '..', 'index.html'));
 const SHOTS = path.join(__dirname, 'shots'); fs.mkdirSync(SHOTS, {recursive:true});
 const shot = n => path.join(SHOTS, n);
 const tile = fs.readFileSync(path.join(__dirname, 'tile_osm.png'));
-let data = {}, clock = () => Date.now();
+let data = {}, clock = () => Date.now(); const ghCalls = [];
 const subs = []; // {page, id, path, uid, last}
 const fails = []; let passes = 0;
 const check = (c, msg) => { if(c) passes++; else fails.push(msg); console.log((c ? 'PASS ' : 'FAIL ') + msg); };
@@ -56,12 +56,13 @@ window.firebase = (function(){
   return {apps, initializeApp(){ apps.push(1); }, auth: authFn, database: dbFn};
 })();`;
 const NATIVE = `
-window.__nat = {calls:[], cbs:{}, http:[], perm:'prompt', n:0, wake:0};
+window.__nat = {calls:[], cbs:{}, lis:{}, http:[], perm:'prompt', n:0, wake:0, ver:4, canInstall:false};
 try { Object.defineProperty(navigator, 'wakeLock', {configurable:true, value:{request(){ window.__nat.wake++; return Promise.resolve({release(){}}); }}}); } catch(e){}
 window.Capacitor = {
   isNativePlatform: () => true, getPlatform: () => 'android',
-  PluginHeaders: ['BackgroundGeolocation', 'CapacitorHttp', 'FirebaseAuthentication', 'LocalNotifications'].map(name => ({name, methods:[]})),
-  nativeCallback(plugin, method, opts, cb){ const id = String(++window.__nat.n); window.__nat.calls.push({plugin, method, opts, id}); window.__nat.cbs[id] = cb; return id; },
+  PluginHeaders: ['BackgroundGeolocation', 'CapacitorHttp', 'FirebaseAuthentication', 'LocalNotifications', 'Filesystem', 'Share', 'AppUpdate'].map(name => ({name, methods:[]})),
+  nativeCallback(plugin, method, opts, cb){ const id = String(++window.__nat.n); window.__nat.calls.push({plugin, method, opts, id});
+    if(method === 'addListener') window.__nat.lis[id] = {plugin, ev:opts.eventName, cb}; else window.__nat.cbs[id] = cb; return id; },
   nativePromise(plugin, method, opts){
     const N = window.__nat; N.calls.push({plugin, method, opts});
     if(plugin === 'CapacitorHttp'){ N.http.push(opts); return window.__natHttp(opts); }
@@ -69,6 +70,13 @@ window.Capacitor = {
     if(plugin === 'LocalNotifications' && method === 'requestPermissions'){ N.perm = 'granted'; return Promise.resolve({display:'granted'}); }
     if(plugin === 'LocalNotifications' && method === 'checkPermissions') return Promise.resolve({display:N.perm});
     if(plugin === 'BackgroundGeolocation' && method === 'removeWatcher') delete N.cbs[opts.id];
+    if(plugin === 'AppUpdate' && method === 'info') return Promise.resolve({versionCode:N.ver, versionName:'1.' + N.ver, canInstall:N.canInstall});
+    if(plugin === 'AppUpdate' && method === 'openInstallSettings'){ N.canInstall = true; return Promise.resolve({}); }
+    if(plugin === 'AppUpdate' && method === 'removeListener'){ delete N.lis[opts.callbackId]; return Promise.resolve({}); }
+    if(plugin === 'AppUpdate' && method === 'install') return new Promise(res => { N.installBar = []; [40, 100].forEach((p, i) => setTimeout(() => {
+      Object.values(N.lis).filter(l => l.plugin === 'AppUpdate' && l.ev === 'progress').forEach(l => l.cb({percent:p})); N.installBar.push(document.getElementById('appUpdBar').textContent);
+      if(p === 100) res({}); }, 60 * (i + 1))); });
+    if(plugin === 'Filesystem' && method === 'writeFile') return Promise.resolve({uri:'file:///data/user/0/app/cache/' + opts.path});
     return Promise.resolve({});
   }
 };
@@ -80,6 +88,8 @@ async function mkPage(browser, who, hash, opts){
   await ctx.route('**/*', r => { const u = r.request().url();
     if(u.includes('firebase-app-compat')) return r.fulfill({status:200, contentType:'text/javascript', body:FAKE});
     if(u.includes('gstatic.com/firebasejs')) return r.fulfill({status:200, contentType:'text/javascript', body:''});
+    if(u.startsWith('https://api.github.com/')){ ghCalls.push({native:!!native, url:u}); return r.fulfill({status:200, contentType:'application/json', headers:{'Access-Control-Allow-Origin':'*'},
+      body:JSON.stringify({tag_name:'app-1.6', assets:[{name:'Jaktkartan-1.6.apk', browser_download_url:'https://github.com/Marc-soder/Jaktkartan/releases/download/app-1.6/Jaktkartan-1.6.apk'}]})}); }
     if(u.includes('api.open-meteo.com')) return r.fulfill({status:200, contentType:'application/json', headers:{'Access-Control-Allow-Origin':'*'}, body:JSON.stringify({current:{wind_speed_10m:3, wind_direction_10m:270, wind_gusts_10m:5}})});
     if(u.startsWith('file:') || u.includes('localhost:8765')) return r.continue();
     if(u.includes('fonts.')) return r.abort();
@@ -264,7 +274,10 @@ const team = async (P, sub, g) => { await P.evaluate(([x, t]) => __fk.openTeam(x
   if(cShared !== 6) console.log('DBG carl', JSON.stringify({denied:C.denied || 0, errs:C.errs, areas:sc.areas.map(a => a.id), subs:subs.filter(x => x.page === C).map(x => x.path)}));
   check(cShared === 6 && cOther === 0, `gästen ser jaktens område (${cShared} nålar) men inte det andra delade området (${cOther})`);
   check((sc.areas.find(a => a.id === aid) || {}).border === data.groups[gid].areas[aid].border, 'gästen ser gränsen för jaktens område');
+  // Jaktkortet ritas när jakten har kommit fram, oberoende av nålarna ovan: vänta på det (högst 5 s)
+  for(let i = 0; i < 25 && !(await C.innerText('#paneJakt')).includes('Vildsvin'); i++) await W(C, 200);
   const txtC = await C.innerText('#paneJakt');
+  if(!(txtC.includes('Rådjur') && txtC.includes('Vildsvin') && !txtC.includes(hunt.code) && !txtC.includes('Medlemmar'))) console.log('DBG txtC', JSON.stringify(txtC), hunt.code);
   check(txtC.includes('Rådjur') && txtC.includes('Vildsvin') && !txtC.includes(hunt.code) && !txtC.includes('Medlemmar'), 'gästen ser jaktbart vilt men inte kod eller medlemslista');
   const g1 = await C.evaluate(([g, a]) => Promise.all(['members', 'hunts', 'guests', 'pins/' + a, 'pins', 'areas'].map(p => firebase.database().ref('groups/' + g + '/' + p).get().then(() => 'ok', () => 'denied'))), [gid, aid2]);
   check(g1.every(x => x === 'denied'), 'gästen nekas läsa medlemmar, alla jakter, andra gäster och övriga områden');
@@ -612,6 +625,32 @@ const team = async (P, sub, g) => { await P.evaluate(([x, t]) => __fk.openTeam(x
   const canc = (await nat('LocalNotifications', 'cancel')).flatMap(c => c.opts.notifications).map(n => n.id);
   check(rem && canc.includes(rem.id), 'avböjer man tas påminnelsen bort');
   await BN.evaluate(g => { delete __fk.cloud.groups[g].hunts.hx; delete __fk.cloud.groups[g].huntRsvp.hx; }, gid);
+  // Export i appen: filen skrivs i appens cache och öppnas i Androids Dela-meny (webbvyn kan inte ladda ned filer)
+  if(await BN.isVisible('#sosClose')) await BN.click('#sosClose');   // nödlarmet från testet ovan
+  await go(BN, 'data'); await BN.click('[data-act="export-json"]'); await W(BN, 300);
+  { const wf = (await nat('Filesystem', 'writeFile'))[0], sh = (await nat('Share', 'share'))[0]; let j = null; try { j = JSON.parse(wf.opts.data); } catch(e){}
+    check(wf && /^export\/jaktkartan-\d{4}-\d\d-\d\d\.json$/.test(wf.opts.path) && wf.opts.directory === 'CACHE' && wf.opts.encoding === 'utf8' && j && j.app === 'Jaktkartan' && Array.isArray(j.pins)
+      && sh && sh.opts.files.length === 1 && sh.opts.files[0] === 'file:///data/user/0/app/cache/' + wf.opts.path, 'Exportera allt i appen sparar säkerhetskopian och öppnar Dela-menyn'); }
+  await BN.evaluate(() => { window.Capacitor.PluginHeaders = window.Capacitor.PluginHeaders.filter(p => p.name !== 'Filesystem' && p.name !== 'Share'); window.__nat.calls = []; });
+  await BN.click('[data-act="export-json"]'); await W(BN, 300);
+  check((await BN.innerText('#toast')).includes('nyare version av appen') && !(await nat('Filesystem')).length, 'en äldre app utan export ber om en nyare version i stället för att inte göra något');
+  // Ny version av appen från GitHub Releases: raden visas, första gången måste appen få installera, sedan laddas den ned
+  check(await BN.isVisible('#appUpdBar') && (await BN.innerText('#appUpdBar')).includes('Ny version av appen: 1.6') && ghCalls.length >= 1 && ghCalls.every(c => c.native && c.url.endsWith('/repos/Marc-soder/Jaktkartan/releases/latest')), `appen ser att version 1.6 finns på GitHub (${JSON.stringify(ghCalls)})`);
+  check(!(await A.isVisible('#appUpdBar')) && !(await A.evaluate(() => __fk.NAT.app)), 'webbsidan söker inte efter appversioner');
+  await go(BN, 'konto');
+  check((await BN.innerText('#paneKonto')).includes('Appen för Android, version 1.4. Version 1.6 finns.'), 'Mitt konto visar appens version och att en ny finns');
+  await BN.click('#appUpdBar [data-natupd]'); await W(BN, 200);
+  check(await BN.isVisible('#natUpdSet') && !(await nat('AppUpdate', 'install')).length, 'första gången förklaras att Jaktkartan måste få installera uppdateringar');
+  await BN.click('#natUpdSet'); await W(BN, 200);
+  check((await nat('AppUpdate', 'openInstallSettings')).length === 1, 'Öppna inställningar öppnar Androids inställning för appen');
+  await BN.click('#appUpdBar [data-natupd]'); await W(BN, 400);
+  { const ins = (await nat('AppUpdate', 'install'))[0], bars = await BN.evaluate(() => window.__nat.installBar);
+    check(ins && ins.opts.url === 'https://github.com/Marc-soder/Jaktkartan/releases/download/app-1.6/Jaktkartan-1.6.apk' && bars[0].includes('40 %') && (await BN.innerText('#toast')).includes('Androids ruta')
+      && !(await BN.evaluate(() => Object.keys(window.__nat.lis).length)), `Uppdatera laddar ned APK-filen med förlopp och öppnar Androids installerare (${bars})`); }
+  // Den nya versionen är installerad: när appen syns igen försvinner raden
+  await BN.evaluate(() => { window.__nat.ver = 6; localStorage.removeItem('jk.natUpd'); Object.defineProperty(document, 'hidden', {configurable:true, get:() => false}); document.dispatchEvent(new Event('visibilitychange')); }); await W(BN, 400);
+  await BN.click('#paneKonto [data-j="app-check"]'); await W(BN, 400);
+  check(!(await BN.isVisible('#appUpdBar')) && (await BN.innerText('#paneKonto')).includes('version 1.6.') && (await BN.innerText('#toast')).includes('Appen är uppdaterad'), 'efter uppdateringen försvinner raden, och Sök efter uppdatering säger att appen är uppdaterad');
   // Nekad platsåtkomst: delningen stoppas och telefonens inställningar öppnas
   await BN.evaluate(() => window.__natErr('NOT_AUTHORIZED')); await W(BN, 600);
   check(!(await BN.evaluate(() => __fk.cloud.sharing)) && (await nat('BackgroundGeolocation', 'openSettings')).length === 1 && (await nat('BackgroundGeolocation', 'removeWatcher'))[0].opts.id === watch.id && !hp().bob, 'nekas platsåtkomst stoppas delningen, positionen tas bort och inställningarna öppnas');

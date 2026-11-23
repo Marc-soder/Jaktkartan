@@ -601,6 +601,7 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
 <div class="sosbar" id="sosBar" role="status" hidden><b>Nödlarm skickat.</b> Jaktlaget ser din position. <a href="tel:112">Ring 112</a> <button type="button" data-sos="ok">Jag är OK</button></div>
 <div class="drivebar" id="driveBar" role="status" aria-live="assertive" hidden></div>
 <div class="netbar updbar" id="updBar" role="status" hidden>En ny version av Jaktkartan finns. <button type="button" data-upd>Uppdatera</button></div>
+<div class="netbar updbar" id="appUpdBar" role="status" hidden></div>
 <div class="netbar" id="netBar" role="status" hidden>Ingen täckning. Kartan visas från det som sparats. Ändringar skickas när täckningen kommer tillbaka.</div>
 <button class="compass" id="compassBtn" type="button" hidden aria-label="Kompass: tryck för att starta"><svg class="cmp-dial" id="compassDial" viewBox="-50 -50 100 100" aria-hidden="true"><circle r="47" class="cmp-ring"/><g id="cmpNo" class="cmp-no"></g><g class="cmp-ticks"><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(0.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(22.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(45.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(67.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(90.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(112.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(135.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(157.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(180.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(202.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(225.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(247.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(270.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(292.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(315.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(337.5)"/></g><path d="M0 -21 L5 0 L0 -3 L-5 0 Z" class="cmp-n"/><path d="M0 21 L5 0 L0 3 L-5 0 Z" class="cmp-s"/><text x="0" y="-32" class="cmp-l n">N</text><text x="32" y="0" class="cmp-l">O</text><text x="0" y="32" class="cmp-l">S</text><text x="-32" y="0" class="cmp-l">V</text></svg><span class="cmp-idx" aria-hidden="true"></span><span class="cmp-txt" id="compassTxt">Kompass</span></button>
 <div class="placebar" id="measurebar" hidden>
@@ -1786,6 +1787,7 @@ $('#modeChip').addEventListener('click', () => setSvampMode(false));
 
 /* ---------- Export ---------- */
 function download(name, text, mime){
+  if(NAT.on){ natShareFile(name, text); return; }   // Android-appen: via Dela-menyn
   const blob = new Blob([text], {type:mime}); const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);

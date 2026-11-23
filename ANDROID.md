@@ -263,7 +263,17 @@ Ingen ny APK behövs.
 insticksprogrammen i `package.json`. Det står i PR:en när det gäller.
 
 1. Kör steg 4 igen (med **Lägg APK-filen under Releases** ikryssat).
-2. Alla installerar den nya APK-filen ovanpå den gamla, på samma sätt som i steg 7. Inloggning och inställningar finns kvar.
+2. Inom några timmar, eller direkt när appen öppnas nästa gång, visas raden **Ny version av appen: 1.x** hos alla i laget.
+   Man kan också trycka **Sök efter uppdatering** under **Mitt konto**.
+3. Tryck **Uppdatera**. Appen laddar ned den nya versionen och Android frågar **Vill du uppdatera den här appen?**: tryck **Uppdatera**.
+4. Första gången frågar appen om Jaktkartan får installera uppdateringar: tryck **Öppna inställningar**, slå på
+   **Tillåt från den här källan**, gå tillbaka och tryck **Uppdatera** igen. Det behövs bara en gång.
+
+Android godkänner aldrig en installation helt utan att fråga, för appar som inte kommer från Google Play. Därför den sista rutan.
+Android installerar bara en uppdatering som är signerad med samma nyckel som appen, så ingen annan kan skicka en falsk uppdatering.
+
+Appar byggda innan uppdateringen fanns (till och med 1.4) har inte raden. De uppdateras en gång för hand, på samma sätt som i steg 7.
+Inloggning och inställningar finns kvar.
 
 Versionsnumret räknas upp av sig själv. Samma nyckel måste användas varje gång (den ligger i GitHub sedan steg 3).
 
@@ -300,6 +310,11 @@ Versionsnumret räknas upp av sig själv. Samma nyckel måste användas varje g�
 - **Inloggning:** `@capacitor-firebase/authentication` loggar in med Google i telefonens eget system och lämnar över till
   webbsidans Firebase (`signInWithCredential`). Google tillåter inte inloggning i webbvyer.
 - **Aviseringar:** `@capacitor/local-notifications` för nödlarm och påminnelse när en jakt man deltar i startar.
+- **Uppdatering av appen:** `android/app/src/main/java/.../AppUpdatePlugin.java` (appens eget insticksprogram) och
+  `natUpdateCheck` i `src/native.js`. Appen frågar GitHub efter senaste releasen (`app-1.<nr>`, där nr är versionCode),
+  högst var sjätte timme, laddar bara ned APK-filer från repots egna releaser, kontrollerar paketnamnet och öppnar Androids installerare.
+- **Export** (säkerhetskopia, GPX, GeoJSON): `@capacitor/filesystem` och `@capacitor/share`. Webbvyn kan inte ladda ned filer,
+  så filen skrivs i appens cache och öppnas i Androids Dela-meny, där man sparar den (Filer, Drive) eller skickar den.
 - **Säkerhetsreglerna** i Firebase är oförändrade. Appen skriver samma sökvägar och fält som webben.
 - **Tester:** `tests/test2.js` kör sidan med en låtsad telefon (en låtsad `window.Capacitor`) och prövar inloggning, delning,
   förnyad inloggning med släckt skärm, nödlarm, påminnelser och nekad plats. Själva Android-bygget kontrolleras i CI.

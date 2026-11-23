@@ -1262,6 +1262,7 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
 <div class="sosbar" id="sosBar" role="status" hidden><b>Nödlarm skickat.</b> Jaktlaget ser din position. <a href="tel:112">Ring 112</a> <button type="button" data-sos="ok">Jag är OK</button></div>
 <div class="drivebar" id="driveBar" role="status" aria-live="assertive" hidden></div>
 <div class="netbar updbar" id="updBar" role="status" hidden>En ny version av Jaktkartan finns. <button type="button" data-upd>Uppdatera</button></div>
+<div class="netbar updbar" id="appUpdBar" role="status" hidden></div>
 <div class="netbar" id="netBar" role="status" hidden>Ingen täckning. Kartan visas från det som sparats. Ändringar skickas när täckningen kommer tillbaka.</div>
 <button class="compass" id="compassBtn" type="button" hidden aria-label="Kompass: tryck för att starta"><svg class="cmp-dial" id="compassDial" viewBox="-50 -50 100 100" aria-hidden="true"><circle r="47" class="cmp-ring"/><g id="cmpNo" class="cmp-no"></g><g class="cmp-ticks"><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(0.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(22.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(45.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(67.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(90.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(112.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(135.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(157.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(180.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(202.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(225.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(247.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(270.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(292.5)"/><line x1="0" y1="-46" x2="0" y2="-41" transform="rotate(315.0)"/><line x1="0" y1="-46" x2="0" y2="-43" transform="rotate(337.5)"/></g><path d="M0 -21 L5 0 L0 -3 L-5 0 Z" class="cmp-n"/><path d="M0 21 L5 0 L0 3 L-5 0 Z" class="cmp-s"/><text x="0" y="-32" class="cmp-l n">N</text><text x="32" y="0" class="cmp-l">O</text><text x="0" y="32" class="cmp-l">S</text><text x="-32" y="0" class="cmp-l">V</text></svg><span class="cmp-idx" aria-hidden="true"></span><span class="cmp-txt" id="compassTxt">Kompass</span></button>
 <div class="placebar" id="measurebar" hidden>
@@ -2452,6 +2453,7 @@ $('#modeChip').addEventListener('click', () => setSvampMode(false));
 
 /* ---------- Export ---------- */
 function download(name, text, mime){
+  if(NAT.on){ natShareFile(name, text); return; }   // Android-appen: via Dela-menyn
   const blob = new Blob([text], {type:mime}); const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);
@@ -2788,6 +2790,8 @@ let viltDay = null;
      (Android stryper dess anrop efter några minuter), och Firebase tar då inte bort positionen när anslutningen bryts.
    - FirebaseAuthentication: inloggning med Google i telefonens eget system. Google tillåter inte inloggning i webbvyer.
    - LocalNotifications: aviseringar om nödlarm, och en påminnelse när en jakt man deltar i startar.
+   - Filesystem och Share: export (säkerhetskopia, GPX, GeoJSON). Webbvyn kan inte ladda ned filer.
+   - AppUpdate (appens eget, android/.../AppUpdatePlugin.java): ny version av appen från GitHub Releases.
    I en vanlig webbläsare finns inget window.Capacitor. Då är NAT.on false och inget här används.
    Skalet anropas direkt via Capacitors brygga (nativePromise och nativeCallback), så sidan behöver inga extra filer. */
 const NAT = (() => {
@@ -2808,6 +2812,12 @@ function natInit(){
     NAT.call('LocalNotifications', 'createChannel', {id:'sos', name:'Nödlarm', description:'Nödlarm från jaktlaget', importance:5, visibility:1, vibration:true}).catch(() => {});
     NAT.call('LocalNotifications', 'createChannel', {id:'jakt', name:'Jakten börjar', description:'När en jakt du deltar i startar', importance:4, visibility:1, vibration:true}).catch(() => {});
     NAT.call('LocalNotifications', 'checkPermissions').then(r => { NAT.notif = (r && r.display) || 'unknown'; renderJakt(); }).catch(() => {});
+  }
+  if(NAT.has('AppUpdate')){
+    natUpdateCheck();
+    document.addEventListener('visibilitychange', () => { if(!document.hidden) natUpdateCheck(); });
+    const bar = document.getElementById('appUpdBar');
+    if(bar) bar.addEventListener('click', e => { if(e.target.closest('[data-natupd]')) natUpdateGo(); });
   }
 }
 setTimeout(natInit, 0);
@@ -2907,6 +2917,84 @@ function natPutPos(path, val){
   })();
 }
 function natPushTrail(path, val){ natRest('POST', path, val).catch(() => {}); }
+
+/* ---------- Export ----------
+   Webbvyn i appen sparar inte filer som laddas ned. Filen skrivs i stället i appens cache och öppnas i Androids
+   Dela-meny, där man kan spara den (Filer, Drive) eller skicka den. Appar byggda före export (1.4) saknar
+   insticksprogrammen och får besked om att installera en nyare version. */
+async function natShareFile(name, text){
+  if(!NAT.has('Filesystem') || !NAT.has('Share')){
+    // Efter exportens eget besked ("sparas som fil"), som annars skulle skriva över det här
+    setTimeout(() => toast('Export kräver en nyare version av appen. Installera den senaste från Releases.', 7000), 0);
+    return false;
+  }
+  try {
+    const w = await NAT.call('Filesystem', 'writeFile', {path:'export/' + name, data:text, directory:'CACHE', encoding:'utf8', recursive:true});
+    await NAT.call('Share', 'share', {title:name, files:[w.uri], dialogTitle:'Spara eller dela ' + name});
+    return true;
+  } catch(e){
+    const m = String((e && (e.message || e.code)) || e || '');
+    if(!/cancel/i.test(m)) toast('Filen kunde inte delas. ' + m.slice(0, 120), 7000);
+    return false;
+  }
+}
+
+/* ---------- Ny version av appen ----------
+   Appen frågar GitHub efter den senaste releasen (app-1.<nr>, nr = versionCode, se .github/workflows/android.yml),
+   högst var sjätte timme. Finns en nyare visas raden "Ny version av appen". Uppdatera laddar ned APK-filen och öppnar
+   Androids installerare, som frågar en gång till. Första gången måste Jaktkartan få installera appar ("Tillåt från
+   den här källan"). Android installerar bara en uppdatering som är signerad med samma nyckel. */
+const NAT_UPD_KEY = 'jk.natUpd', NAT_UPD_MS = 6 * 3600000;
+const NAT_RELEASE = 'https://api.github.com/repos/Marc-soder/Jaktkartan/releases/latest';
+async function natUpdateCheck(force){
+  if(!NAT.has('AppUpdate')) return null;
+  try {
+    NAT.app = await NAT.call('AppUpdate', 'info');
+    let c = {}; try { c = JSON.parse(lsGet(NAT_UPD_KEY) || '{}') || {}; } catch(e){}
+    if(force || !c.t || Date.now() - c.t > NAT_UPD_MS){
+      const r = await fetch(NAT_RELEASE, {headers:{Accept:'application/vnd.github+json'}, cache:'no-store'});
+      if(!r.ok) throw new Error('GitHub svarade ' + r.status);
+      const j = await r.json(), m = /^app-1\.(\d+)$/.exec(j.tag_name || ''), a = (j.assets || []).find(x => x && /\.apk$/.test(x.name || ''));
+      c = {t:Date.now(), code:m ? +m[1] : 0, name:m ? '1.' + m[1] : '', url:a ? a.browser_download_url : ''};
+      lsSet(NAT_UPD_KEY, JSON.stringify(c));
+    }
+    NAT.upd = c.code > (+NAT.app.versionCode || 0) && c.url ? c : null;
+  } catch(e){ if(force) toast('Kunde inte söka efter uppdateringar. ' + String(e && e.message || '').slice(0, 80), 6000); }
+  natUpdBar(); renderKonto();
+  return NAT.upd;
+}
+function natUpdBar(text){
+  const bar = document.getElementById('appUpdBar'); if(!bar) return;
+  bar.hidden = !NAT.upd;
+  if(!NAT.upd) return;
+  bar.innerHTML = text ? esc(text) : `Ny version av appen: ${esc(NAT.upd.name)}. <button type="button" data-natupd>Uppdatera</button>`;
+}
+async function natUpdateGo(){
+  const u = NAT.upd; if(!u || NAT.updBusy) return;
+  const info = await NAT.call('AppUpdate', 'info').catch(() => null);
+  if(info && !info.canInstall){
+    openModal(`<h2>Tillåt uppdateringar</h2><p>Android behöver tillåta att Jaktkartan installerar sina egna uppdateringar. Det görs en gång.</p>
+      <ol><li>Tryck <b>Öppna inställningar</b>.</li><li>Slå på <b>Tillåt från den här källan</b>.</li><li>Gå tillbaka till Jaktkartan och tryck <b>Uppdatera</b> igen.</li></ol>
+      <div class="actions"><button class="btn primary grow" type="button" id="natUpdSet">Öppna inställningar</button><button class="btn ghost" type="button" id="natUpdNo">Avbryt</button></div>`, m => {
+      m.querySelector('#natUpdNo').addEventListener('click', closeModal);
+      m.querySelector('#natUpdSet').addEventListener('click', () => { closeModal(); NAT.call('AppUpdate', 'openInstallSettings').catch(() => {}); });
+    });
+    return;
+  }
+  NAT.updBusy = true; natUpdBar('Laddar ned uppdateringen …');
+  const lid = NAT.listen('AppUpdate', 'addListener', {eventName:'progress'}, d => { if(d && d.percent >= 0 && NAT.updBusy) natUpdBar(`Laddar ned uppdateringen … ${d.percent} %`); });
+  try {
+    await NAT.call('AppUpdate', 'install', {url:u.url});
+    toast('Tryck Uppdatera i Androids ruta. Appen startar om med den nya versionen.', 8000);
+  } catch(e){
+    const m = String((e && (e.message || e.code)) || e || '');
+    toast('Uppdateringen kunde inte laddas ned. ' + m.slice(0, 120), 7000);
+  } finally {
+    NAT.updBusy = false;
+    if(lid) NAT.call('AppUpdate', 'removeListener', {callbackId:lid, eventName:'progress'}).catch(() => {});
+    natUpdBar();
+  }
+}
 
 /* ---------- Inloggning med Google ---------- */
 function natGoogleLogin(){
@@ -3614,6 +3702,8 @@ function renderKonto(){
       ${NAT.on ? (NAT.notif !== 'granted' && NAT.has('LocalNotifications') ? '<div class="btnrow"><button class="btn sm" type="button" data-j="notif">Tillåt aviseringar</button></div><p class="note" style="margin-top:2px">För nödlarm, påminnelse när en jakt du deltar i startar, och aviseringen som visar att positionen delas.</p>' : '')
       : window.Notification && Notification.permission === 'default' ? '<div class="btnrow"><button class="btn sm" type="button" data-j="notif">Tillåt aviseringar om nödlarm</button></div><p class="note" style="margin-top:2px">Då kan ett nödlarm synas även när appen ligger i bakgrunden.</p>' : ''}`;
   }
+  if(NAT.app) html += `<p class="note" style="margin-top:10px">Appen för Android, version ${esc(NAT.app.versionName || '')}.${NAT.upd ? ` Version ${esc(NAT.upd.name)} finns.` : ''}
+    <button class="linkbtn" type="button" data-j="${NAT.upd ? 'app-update' : 'app-check'}">${NAT.upd ? 'Uppdatera' : 'Sök efter uppdatering'}</button></p>`;
   html += docsCardHtml();
   pane.innerHTML = html;
 }
@@ -3879,6 +3969,8 @@ function jaktClick(e){
   else if(act === 'logout'){ stopSharing(); natLogout(); fb.auth.signOut(); }
   else if(act === 'name') askText('Byt namn', 'Namn som syns för andra', myName(), 'Spara', v => { lsSet(NAMEKEY, v); for(const gr of Object.values(cloud.groups)){ if(gr.kind === 'member'){ fb.db.ref(`groups/${gr.id}/members/${myUid()}/name`).set(v).catch(() => {}); for(const [h, r] of Object.entries(gr.huntRsvp || {})) if(r && r[myUid()]) fb.db.ref(`groups/${gr.id}/huntRsvp/${h}/${myUid()}/name`).set(v).catch(() => {}); } else fb.db.ref(`groups/${gr.id}/guests/${myUid()}/name`).set(v).catch(() => {}); msgPublish(gr); } renderJakt(); }, 40);
   else if(act === 'notif' && NAT.on) natNotifPerm();
+  else if(act === 'app-update') natUpdateGo();
+  else if(act === 'app-check') natUpdateCheck(true).then(u => { if(NAT.app && !u) toast('Appen är uppdaterad.'); });
   else if(act === 'notif'){ try { Notification.requestPermission().then(p => { toast(p === 'granted' ? 'Aviseringar om nödlarm är tillåtna.' : 'Aviseringar är inte tillåtna. Det går att ändra i webbläsarens inställningar.', 5000); renderJakt(); }); } catch(e){} }
   else if(act === 'group-new') askText('Skapa jaktlag', 'Namn på jaktlaget', '', 'Skapa', v => createGroup(v), 60);
   else if(act === 'join') askText('Gå med med kod', 'Inbjudningskod eller jaktkod', '', 'Gå med', v => joinByCode(v), 14);

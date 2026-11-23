@@ -658,6 +658,8 @@ function renderKonto(){
       ${NAT.on ? (NAT.notif !== 'granted' && NAT.has('LocalNotifications') ? '<div class="btnrow"><button class="btn sm" type="button" data-j="notif">Tillåt aviseringar</button></div><p class="note" style="margin-top:2px">För nödlarm, påminnelse när en jakt du deltar i startar, och aviseringen som visar att positionen delas.</p>' : '')
       : window.Notification && Notification.permission === 'default' ? '<div class="btnrow"><button class="btn sm" type="button" data-j="notif">Tillåt aviseringar om nödlarm</button></div><p class="note" style="margin-top:2px">Då kan ett nödlarm synas även när appen ligger i bakgrunden.</p>' : ''}`;
   }
+  if(NAT.app) html += `<p class="note" style="margin-top:10px">Appen för Android, version ${esc(NAT.app.versionName || '')}.${NAT.upd ? ` Version ${esc(NAT.upd.name)} finns.` : ''}
+    <button class="linkbtn" type="button" data-j="${NAT.upd ? 'app-update' : 'app-check'}">${NAT.upd ? 'Uppdatera' : 'Sök efter uppdatering'}</button></p>`;
   html += docsCardHtml();
   pane.innerHTML = html;
 }
@@ -923,6 +925,8 @@ function jaktClick(e){
   else if(act === 'logout'){ stopSharing(); natLogout(); fb.auth.signOut(); }
   else if(act === 'name') askText('Byt namn', 'Namn som syns för andra', myName(), 'Spara', v => { lsSet(NAMEKEY, v); for(const gr of Object.values(cloud.groups)){ if(gr.kind === 'member'){ fb.db.ref(`groups/${gr.id}/members/${myUid()}/name`).set(v).catch(() => {}); for(const [h, r] of Object.entries(gr.huntRsvp || {})) if(r && r[myUid()]) fb.db.ref(`groups/${gr.id}/huntRsvp/${h}/${myUid()}/name`).set(v).catch(() => {}); } else fb.db.ref(`groups/${gr.id}/guests/${myUid()}/name`).set(v).catch(() => {}); msgPublish(gr); } renderJakt(); }, 40);
   else if(act === 'notif' && NAT.on) natNotifPerm();
+  else if(act === 'app-update') natUpdateGo();
+  else if(act === 'app-check') natUpdateCheck(true).then(u => { if(NAT.app && !u) toast('Appen är uppdaterad.'); });
   else if(act === 'notif'){ try { Notification.requestPermission().then(p => { toast(p === 'granted' ? 'Aviseringar om nödlarm är tillåtna.' : 'Aviseringar är inte tillåtna. Det går att ändra i webbläsarens inställningar.', 5000); renderJakt(); }); } catch(e){} }
   else if(act === 'group-new') askText('Skapa jaktlag', 'Namn på jaktlaget', '', 'Skapa', v => createGroup(v), 60);
   else if(act === 'join') askText('Gå med med kod', 'Inbjudningskod eller jaktkod', '', 'Gå med', v => joinByCode(v), 14);
