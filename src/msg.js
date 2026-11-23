@@ -114,10 +114,10 @@ function msgMine(g, hid){
   return Object.entries((g.huntMsg || {})[hid] || {}).filter(([, m]) => m && (m.from === me || m.all || (m.to && m.to[me]))).sort((a, b) => a[1].t - b[1].t);
 }
 const msgToText = (g, hid, m) => m.all ? 'alla' : Object.keys(m.to || {}).map(u => u === myUid() ? 'dig' : ((msgPeople(g, hid).find(p => p.uid === u) || {}).name || 'deltagare')).join(', ');
-function msgHtml(g, hid){
+function msgHtml(g, hid, chat){
   if(!msgCryptoOk()) return `<div class="lbl">Meddelanden</div><p class="note" style="margin-top:0">Den här webbläsaren kan inte kryptera meddelanden.</p>`;
-  const list = msgMine(g, hid).slice(-30);
-  let h = `<div class="lbl">Meddelanden</div>`;
+  const list = msgMine(g, hid).slice(chat ? -100 : -30);
+  let h = chat ? '' : `<div class="lbl">Meddelanden</div>`;
   if(!list.length) h += '<p class="note" style="margin-top:0">Inga meddelanden ännu. De är krypterade: bara mottagarna kan läsa dem.</p>';
   else h += `<div class="msg-list">${list.map(([mid, m]) => {
     const p = msgPlain[mid], mine = m.from === myUid();
@@ -125,9 +125,37 @@ function msgHtml(g, hid){
     return `<div class="msg${mine ? ' me' : ''}${msgFlash.mid === mid && Date.now() < msgFlash.until ? ' flash' : ''}" id="msg-${esc(mid)}"><div class="msg-h"><b>${esc(mine ? 'Du' : m.name || 'Deltagare')}</b> till ${esc(msgToText(g, hid, m))} <span class="muted">· ${esc(fmtClock(m.t))}</span></div>
       ${m.re ? msgQuote(g, hid, m.re) : ''}<div class="msg-t">${p ? (p.text != null ? esc(p.text) : `<span class="muted">${esc(p.err)}</span>`) : '<span class="muted">Låser upp …</span>'}</div>
       ${!mine ? `<button class="linkbtn" type="button" data-j="msg-reply" data-g="${esc(g.id)}" data-h="${esc(hid)}" data-u="${esc(m.from)}" data-m="${esc(mid)}">Svara</button>` : ''}</div>`; }).join('')}</div>`;
+  if(chat) return h;
   h += `<div class="btnrow" style="margin-top:6px"><button class="btn sm primary" type="button" data-j="msg-new" data-g="${esc(g.id)}" data-h="${esc(hid)}">Nytt meddelande</button></div>`;
   return h;
 }
+/* Skrivfältet längst ned i chatten: Skicka går till alla i jakten. Knappen bredvid väljer mottagare. */
+function chatBarHtml(g, hid){
+  if(!msgCryptoOk()) return '';
+  const id = `chatText-${g.id}-${hid}`;
+  return `<div class="chat-bar"><textarea class="input" id="${esc(id)}" rows="1" maxlength="${MSG_MAX}" placeholder="Skriv till alla i jakten" aria-label="Meddelande till alla i jakten">${esc(chatDraft[id] || '')}</textarea>
+    <button class="btn sm primary" type="button" data-j="chat-send" data-g="${esc(g.id)}" data-h="${esc(hid)}">Skicka</button>
+    <button class="iconbtn" type="button" data-j="msg-new" data-g="${esc(g.id)}" data-h="${esc(hid)}" title="Välj mottagare" aria-label="Skriv till valda mottagare"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19.5c.6-3.3 3-5.2 6-5.2s5.4 1.9 6 5.2"/><circle cx="17" cy="9" r="2.4"/><path d="M16.5 14.2c2.3.2 4 1.8 4.5 4.3"/></svg></button></div>`;
+}
+async function chatSend(g, hid, b){
+  const ta = document.getElementById(`chatText-${g.id}-${hid}`), text = ta ? ta.value.trim().slice(0, MSG_MAX) : '';
+  if(!text){ toast('Skriv ett meddelande.'); if(ta) ta.focus(); return; }
+  b.disabled = true;
+  try {
+    const r = await msgSend(g, hid, text, msgPeople(g, hid), true);
+    const id = `chatText-${g.id}-${hid}`, t2 = document.getElementById(id); if(t2) t2.value = ''; delete chatDraft[id];
+    chatStick = 'send'; scheduleRender();
+    if(r === 'queued') toast('Ingen täckning: meddelandet skickas när täckningen kommer tillbaka. Håll appen öppen.', 6000);
+  } catch(e){ toast('Kunde inte skicka meddelandet. Kontrollera nätverket.', 5000); }
+  finally { b.disabled = false; }
+}
+/* Chatten rullar till det senaste meddelandet när den öppnas, och när något nytt kommer om man redan är längst ned. */
+let chatStick = true;
+// Det man håller på att skriva finns kvar när chatten ritas om (till exempel när ett nytt meddelande kommer)
+const chatDraft = {};
+/* Skrivfältet växer med texten, upp till några rader */
+function chatGrow(ta){ ta.style.height = ''; if(ta.scrollHeight > ta.clientHeight) ta.style.height = Math.min(ta.scrollHeight + 2, 120) + 'px'; }
+document.addEventListener('input', e => { if(e.target.id && e.target.id.startsWith('chatText-')){ chatDraft[e.target.id] = e.target.value; chatGrow(e.target); } });
 /* Olästa meddelanden: de som kommit till mig och inte visats i Chatt-fliken. Vilka som är lästa sparas på enheten. */
 let msgRead = null;
 function msgReadMap(){
@@ -162,7 +190,7 @@ function msgBell(){
 function msgBellOpen(){
   const gs = Object.values(cloud.groups).filter(g => liveHunts(g).length);
   const g = gs.find(x => msgUnread(x)) || gs[0]; if(!g) return;
-  openTeam(g.id, 'chat'); if(!isDesktop()) setSheet('half');
+  openTeam(g.id, 'chat'); if(!isDesktop()) setSheet('full');
 }
 /* Avisering i telefonen när appen ligger i bakgrunden: i appen via telefonens egna aviseringar, på webben via
    service workern (om aviseringar är tillåtna). */

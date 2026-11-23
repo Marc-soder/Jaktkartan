@@ -595,6 +595,32 @@ async function inviteRevokeAll(){
   const cp = await A.evaluate(([g, h, m]) => firebase.database().ref(`groups/${g}/huntMsg/${h}/mcopy1`).set(m).then(() => 'ok', () => 'denied'), [gid, hid, copy]); await W(C, 700);
   const ctx2 = await C.innerText('#paneJakt');
   check(cp === 'ok' && ctx2.includes('Kunde inte bekräfta avsändaren'), 'ett kopierat meddelande avslöjas: avsändaren kan inte bekräftas');
+  // Chatten på telefonen: skrivfältet syns längst ned medan listan rullar, och Skicka går till alla
+  await C.setViewportSize({width:390, height:844}); await W(C, 300);
+  await team(C, 'chat'); await C.evaluate(() => __fk.setSheet('half')); await W(C, 500);
+  { const r = await C.evaluate(() => { const b = document.querySelector('.chat-bar').getBoundingClientRect(), p = document.getElementById('pBody').getBoundingClientRect(); return {barTop:b.top, bar:b.bottom, bodyTop:p.top, body:p.bottom}; });
+    check(r.bar <= r.body + 1 && r.barTop >= r.bodyTop && r.bar > r.body - 40, `skrivfältet syns längst ned i chatten på telefonen (${JSON.stringify(r)})`); }
+  await C.evaluate(() => { document.getElementById('pBody').scrollTop = 0; }); await W(C, 100);
+  { const r = await C.evaluate(() => { const b = document.querySelector('.chat-bar').getBoundingClientRect(), p = document.getElementById('pBody').getBoundingClientRect(); return {bar:b.bottom, body:p.bottom}; });
+    check(r.bar <= r.body + 1 && r.bar > r.body - 40, `skrivfältet ligger kvar längst ned när man rullar upp i chatten (${JSON.stringify(r)})`); }
+  await C.screenshot({path:shot('c_chat_mobil.png')});
+  { const ta = `#chatText-${gid}-${hid}`, h0 = await C.evaluate(t => document.querySelector(t).offsetHeight, ta);
+    await C.fill(ta, 'rad 1\nrad 2\nrad 3'); await W(C, 100); const h1 = await C.evaluate(t => document.querySelector(t).offsetHeight, ta);
+    check(h0 <= 46 && h1 > h0 && h1 <= 122, `skrivfältet är en rad högt och växer med texten (${h0} → ${h1} px)`); }
+  // Telefonens navigeringsknappar: appen får kantmåttet från Capacitor, och panel, skrivfält och knappar hamnar ovanför
+  await C.evaluate(() => { document.documentElement.style.setProperty('--safe-area-inset-bottom', '48px'); document.documentElement.style.setProperty('--safe-area-inset-top', '30px'); }); await W(C, 500);
+  { const r = await C.evaluate(() => { const R = s => document.querySelector(s).getBoundingClientRect(); return {bar:R('.chat-bar').bottom, body:R('#pBody').bottom, panel:R('#panel').top, fab:R('#btnAdd').bottom, ctrls:R('.ctrls').top, h:innerHeight}; });
+    check(r.bar <= r.h - 48 + 1 && r.body <= r.h - 48 + 1 && r.bar > r.body - 40 && r.fab <= r.panel && r.ctrls >= 30, `med navigeringsknappar längst ned ligger skrivfältet, panelens innehåll och knapparna ovanför dem (${JSON.stringify(r)})`); }
+  await C.evaluate(() => __fk.setSheet('half')); await W(C, 500);
+  { const r = await C.evaluate(() => { const f = document.getElementById('btnAdd').getBoundingClientRect(), p = document.getElementById('panel').getBoundingClientRect();
+      const vis = [...document.querySelectorAll('.ctrls .ctrl')].filter(b => b.offsetParent), bad = vis.filter(b => { const r = b.getBoundingClientRect(); return r.bottom > p.top || r.left < 0 || (r.bottom > f.top && r.top < f.bottom && r.right > f.left && r.left < f.right); });
+      return {n:vis.length, sos:vis.some(b => b.id === 'btnSos'), bad:bad.map(b => b.id)}; });
+    check(r.n >= 8 && r.sos && !r.bad.length, `kartknapparna, även SOS, syns ovanför plusknappen och panelen när panelen är halvöppen (${JSON.stringify(r)})`); }
+  await C.screenshot({path:shot('c_chat_navknappar.png')});
+  await C.evaluate(() => { document.documentElement.style.removeProperty('--safe-area-inset-bottom'); document.documentElement.style.removeProperty('--safe-area-inset-top'); }); await W(C, 300);
+  await C.fill(`#chatText-${gid}-${hid}`, 'Jag är på plats'); await C.click('.chat-bar [data-j="chat-send"]'); await W(C, 900); await W(A, 600);
+  check(msgs().some(m => m.all && m.from === 'anon-carl') && (await A.innerText('#paneJakt')).includes('Jag är på plats') && (await C.inputValue(`#chatText-${gid}-${hid}`)) === '', 'Skicka i chatten går till alla i jakten, och fältet töms');
+  await C.setViewportSize({width:1280, height:900}); await W(C, 300);
   await team(B, 'jakt'); await team(C, 'jakt');
   // ---- Positioner ----
   await team(A, 'jakt'); await A.locator('#shareToggle').check({force:true}); await W(A, 900);

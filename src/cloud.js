@@ -849,7 +849,7 @@ function teamTabs(g){
 function chatHtml(g){
   const live = liveHunts(g);
   if(!live.length) return '<div class="empty">Chatten finns medan en jakt pågår.</div>';
-  return live.map(hid => `${live.length > 1 ? `<h3 class="sec">${esc(((g.hunts || {})[hid] || {}).name || 'Jakt')}</h3>` : ''}${msgHtml(g, hid)}`).join('');
+  return `<div class="chat">${live.map(hid => `${live.length > 1 ? `<h3 class="sec">${esc(((g.hunts || {})[hid] || {}).name || 'Jakt')}</h3>` : ''}${msgHtml(g, hid, true)}${chatBarHtml(g, hid)}`).join('')}</div>`;
 }
 /* Jaktlagen i den ordning användaren har valt (state.settings.teamOrder, sparas bara på enheten). Nya lag hamnar sist. */
 function teamGroups(){
@@ -892,7 +892,12 @@ function renderJakt(){
       <div class="btnrow">${canCreate() ? '<button class="btn sm" type="button" data-j="group-new">Skapa jaktlag</button>' : ''}<button class="btn sm" type="button" data-j="join">Gå med med kod</button></div>
       ${u.isAnonymous ? '<p class="note">Som gäst kan du gå med i jakter. Logga in med Google för att bli medlem i ett jaktlag.</p>' : canCreate() ? '' : '<p class="note">Bara ägaren av den här Jaktkartan kan skapa jaktlag. Du går med i ett lag eller en jakt med en kod.</p>'}`;
   }
+  const body = $('#pBody'), chatNow = nav.tab === 'jakt' && nav.sub === 'chat' && !!nav.team;
+  // Chatten: längst ned när den öppnas, efter att man skickat, och när något nytt kommer om man redan var längst ned
+  if(chatNow) chatStick = chatStick === 'send' || !pane.querySelector('.chat') || !body || body.scrollHeight - body.scrollTop - body.clientHeight <= 80;
   pane.innerHTML = html;
+  if(chatNow) pane.querySelectorAll('.chat-bar textarea').forEach(t => { if(t.value) chatGrow(t); });
+  if(chatNow && chatStick && body) body.scrollTop = body.scrollHeight;
   if(st === 'in' && nav.team && cloud.groups[nav.team] && chatOpen(cloud.groups[nav.team])) msgMarkRead(cloud.groups[nav.team]);
   msgBell();
   renderDrawerTeams(); if(typeof renderNav === 'function') renderNav();
@@ -1163,6 +1168,7 @@ function jaktClick(e){
   else if(act === 'msg-new') openMsgForm(g, hid);
   else if(act === 'msg-reply') openMsgForm(g, hid, u, b.dataset.m);
   else if(act === 'msg-goto') msgGoto(b.dataset.m);
+  else if(act === 'chat-send') chatSend(g, hid, b);
   else if(act === 'rsvp') rsvpSet(g, hid, true);
   else if(act === 'rsvp-no') rsvpSet(g, hid, false);
   else if(act === 'cal-go') calGo(g.id, hid);
