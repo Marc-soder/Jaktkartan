@@ -532,6 +532,9 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
 .pp .pnote{margin:6px 0;white-space:pre-wrap}
 .pp .pc{font:400 12px/1.5 var(--font-mono);color:var(--muted);margin:6px 0 8px}
 .pp .pbtns{display:flex;gap:6px;flex-wrap:wrap}
+.mt-list{max-height:50vh;overflow:auto}
+.mt-pin{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 10px;margin:0 0 6px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);font:inherit;cursor:pointer}
+.mt-pin[hidden]{display:none}.mt-pin:disabled{opacity:.5;cursor:default}.mt-pin .swatch{flex:none}
 .pp .pbtns > *{flex:1 1 auto}
 .pp .src{font-size:12px;color:var(--muted)}
 

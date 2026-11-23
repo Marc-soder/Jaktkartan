@@ -799,9 +799,19 @@ async function inviteRevokeAll(){
   // samlingsplats och återsamling
   await B.click(`[data-j="plan"][data-h="${hid}"]`); await W(B, 300);
   await B.click('#planBody [data-pl="meet-add"]'); await W(B, 400);
-  check(await B.isVisible('#placebar') && (await B.innerText('#placeOk')) === 'Samlingsplats här', 'samlingsplatsen placeras med korset');
+  // I första hand en kartnål i jaktens område: parkering, stuga och liknande överst
+  { const rows = await B.locator('.mt-pin').allInnerTexts(), lbl = (await B.innerText('.mt-list')).toLowerCase();
+    check(rows.length >= 3 && lbl.startsWith('förslag') && /Jaktstugan|Bommen/.test(rows[0]) && await B.isVisible('#mtNew'), `Lägg till samlingsplats visar kartnålarna, med förslag överst, och Ny position på kartan (${rows.slice(0, 3).map(r => r.split('\n')[0])})`); }
+  const pinPick = (await st(B)).pins.find(p => p.name === 'Jaktstugan (ny)');
+  await B.click(`.mt-pin[data-pid="${pinPick.id}"]`); await W(B, 800);
+  { const mm = Object.values(PLN().meets || {}).find(m => m.name === 'Jaktstugan (ny)');
+    check(mm && Math.abs(mm.lat - pinPick.lat) < 1e-6 && Math.abs(mm.lng - pinPick.lng) < 1e-6 && await B.isVisible('#planBody'), 'en vald kartnål blir samlingsplats med nålens namn och position'); }
+  await B.click('#planBody [data-pl="meet-add"]'); await W(B, 400);
+  check(await B.isDisabled(`.mt-pin[data-pid="${pinPick.id}"]`) && (await B.innerText(`.mt-pin[data-pid="${pinPick.id}"]`)).includes('redan samlingsplats'), 'en nål som redan är samlingsplats kan inte väljas igen');
+  await B.click('#mtNew'); await W(B, 400);
+  check(await B.isVisible('#placebar') && (await B.innerText('#placeOk')) === 'Samlingsplats här', 'Ny position på kartan placeras med korset');
   await B.click('#placeOk'); await W(B, 300); await B.fill('#mtName', 'boden'); await B.click('#mtForm button[type=submit]'); await W(B, 800);
-  const mid = Object.keys(PLN().meets || {})[0], meet = mid && PLN().meets[mid];
+  const mid = Object.keys(PLN().meets || {}).find(k => PLN().meets[k].name === 'boden'), meet = mid && PLN().meets[mid];
   check(meet && meet.name === 'boden' && typeof meet.lat === 'number' && await B.isVisible('#planBody'), 'samlingsplatsen boden är sparad i planen');
   await B.click('#plClose'); await W(B, 300);
   await B.click(`[data-j="drive-call"][data-h="${hid}"][data-m="${mid}"]`); await W(B, 1200); await W(C, 600);

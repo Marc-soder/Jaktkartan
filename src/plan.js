@@ -543,7 +543,8 @@ function planClick(e){
     const go = () => planRef(c.g, c.hid, `drives/${b.dataset.d}/pass`).set(from).then(() => toast('Passen är kopierade.')).catch(fail());
     if(has) confirmClick(b, 'Ersätt passen?', go); else go();
   }
-  else if(k === 'meet-add' || k === 'meet-move') meetPlace(c.g, c.hid, b.dataset.m);
+  else if(k === 'meet-add') meetAdd(c.g, c.hid);
+  else if(k === 'meet-move') meetPlace(c.g, c.hid, b.dataset.m);
   else if(k === 'meet-call') driveCall(c.g, c.hid, b.dataset.m);
   else if(k === 'meet-del') confirmClick(b, 'Bekräfta', () => planRef(c.g, c.hid, 'meets/' + b.dataset.m).remove().catch(fail()));
 }
@@ -578,6 +579,38 @@ function openLottery(g, hid, did){
       }
       const warn = Object.entries(out).filter(([pid, u]) => passIssues(g, pinById(pid), u.uid, u.name).length).length;
       planRef(g, hid).update(up).then(() => toast(`${Object.keys(out).length} pass är lottade.${left.length ? ` ${left.map(u => u.name).join(', ')} fick inget pass.` : ''}${warn ? ` ${warn === 1 ? 'En placering' : warn + ' placeringar'} passar inte: se varningarna.` : ''}`, 6000)).catch(fail());
+      openPlan(g, hid);
+    });
+  });
+}
+/* Ny samlingsplats: i första hand en kartnål i jaktens områden (parkering, stuga, eldplats och liknande överst),
+   annars en ny position på kartan. Nålens namn och position kopieras till samlingsplatsen. */
+const MEET_ICONS = ['parking', 'house', 'fire', 'tent', 'car', 'flag', 'bridge', 'gate'];
+function meetAdd(g, hid){
+  const hunt = (g.hunts || {})[hid]; if(!hunt) return;
+  const aids = new Set(planAreaIds(g, hunt)), used = Object.values(planOf(g, hid).meets || {}).filter(Boolean);
+  const pinName = p => p.name || (typeById(p.typeId) || {}).name || 'Nål';
+  const pins = state.pins.filter(p => aids.has(p.areaId) && typeof p.lat === 'number' && typeof p.lng === 'number')
+    .map(p => ({p, t:typeById(p.typeId) || {name:'', color:'#475569', icon:'dot'}, sug:MEET_ICONS.includes((typeById(p.typeId) || {}).icon), used:used.some(m => Math.abs(m.lat - p.lat) < 1e-6 && Math.abs(m.lng - p.lng) < 1e-6)}))
+    .sort((a, b) => (b.sug - a.sug) || pinName(a.p).localeCompare(pinName(b.p), 'sv'));
+  const row = x => `<button class="mt-pin" type="button" data-pid="${esc(x.p.id)}" ${x.used ? 'disabled' : ''}>${swatch(x.t)}<span class="grow"><b>${esc(pinName(x.p))}</b><br><span class="small muted">${esc(x.t.name || '')}${x.used ? ' · redan samlingsplats' : ''}</span></span></button>`;
+  const sug = pins.filter(x => x.sug), rest = pins.filter(x => !x.sug);
+  openModal(`<h2>Ny samlingsplats</h2>
+    ${pins.length ? `<p class="note" style="margin-top:0">Välj en kartnål i jaktens områden, eller lägg till en ny position.</p>
+      ${pins.length > 8 ? '<input class="input" id="mtFind" type="search" placeholder="Sök bland nålarna" autocomplete="off" style="margin-bottom:8px">' : ''}
+      <div class="mt-list">${sug.length ? `<div class="lbl">Förslag</div>${sug.map(row).join('')}` : ''}${rest.length ? `${sug.length ? '<div class="lbl">Övriga nålar</div>' : ''}${rest.map(row).join('')}` : ''}</div>`
+    : '<p class="note" style="margin-top:0">Jaktens områden har inga kartnålar. Lägg till en ny position på kartan.</p>'}
+    <div class="actions"><button class="btn ${pins.length ? '' : 'primary '}grow" type="button" id="mtNew">Ny position på kartan</button><button class="btn ghost" type="button" id="mtNo">Avbryt</button></div>`, m => {
+    m.querySelector('#mtNo').addEventListener('click', () => openPlan(g, hid));
+    m.querySelector('#mtNew').addEventListener('click', () => meetPlace(g, hid));
+    const find = m.querySelector('#mtFind');
+    if(find) find.addEventListener('input', () => { const q = find.value.trim().toLowerCase();
+      m.querySelectorAll('.mt-pin').forEach(el => { el.hidden = !!q && !el.textContent.toLowerCase().includes(q); }); });
+    m.addEventListener('click', e => {
+      const b = e.target.closest('.mt-pin'); if(!b || b.disabled) return;
+      const x = pins.find(y => y.p.id === b.dataset.pid); if(!x) return;
+      const name = pinName(x.p).slice(0, 60);
+      planRef(g, hid, 'meets/m-' + uid()).set({name, lat:+x.p.lat.toFixed(6), lng:+x.p.lng.toFixed(6)}).then(() => toast(`Samlingsplatsen ${name} är sparad.`)).catch(fail());
       openPlan(g, hid);
     });
   });
