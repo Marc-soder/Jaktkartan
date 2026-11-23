@@ -33,11 +33,16 @@ window.firebase = (function(){
   window.__fbEmit = (id, v) => { if(subs[id]) subs[id].cb(snap(v)); };
   window.__fbDeny = id => { if(subs[id]){ const e = subs[id].err; delete subs[id]; if(e) e(new Error('permission_denied')); } };
   const uid = () => user ? user.uid : null;
+  window.__popup = 0; window.__od = 0; window.__tokLife = 3600;
+  const jwt = u => 'h.' + btoa(JSON.stringify({uid:u, exp:Math.floor(Date.now() / 1000) + window.__tokLife})).replace(/=+$/, '').replace(/[+]/g, '-').replace(/[/]/g, '_') + '.s';
+  const mkUser = o => Object.assign({refreshToken:'rt-' + o.uid, getIdToken(){ return Promise.resolve(jwt(o.uid)); }}, o);
+  const google = () => { user = mkUser({uid:who, displayName:who[0].toUpperCase() + who.slice(1) + ' Test', email:who + '@example.se', isAnonymous:false}); fire(); return Promise.resolve(); };
   const auth = { get currentUser(){ return user; }, onAuthStateChanged(cb){ cbs.push(cb); setTimeout(() => cb(user), 0); },
-    signInWithPopup(){ user = {uid:who, displayName:who[0].toUpperCase() + who.slice(1) + ' Test', email:who + '@example.se', isAnonymous:false}; fire(); return Promise.resolve(); },
+    signInWithPopup(){ window.__popup++; return google(); },
+    signInWithCredential(c){ return c && c.idToken === 'google-' + who ? google() : Promise.reject(new Error('auth/invalid-credential')); },
     signInAnonymously(){ user = {uid:'anon-' + who, displayName:null, isAnonymous:true}; fire(); return Promise.resolve(); },
     signOut(){ user = null; fire(); return Promise.resolve(); } };
-  const authFn = () => auth; authFn.GoogleAuthProvider = function(){};
+  const authFn = () => auth; authFn.GoogleAuthProvider = function(){}; authFn.GoogleAuthProvider.credential = t => ({idToken:t});
   const wr = (kind, p, v) => window.__fbWrite(uid(), kind, p, v === undefined ? null : v).then(ok => { if(!ok) throw new Error('PERMISSION_DENIED'); });
   const ref = p => { p = String(p || '').replace(/^\\/+|\\/+$/g, ''); const ids = [];
     return { on(ev, cb, err){ const id = ++n; subs[id] = {cb, err}; ids.push(id); window.__fbSub(uid(), id, p); },
@@ -45,12 +50,32 @@ window.firebase = (function(){
       set: v => wr('set', p, v), update: v => wr('update', p, v), remove: () => wr('set', p, null),
       push: v => { const k = 'k' + Date.now().toString(36) + (++n); return wr('set', p + '/' + k, v).then(() => ({key:k})); },
       get: () => window.__fbGet(uid(), p).then(r => { if(!r.ok) throw new Error('PERMISSION_DENIED'); return snap(r.val); }),
-      onDisconnect: () => ({remove: () => Promise.resolve()}) }; };
+      onDisconnect: () => ({remove: () => { window.__od++; return Promise.resolve(); }}) }; };
   const db = {ref}; const dbFn = () => db;
   const apps = [];
   return {apps, initializeApp(){ apps.push(1); }, auth: authFn, database: dbFn};
 })();`;
+const NATIVE = `
+window.__nat = {calls:[], cbs:{}, http:[], perm:'prompt', n:0, wake:0};
+try { Object.defineProperty(navigator, 'wakeLock', {configurable:true, value:{request(){ window.__nat.wake++; return Promise.resolve({release(){}}); }}}); } catch(e){}
+window.Capacitor = {
+  isNativePlatform: () => true, getPlatform: () => 'android',
+  PluginHeaders: ['BackgroundGeolocation', 'CapacitorHttp', 'FirebaseAuthentication', 'LocalNotifications'].map(name => ({name, methods:[]})),
+  nativeCallback(plugin, method, opts, cb){ const id = String(++window.__nat.n); window.__nat.calls.push({plugin, method, opts, id}); window.__nat.cbs[id] = cb; return id; },
+  nativePromise(plugin, method, opts){
+    const N = window.__nat; N.calls.push({plugin, method, opts});
+    if(plugin === 'CapacitorHttp'){ N.http.push(opts); return window.__natHttp(opts); }
+    if(plugin === 'FirebaseAuthentication' && method === 'signInWithGoogle') return Promise.resolve({credential:{idToken:'google-' + new URLSearchParams(location.search).get('u')}});
+    if(plugin === 'LocalNotifications' && method === 'requestPermissions'){ N.perm = 'granted'; return Promise.resolve({display:'granted'}); }
+    if(plugin === 'LocalNotifications' && method === 'checkPermissions') return Promise.resolve({display:N.perm});
+    if(plugin === 'BackgroundGeolocation' && method === 'removeWatcher') delete N.cbs[opts.id];
+    return Promise.resolve({});
+  }
+};
+window.__natEmit = (lat, lng, acc) => Object.values(window.__nat.cbs).forEach(cb => cb({latitude:lat, longitude:lng, accuracy:acc, time:Date.now()}));
+window.__natErr = code => Object.values(window.__nat.cbs).forEach(cb => cb(null, {code, message:'Permission denied.'}));`;
 async function mkPage(browser, who, hash, opts){
+  opts = Object.assign({}, opts || {}); const native = opts.native; delete opts.native;
   const ctx = await browser.newContext(Object.assign({viewport:{width:1280, height:900}, geolocation:{latitude:58.72, longitude:14.61, accuracy:12}, permissions:['geolocation', 'accelerometer', 'gyroscope', 'magnetometer']}, opts || {}));
   await ctx.route('**/*', r => { const u = r.request().url();
     if(u.includes('firebase-app-compat')) return r.fulfill({status:200, contentType:'text/javascript', body:FAKE});
@@ -59,11 +84,32 @@ async function mkPage(browser, who, hash, opts){
     if(u.startsWith('file:') || u.includes('localhost:8765')) return r.continue();
     if(u.includes('fonts.')) return r.abort();
     return r.fulfill({status:200, contentType:'image/png', body:tile}); });
+  if(native) await ctx.addInitScript(NATIVE);
   await ctx.addInitScript(() => { try { if(!localStorage.getItem('faltkartan.fb')) localStorage.setItem('faltkartan.fb', JSON.stringify({apiKey:'k', databaseURL:'https://x.firebasedatabase.app', projectId:'x'})); } catch(e){} });
   const page = await ctx.newPage(); page.errs = [];
   page.on('pageerror', e => page.errs.push(String(e)));
   await page.exposeFunction('__fbSub', async (uid, id, p) => { if(!canRead(uid, p)){ await page.evaluate(i => window.__fbDeny(i), id).catch(() => {}); return; } const j = JSON.stringify(valAt(p)); subs.push({page, id, path:p, uid, last:j}); await page.evaluate(([i, v]) => window.__fbEmit(i, v), [id, JSON.parse(j)]).catch(() => {}); });
   await page.exposeFunction('__fbUnsub', id => { const i = subs.findIndex(s => s.page === page && s.id === id); if(i >= 0) subs.splice(i, 1); });
+  // Appens HTTP: Firebase REST (PUT och POST med ?auth=<ID-token>) och förnyelse av ID-token (securetoken.googleapis.com)
+  if(native) await page.exposeFunction('__natHttp', async o => {
+    const u = new URL(o.url);
+    if(u.hostname === 'securetoken.googleapis.com'){
+      const rt = o.data && o.data.refresh_token, uid = String(rt || '').replace(/^rt-/, '');
+      if(o.method !== 'POST' || !u.searchParams.get('key') || !rt || !(o.headers || {}).Referer) return {status:400, data:{}};
+      const p = Buffer.from(JSON.stringify({uid, exp:Math.floor(Date.now() / 1000) + 3600})).toString('base64url');
+      return {status:200, data:{id_token:'h.' + p + '.s', refresh_token:rt, expires_in:'3600'}};
+    }
+    if(!u.hostname.endsWith('.firebasedatabase.app') || !u.pathname.endsWith('.json')) return {status:404, data:null};
+    let tok; try { tok = JSON.parse(Buffer.from(String(u.searchParams.get('auth')).split('.')[1], 'base64url').toString()); } catch(e){ return {status:401, data:{error:'Unauthorized'}}; }
+    if(!tok.uid || tok.exp * 1000 < Date.now()) return {status:401, data:{error:'Auth token is expired'}};
+    let p = decodeURIComponent(u.pathname.slice(1, -5)), key = null;
+    if(o.method === 'POST'){ key = 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); p += '/' + key; }
+    else if(o.method !== 'PUT') return {status:405, data:null};
+    const r = dbAs(tok.uid).write('/' + p, o.data, undefined, clock());
+    if(!r.allowed) return {status:401, data:{error:'Permission denied'}};
+    data = r.newDatabase.snapshot('/').val() || {}; await pump();
+    return {status:200, data:key ? {name:key} : o.data};
+  });
   await page.exposeFunction('__fbGet', (uid, p) => canRead(uid, p) ? {ok:true, val:valAt(p)} : {ok:false});
   await page.exposeFunction('__fbWrite', async (uid, kind, p, v) => {
     const d = dbAs(uid), r = kind === 'set' ? d.write('/' + p, v, undefined, clock()) : d.update('/' + p, v, clock());
@@ -517,6 +563,30 @@ const team = async (P, sub, g) => { await P.evaluate(([x, t]) => __fk.openTeam(x
   check(kw === 'denied', 'fällt vilt tar bara emot giltiga värden för kön och ålder');
   await B.evaluate(([g, h, o]) => firebase.database().ref(`groups/${g}/huntObs/${h}/${o}`).remove(), [gid, hid, killE[0]]); await W(A, 500);
   check(!data.groups[gid].huntObs[hid][killE[0]] && await A.locator('.obs-icon .obs-dot.kill').count() === 0, 'den som registrerat fällt vilt kan ta bort det');
+  // ---- Appen på Android (låtsad Capacitor): position med släckt skärm, inloggning och aviseringar ----
+  check(!(await A.evaluate(() => __fk.NAT.on)) && (await A.evaluate(() => window.__od)) > 0, 'på webben är appläget av, och positionen tas bort när anslutningen bryts (onDisconnect)');
+  const BN = await mkPage(browser, 'bob', '', {native:true});
+  const nat = (pl, m) => BN.evaluate(([a, b]) => window.__nat.calls.filter(c => c.plugin === a && (!b || c.method === b)), [pl, m]);
+  check(await BN.evaluate(() => __fk.NAT.on) && (await nat('LocalNotifications', 'createChannel')).map(c => c.opts.id).join() === 'sos,jakt', 'appen känns igen, och kanaler för nödlarm och jaktstart skapas');
+  await go(BN, 'konto'); await BN.click('[data-j="login-google"]'); await W(BN, 700);
+  check((await BN.evaluate(() => __fk.cloud.user && __fk.cloud.user.uid)) === 'bob' && (await BN.evaluate(() => window.__popup)) === 0 && (await nat('FirebaseAuthentication', 'signInWithGoogle'))[0].opts.skipNativeAuth === true, 'i appen loggar man in med Google i telefonens eget system, utan popup');
+  check(await BN.isVisible('#paneKonto [data-j="notif"]'), 'Mitt konto erbjuder Tillåt aviseringar i appen');
+  await BN.click('#paneKonto [data-j="notif"]'); await W(BN, 300);
+  check(!(await BN.isVisible('#paneKonto [data-j="notif"]')) && (await BN.evaluate(() => __fk.NAT.notif)) === 'granted', 'aviseringarna tillåts, och knappen försvinner');
+  await team(BN, 'jakt'); await BN.locator('#shareToggle').check({force:true}); await W(BN, 400);
+  const watch = (await nat('BackgroundGeolocation', 'addWatcher'))[0];
+  check(watch && watch.opts.backgroundTitle === 'Jaktkartan delar din position' && watch.opts.requestPermissions === true && watch.opts.distanceFilter === 0 && (await BN.evaluate(() => window.__nat.wake)) === 0 && (await BN.innerText('#paneJakt')).includes('även med släckt skärm'), 'delningen använder positionen i bakgrunden med en fast avisering, utan att hålla skärmen tänd');
+  await BN.evaluate(() => window.__natEmit(58.7215, 14.6115, 6)); await W(BN, 700);
+  const bp = () => hp().bob || {}, btr = () => Object.values(((data.groups[gid].huntTrail || {})[hid] || {}).bob || {});
+  const puts = await BN.evaluate(() => window.__nat.http.filter(h => h.method === 'PUT').map(h => h.url)), dbUrl = await BN.evaluate(() => __fk.cloud.cfg.databaseURL.replace(/\/+$/, ''));
+  check(bp().lat === 58.7215 && bp().acc === 6 && bp().name === 'Bob Test' && btr().length === 1 && puts.length && puts[0].startsWith(`${dbUrl}/groups/${gid}/huntPos/${hid}/bob.json?auth=`), 'positionen och spåret skickas till Firebase REST med telefonens egen HTTP');
+  check((await BN.evaluate(() => window.__od)) === 0, 'i appen tas positionen inte bort när anslutningen bryts (ingen onDisconnect)');
+  check(await A.locator('.pos-icon').count() === 2, 'Alice ser Bobs position från appen');
+  // Skärmen släckt och ID-token nästan slut: den förnyas med telefonens egen HTTP
+  await BN.evaluate(() => { Object.defineProperty(document, 'hidden', {configurable:true, get:() => true}); window.__tokLife = 60; __fk.natTok.exp = 0; __fk.cloud.lastSent = 0; window.__natEmit(58.7225, 14.6125, 5); }); await W(BN, 700);
+  const ref = await BN.evaluate(() => window.__nat.http.filter(h => h.url.startsWith('https://securetoken.googleapis.com/')));
+  check(ref.length === 1 && ref[0].data.refresh_token === 'rt-bob' && ref[0].data.grant_type === 'refresh_token' && ref[0].headers.Referer.includes('jaktkartan.html') && bp().lat === 58.7225, 'med släckt skärm förnyas inloggningen med telefonens HTTP (med Referer för API-nyckeln), och positionen kommer fram');
+  // Nödlarm när appen ligger i bakgrunden: avisering i telefonen (kontrolleras under Nödläge nedan)
   // ---- Nödläge ----
   check(await A.isVisible('#btnSos') && await B.isVisible('#btnSos') && await C.isVisible('#btnSos'), 'alla i jaktlaget, även gästen, har knappen SOS');
   await C.click('#btnSos'); await W(C, 200);
@@ -531,6 +601,23 @@ const team = async (P, sub, g) => { await P.evaluate(([x, t]) => __fk.openTeam(x
     const href = await P.isVisible('#sosNav') ? await P.getAttribute('#sosNav', 'href') : '';
     check(t.includes('Carl Gäst') && t.includes('Vill du navigera') && href.includes('destination=58.72') && await P.locator('.sos-icon').count() === 1, `${n} får larmet, med frågan om att navigera till Carl och en markering på kartan`);
   }
+  { const ns = (await nat('LocalNotifications', 'schedule')).flatMap(c => c.opts.notifications);
+    check(ns.some(n => n.title === 'Nödlarm: Carl Gäst behöver hjälp' && n.channelId === 'sos' && !n.schedule), `appen i bakgrunden visar nödlarmet som en avisering i telefonen (${ns.map(n => n.title)})`); }
+  // Påminnelse när en jakt man deltar i startar: schemaläggs i telefonen, och tas bort om man avböjer
+  const remAt = Date.now() + 3 * 3600000;
+  await BN.evaluate(([g, at]) => { const G = __fk.cloud.groups[g]; G.hunts.hx = {name:'Testjakt', starts:at, expires:at + 3600000, day:'2026-11-23'}; G.huntRsvp.hx = {bob:{name:'Bob Test', t:Date.now()}}; __fk.renderAll(); }, [gid, remAt]); await W(BN, 200);
+  const rem = (await nat('LocalNotifications', 'schedule')).flatMap(c => c.opts.notifications).find(n => n.title === 'Jakten börjar: Testjakt');
+  check(rem && rem.schedule.at === new Date(remAt).toISOString() && rem.channelId === 'jakt' && rem.body.includes('Älglaget'), 'en jakt man deltar i får en påminnelse i telefonen när den startar');
+  await BN.evaluate(g => { __fk.cloud.groups[g].huntRsvp.hx = {bob:{name:'Bob Test', t:Date.now(), no:true}}; __fk.renderAll(); }, gid); await W(BN, 200);
+  const canc = (await nat('LocalNotifications', 'cancel')).flatMap(c => c.opts.notifications).map(n => n.id);
+  check(rem && canc.includes(rem.id), 'avböjer man tas påminnelsen bort');
+  await BN.evaluate(g => { delete __fk.cloud.groups[g].hunts.hx; delete __fk.cloud.groups[g].huntRsvp.hx; }, gid);
+  // Nekad platsåtkomst: delningen stoppas och telefonens inställningar öppnas
+  await BN.evaluate(() => window.__natErr('NOT_AUTHORIZED')); await W(BN, 600);
+  check(!(await BN.evaluate(() => __fk.cloud.sharing)) && (await nat('BackgroundGeolocation', 'openSettings')).length === 1 && (await nat('BackgroundGeolocation', 'removeWatcher'))[0].opts.id === watch.id && !hp().bob, 'nekas platsåtkomst stoppas delningen, positionen tas bort och inställningarna öppnas');
+  check(!BN.errs.length, `inga JS-fel i appen: ${BN.errs.slice(0, 3)}`);
+  for(let i = subs.length - 1; i >= 0; i--) if(subs[i].page === BN) subs.splice(i, 1);
+  await BN.context().close();
   await A.screenshot({path:shot('a_sos.png')});
   check(await C.isVisible('#sosBar') && await C.evaluate(() => document.getElementById('btnSos').classList.contains('on')), 'Carl ser att hans larm är aktivt');
   await A.click('#sosClose'); await B.click('#sosClose'); await W(A, 200);

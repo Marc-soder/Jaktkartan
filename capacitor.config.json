@@ -1,0 +1,22 @@
+{
+  "appId": "io.github.marcsoder.jaktkartan",
+  "appName": "Jaktkartan",
+  "webDir": "app/www",
+  "server": {
+    "url": "https://marc-soder.github.io/Jaktkartan/",
+    "errorPath": "offline.html"
+  },
+  "android": {
+    "useLegacyBridge": true
+  },
+  "plugins": {
+    "FirebaseAuthentication": {
+      "skipNativeAuth": true,
+      "providers": ["google.com"]
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_jk",
+      "iconColor": "#1f3a2e"
+    }
+  }
+}

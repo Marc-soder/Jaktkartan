@@ -1,0 +1,141 @@
+name: Android-appen
+
+# Kontrollbygge: i PR:er som ändrar appens skal, utan nycklar, så att bygget inte går sönder.
+# Signerat bygge: startas för hand under Actions → Android-appen → Run workflow. Se ANDROID.md.
+on:
+  pull_request:
+    paths:
+      - 'android/**'
+      - 'app/**'
+      - 'capacitor.config.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+    inputs:
+      publicera:
+        description: 'Lägg APK-filen under Releases, så att laget kan ladda ner den'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  kontroll:
+    name: Kontrollbygge av appen
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - name: Installera
+        run: npm ci
+      - name: Uppdatera Android-projektet från capacitor.config.json
+        run: npx cap sync android
+      - name: Bygg (felsökningsversion, utan nycklar)
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+  bygg:
+    name: Bygg appen (signerad)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write   # bara för att kunna lägga APK-filen under Releases
+    env:
+      JK_KEYSTORE_BASE64: ${{ secrets.JK_KEYSTORE_BASE64 }}
+      JK_KEYSTORE_PASSWORD: ${{ secrets.JK_KEYSTORE_PASSWORD }}
+      JK_GOOGLE_SERVICES_JSON: ${{ secrets.JK_GOOGLE_SERVICES_JSON }}
+      JK_KEY_ALIAS: jaktkartan
+      JK_VERSION_CODE: ${{ github.run_number }}
+      JK_VERSION_NAME: 1.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - name: Installera
+        run: npm ci
+      - name: Kontrollera hemligheterna och lägg fram nyckeln och Firebase-filen
+        run: |
+          saknas=""
+          for v in JK_KEYSTORE_BASE64 JK_KEYSTORE_PASSWORD JK_GOOGLE_SERVICES_JSON; do
+            [ -n "${!v}" ] || saknas="$saknas $v"
+          done
+          if [ -n "$saknas" ]; then
+            echo "::error::Hemligheter saknas i GitHub:$saknas. Lägg in dem enligt ANDROID.md (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          printf '%s' "$JK_KEYSTORE_BASE64" | tr -d ' \r\n' | base64 -d > "$RUNNER_TEMP/jaktkartan.jks"
+          printf '%s' "$JK_GOOGLE_SERVICES_JSON" > android/app/google-services.json
+          echo "JK_KEYSTORE_FILE=$RUNNER_TEMP/jaktkartan.jks" >> "$GITHUB_ENV"
+          echo "JK_KEY_PASSWORD=$JK_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          # Nyckelns fingeravtryck (SHA-1) måste finnas i Firebase, annars fungerar inte inloggningen med Google
+          sha1=$(keytool -list -v -keystore "$RUNNER_TEMP/jaktkartan.jks" -alias "$JK_KEY_ALIAS" -storepass "$JK_KEYSTORE_PASSWORD" | sed -n 's/^[[:space:]]*SHA1:[[:space:]]*//p' | head -1)
+          if [ -z "$sha1" ]; then
+            echo "::error::Signeringsnyckeln gick inte att läsa. Kontrollera JK_KEYSTORE_BASE64, JK_KEYSTORE_PASSWORD och att nyckeln heter jaktkartan (ANDROID.md)."
+            exit 1
+          fi
+          echo "Signeringsnyckelns SHA-1: $sha1"
+          APP_ID=$(node -p "require('./capacitor.config.json').appId") SHA1="$sha1" python3 - <<'PY'
+          import json, os, sys
+          app, sha1 = os.environ['APP_ID'], os.environ['SHA1'].replace(':', '').lower()
+          try:
+              d = json.load(open('android/app/google-services.json'))
+          except Exception as e:
+              print(f'::error::JK_GOOGLE_SERVICES_JSON är inte en giltig google-services.json ({e}).'); sys.exit(1)
+          clients = [c for c in d.get('client', []) if c.get('client_info', {}).get('android_client_info', {}).get('package_name') == app]
+          if not clients:
+              print(f'::error::google-services.json saknar Android-appen {app}. Lägg till appen i Firebase med det paketnamnet och hämta filen igen.'); sys.exit(1)
+          oauth = [o for c in clients for o in c.get('oauth_client', [])] + [o for c in clients for s in c.get('services', {}).values() if isinstance(s, dict) for o in s.get('other_platform_oauth_client', [])]
+          hashes = {o.get('android_info', {}).get('certificate_hash', '').lower() for o in oauth if o.get('client_type') == 1}
+          if sha1 not in hashes:
+              print(f'::error::Signeringsnyckelns SHA-1 ({os.environ["SHA1"]}) finns inte i google-services.json. Lägg in den i Firebase (Projektinställningar → Dina appar → Lägg till fingeravtryck) och hämta filen igen.'); sys.exit(1)
+          if not any(o.get('client_type') == 3 for o in oauth):
+              print('::error::google-services.json saknar webbklienten för inloggning med Google. Kontrollera att Google är påslaget under Authentication → Sign-in method och hämta filen igen.'); sys.exit(1)
+          print('google-services.json stämmer med appen och nyckeln.')
+          PY
+      - name: Uppdatera Android-projektet från capacitor.config.json
+        run: npx cap sync android
+      - name: Bygg signerad app
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+      - name: Kontrollera signaturen
+        run: |
+          apk=android/app/build/outputs/apk/release/app-release.apk
+          bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$bt/apksigner" verify --print-certs "$apk" | grep -E 'SHA-1|Signer' || { echo "::error::APK-filen är inte signerad."; exit 1; }
+          mkdir -p ut && cp "$apk" "ut/Jaktkartan-$JK_VERSION_NAME.apk"
+          rm -f "$JK_KEYSTORE_FILE" android/app/google-services.json
+      - name: Spara APK-filen
+        uses: actions/upload-artifact@v4
+        with:
+          name: Jaktkartan-${{ env.JK_VERSION_NAME }}
+          path: ut/*.apk
+          retention-days: 30
+      - name: Publicera under Releases
+        if: inputs.publicera
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "app-$JK_VERSION_NAME" "ut/Jaktkartan-$JK_VERSION_NAME.apk" \
+            --target "$GITHUB_SHA" \
+            --title "Jaktkartan $JK_VERSION_NAME för Android" \
+            --notes "Appen för Android. Installera APK-filen på telefonen enligt ANDROID.md (steg för laget). Själva kartan och jakterna uppdateras automatiskt från webben, så en ny APK behövs bara när appens skal ändras."

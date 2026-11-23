@@ -232,7 +232,7 @@ function autoShare(){
   if(cloud.sharing || !live.length) return;
   startSharing();
   // Har man precis tryckt Jag deltar har man redan fått besked: ingen andra avisering
-  if(cloud.sharing){ cloud.autoShared = true; if(Date.now() - (cloud.rsvpAt || 0) > 5000) toast('Jakten har startat. Din position delas med jaktlaget medan appen är öppen.', 5000); }
+  if(cloud.sharing){ cloud.autoShared = true; if(Date.now() - (cloud.rsvpAt || 0) > 5000) toast(NAT.on ? 'Jakten har startat. Din position delas med jaktlaget, även med släckt skärm.' : 'Jakten har startat. Din position delas med jaktlaget medan appen är öppen.', 5000); }
 }
 let huntPosTimer = null;
 function syncHuntPos(){
@@ -465,27 +465,34 @@ $('#popTrailRec').addEventListener('change', e => { if(e.target.checked) startTr
 function clearOwnTrail(){ trail.own = []; try { localStorage.removeItem(TRAIL_KEY); } catch(e){} renderTrails(); }
 /* Vart positionen skickas: startade man själv, till alla pågående jakter. Startade den automatiskt, bara till jakterna man deltar i. */
 const shareHunts = g => liveHunts(g).filter(hid => !cloud.autoShared || (accepted(g, hid) && !cloud.autoOff[g.id + '/' + hid]));
+/* I appen skickas positionen med telefonens egen HTTP (natPutPos), och Firebase tar inte bort den när anslutningen bryts
+   (onDisconnect), annars försvinner man från kartan när skärmen släcks. Den tas bort när man stoppar delningen eller jakten slutar. */
 function sendPos(){
   if(!fb || !cloud.user || !myPos) return;
   for(const g of Object.values(cloud.groups)) for(const hid of shareHunts(g)){
-    const r = fb.db.ref(`groups/${g.id}/huntPos/${hid}/${myUid()}`);
+    const path = `groups/${g.id}/huntPos/${hid}/${myUid()}`, val = {lat:+myPos.lat.toFixed(6), lng:+myPos.lng.toFixed(6), acc:Math.round(myPos.acc || 0), t:Date.now(), name:myName()};
+    if(NAT.on){ natPutPos(path, val); continue; }
+    const r = fb.db.ref(path);
     if(!g.disc[hid]){ g.disc[hid] = true; try { r.onDisconnect().remove(); } catch(e){} }
-    r.set({lat:+myPos.lat.toFixed(6), lng:+myPos.lng.toFixed(6), acc:Math.round(myPos.acc || 0), t:Date.now(), name:myName()}).catch(() => {});
+    r.set(val).catch(() => {});
   }
   // Spårpunkt när man flyttat sig minst 10 m, eller varje minut
   const lt = cloud.lastTrail, now = Date.now();
   if((myPos.acc || 0) <= 100 && (!lt || now - lt.t >= 60000 || distM(lt, myPos) >= 10)){
     cloud.lastTrail = {lat:myPos.lat, lng:myPos.lng, t:now};
-    for(const g of Object.values(cloud.groups)) for(const hid of shareHunts(g))
-      fb.db.ref(`groups/${g.id}/huntTrail/${hid}/${myUid()}`).push({lat:+myPos.lat.toFixed(6), lng:+myPos.lng.toFixed(6), t:now}).catch(() => {});
+    for(const g of Object.values(cloud.groups)) for(const hid of shareHunts(g)){
+      const path = `groups/${g.id}/huntTrail/${hid}/${myUid()}`, val = {lat:+myPos.lat.toFixed(6), lng:+myPos.lng.toFixed(6), t:now};
+      if(NAT.on) natPushTrail(path, val); else fb.db.ref(path).push(val).catch(() => {});
+    }
   }
 }
 function startSharing(){
-  if(!('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); return; }
+  if(!NAT.on && !('geolocation' in navigator)){ toast('Den här webbläsaren kan inte ge din position.'); return; }
   if(!anyLiveHunt()){ toast('Positioner kan bara delas medan en jakt pågår.'); renderJakt(); return; }
   cloud.sharing = true; cloud.lastSent = 0; cloud.lastTrail = null; cloud.sentAt = null;
   gpsStart(powerOn());
-  try { if(navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { cloud.wake = l; }).catch(() => {}); } catch(e){}
+  // I appen fortsätter delningen med släckt skärm. På webben hålls skärmen tänd.
+  if(!NAT.on) try { if(navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { cloud.wake = l; }).catch(() => {}); } catch(e){}
   renderJakt();
 }
 /* GPS: i vanligt läge följs positionen hela tiden. I sparläget görs en mätning var 30:e sekund (fortfarande med hög
@@ -501,22 +508,27 @@ function gpsPos(pos){
 /* Bara nekad platsåtkomst stänger av delningen. Tillfälliga fel (ingen GPS-signal, för långsamt svar) är vanliga i skogen:
    då fortsätter delningen, och positionen skickas igen när GPS:en svarar. */
 function gpsErr(err){
-  if(err && err.code === 1){ for(const k of acceptedLive()) cloud.autoOff[k] = true; stopSharing(); toast('Positionen är blockerad. Tillåt plats för sidan i webbläsarens inställningar.'); renderJakt(); return; }
+  if(err && err.code === 1){ for(const k of acceptedLive()) cloud.autoOff[k] = true; stopSharing(); toast(NAT.on ? 'Positionen är blockerad. Tillåt plats för Jaktkartan: När appen används, och Exakt plats.' : 'Positionen är blockerad. Tillåt plats för sidan i webbläsarens inställningar.', 6000); renderJakt(); return; }
   if(Date.now() - (cloud.gpsWarned || 0) > 120000){ cloud.gpsWarned = Date.now(); toast('Svag GPS-signal just nu. Positionen skickas igen så fort telefonen får en.', 5000); }
 }
 function gpsStop(){
+  natGpsStop();
   if(cloud.watchId != null){ navigator.geolocation.clearWatch(cloud.watchId); cloud.watchId = null; }
   if(cloud.gpsTimer){ clearInterval(cloud.gpsTimer); cloud.gpsTimer = null; }
 }
 function gpsStart(save){
   gpsStop(); cloud.gpsSave = !!save;
+  if(NAT.on){ natGpsStart(); return; }
   const opt = {enableHighAccuracy:true, maximumAge:5000, timeout:30000};
   if(!save){ cloud.watchId = navigator.geolocation.watchPosition(gpsPos, gpsErr, opt); return; }
   const once = () => navigator.geolocation.getCurrentPosition(gpsPos, gpsErr, Object.assign({}, opt, {maximumAge:10000}));
   once(); cloud.gpsTimer = setInterval(once, GPS_SAVE_MS);
 }
 /* Byt GPS-läge när sparläget slås på eller av (bara medan positionen delas). */
-function gpsSync(){ if(cloud.sharing && cloud.gpsSave !== powerOn()) gpsStart(powerOn()); }
+function gpsSync(){
+  if(NAT.on){ cloud.gpsSave = powerOn(); return; }   // appen: samma GPS i båda lägena, bara sändningen glesas ut (gpsPos)
+  if(cloud.sharing && cloud.gpsSave !== powerOn()) gpsStart(powerOn());
+}
 function stopSharing(silent){
   gpsStop();
   if(cloud.wake){ try { cloud.wake.release(); } catch(e){} cloud.wake = null; }
@@ -643,7 +655,8 @@ function renderKonto(){
     const u = cloud.user;
     html += `<div class="userrow"><span class="pos-dot">${esc(initials(myName()))}</span><span class="grow"><strong>${esc(myName())}</strong><br><span class="small muted">${u.isAnonymous ? 'Gäst' : esc(u.email || 'Inloggad')}</span></span></div>
       <div class="btnrow" style="margin-top:8px"><button class="btn sm" type="button" data-j="name">Byt namn</button><button class="btn sm ghost" type="button" data-j="logout">Logga ut</button></div>
-      ${window.Notification && Notification.permission === 'default' ? '<div class="btnrow"><button class="btn sm" type="button" data-j="notif">Tillåt aviseringar om nödlarm</button></div><p class="note" style="margin-top:2px">Då kan ett nödlarm synas även när appen ligger i bakgrunden.</p>' : ''}`;
+      ${NAT.on ? (NAT.notif !== 'granted' && NAT.has('LocalNotifications') ? '<div class="btnrow"><button class="btn sm" type="button" data-j="notif">Tillåt aviseringar</button></div><p class="note" style="margin-top:2px">För nödlarm, påminnelse när en jakt du deltar i startar, och aviseringen som visar att positionen delas.</p>' : '')
+      : window.Notification && Notification.permission === 'default' ? '<div class="btnrow"><button class="btn sm" type="button" data-j="notif">Tillåt aviseringar om nödlarm</button></div><p class="note" style="margin-top:2px">Då kan ett nödlarm synas även när appen ligger i bakgrunden.</p>' : ''}`;
   }
   html += docsCardHtml();
   pane.innerHTML = html;
@@ -674,6 +687,7 @@ function teamRowHtml(g, i, n){
 }
 function renderJakt(){
   renderKonto();
+  if(NAT.on) natReminders();
   const pane = $('#paneJakt'); if(!pane) return;
   const st = cloud.status;
   if(nav.team && !(cloud.groups[nav.team] && cloud.groups[nav.team].meta)) nav.team = null;
@@ -700,7 +714,7 @@ function renderJakt(){
 function shareHtml(){
   return `<label class="bigtoggle" for="shareToggle"><span><strong>Dela min position</strong><br><span class="small muted">Syns bara för deltagarna i pågående jakter</span></span><input class="sw-toggle" type="checkbox" id="shareToggle" ${cloud.sharing ? 'checked' : ''} ${anyLiveHunt() ? '' : 'disabled'}></label>
     <p class="note" id="posCount">${posCountText()}</p>
-    ${cloud.sharing ? '<p class="note">Positionen skickas bara medan appen är öppen och skärmen är på.</p>' : ''}`;
+    ${cloud.sharing ? (NAT.on ? '<p class="note">Positionen skickas även med släckt skärm. Aviseringen <b>Jaktkartan delar din position</b> visar att den delas.</p>' : '<p class="note">Positionen skickas bara medan appen är öppen och skärmen är på.</p>') : ''}`;
 }
 function teamHtml(g){
   const u = cloud.user;
@@ -903,10 +917,12 @@ function jaktClick(e){
   else if(act === 'copy-rules') copyText(RULES_TEXT, 'Reglerna är kopierade');
   else if(act === 'cfg-save'){ const cfg = parseCfg($('#fbCfg').value); if(!cfg){ toast('Hittade inte apiKey, databaseURL och projectId i texten.', 5000); return; } lsSet(FBKEY, JSON.stringify(cfg)); cloudInit(); }
   else if(act === 'cfg-reset') confirmClick(b, 'Tryck igen för att byta', () => { try { localStorage.removeItem(FBKEY); } catch(e){} location.reload(); });
+  else if(act === 'login-google' && NAT.on) natGoogleLogin();
   else if(act === 'login-google') fb.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(err => toast(err && err.code === 'auth/unauthorized-domain' ? 'Webbadressen är inte godkänd i Firebase. Lägg till den under Authentication, Settings, Authorized domains.' : 'Inloggningen avbröts.', 6000));
   else if(act === 'login-guest'){ const n = $('#gName').value.trim(), c = $('#gCode').value.trim(); if(!n || !c){ toast('Fyll i namn och jaktkod.'); return; } lsSet(NAMEKEY, n); cloud.pending = c.toUpperCase(); fb.auth.signInAnonymously().catch(() => toast('Gästinloggning är inte påslagen i Firebase (Anonym).', 6000)); }
-  else if(act === 'logout'){ stopSharing(); fb.auth.signOut(); }
+  else if(act === 'logout'){ stopSharing(); natLogout(); fb.auth.signOut(); }
   else if(act === 'name') askText('Byt namn', 'Namn som syns för andra', myName(), 'Spara', v => { lsSet(NAMEKEY, v); for(const gr of Object.values(cloud.groups)){ if(gr.kind === 'member'){ fb.db.ref(`groups/${gr.id}/members/${myUid()}/name`).set(v).catch(() => {}); for(const [h, r] of Object.entries(gr.huntRsvp || {})) if(r && r[myUid()]) fb.db.ref(`groups/${gr.id}/huntRsvp/${h}/${myUid()}/name`).set(v).catch(() => {}); } else fb.db.ref(`groups/${gr.id}/guests/${myUid()}/name`).set(v).catch(() => {}); msgPublish(gr); } renderJakt(); }, 40);
+  else if(act === 'notif' && NAT.on) natNotifPerm();
   else if(act === 'notif'){ try { Notification.requestPermission().then(p => { toast(p === 'granted' ? 'Aviseringar om nödlarm är tillåtna.' : 'Aviseringar är inte tillåtna. Det går att ändra i webbläsarens inställningar.', 5000); renderJakt(); }); } catch(e){} }
   else if(act === 'group-new') askText('Skapa jaktlag', 'Namn på jaktlaget', '', 'Skapa', v => createGroup(v), 60);
   else if(act === 'join') askText('Gå med med kod', 'Inbjudningskod eller jaktkod', '', 'Gå med', v => joinByCode(v), 14);
