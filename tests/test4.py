@@ -30,6 +30,17 @@ with sync_playwright() as p:
 
         # ---- Vind ----
         check(pg.is_visible('#windChip') and len(meteo) >= 1, f'{name}: vinden är påslagen från början')
+        if name == 'mobil':
+            # Appen ritar ända ned bakom Androids navigeringsfält (iPhone: listen nertill). Panelen blir då högre (--sab),
+            # och vind, plusknapp och placering ska fortfarande ligga ovanför den.
+            js = "(() => { const b = id => document.getElementById(id).getBoundingClientRect(), p = b('panel'); return {top:p.top, h:p.height, bottom:p.bottom, vh:innerHeight, wind:b('windChip').bottom, fab:b('btnAdd').bottom}; })()"
+            ra = {}
+            for sab in ('0px', '48px'):
+                pg.evaluate(f"document.documentElement.style.setProperty('--sab', '{sab}'); __fk.setSheet('peek', true)"); pg.wait_for_timeout(400)
+                ra[sab] = r = pg.evaluate(js)
+                check(r['wind'] <= r['top'] - 4 and r['fab'] <= r['top'] - 4 and abs(r['bottom'] - r['vh']) < 1, f'{name}: med {sab} nedre kant ligger vind och plusknapp ovanför panelen ({r})')
+            check(abs(ra['48px']['h'] - ra['0px']['h'] - 48) < 1, f'{name}: panelen blir lika mycket högre som den nedre kanten ({ra})')
+            pg.evaluate("document.documentElement.style.removeProperty('--sab'); __fk.setSheet('peek', true)"); pg.wait_for_timeout(300)
         check(pg.locator('path.wind-sector').count() == 0 and pg.evaluate('__fk.wind.sector') is None, f'{name}: utan känd position visas inget gult område (det följer inte kartans mitt)')
         pg.click('#btnLayers'); pg.wait_for_timeout(200)
         check(pg.is_checked('#popWind'), f'{name}: Vindriktning är ibockad från början')

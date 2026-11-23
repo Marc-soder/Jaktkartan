@@ -689,6 +689,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
   --font-body:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
   --panel-w:380px; --sheet-h:120px;
+  /* --sab: skärmens nedre kant som inte får täckas (iPhones list, Androids navigeringsfält när appen ritar ända ned).
+     --sheet-b: panelens överkant räknat från skärmens nederkant. Allt som ska ligga ovanför panelen utgår från den. */
+  --sab:env(safe-area-inset-bottom, 0px); --sheet-b:calc(var(--sheet-h) + var(--sab));
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
@@ -740,7 +743,7 @@ a{color:var(--accent)}
 .ctrl-gap{height:4px}
 .mode-chip{position:fixed;z-index:900;top:calc(12px + env(safe-area-inset-top,0px));left:calc(12px + env(safe-area-inset-left,0px));background:var(--accent);color:var(--accent-fg);font:700 13px/1 var(--font-display);letter-spacing:.08em;text-transform:uppercase;padding:9px 12px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.2);border:0;display:flex;gap:6px;align-items:center}
 @media (min-width:860px){.mode-chip{left:calc(var(--panel-w) + 12px)}}
-.fab{position:fixed;z-index:950;right:calc(14px + env(safe-area-inset-right,0px));bottom:calc(var(--sheet-h) + 14px);width:56px;height:56px;border-radius:18px;border:0;background:var(--accent);color:var(--accent-fg);box-shadow:0 6px 18px rgba(0,0,0,.3);display:grid;place-items:center;transition:bottom .25s ease}
+.fab{position:fixed;z-index:950;right:calc(14px + env(safe-area-inset-right,0px));bottom:calc(var(--sheet-b) + 14px);width:56px;height:56px;border-radius:18px;border:0;background:var(--accent);color:var(--accent-fg);box-shadow:0 6px 18px rgba(0,0,0,.3);display:grid;place-items:center;transition:bottom .25s ease}
 .fab svg{width:28px;height:28px}
 @media (min-width:860px){.fab{bottom:28px}}
 
@@ -906,7 +909,7 @@ a{color:var(--accent)}
 .netbar[hidden]{display:none}
 .updbar{background:#14532d;display:flex;align-items:center;gap:8px;z-index:1310}
 .updbar button{border:1px solid #fff;background:none;color:#fff;border-radius:8px;padding:4px 10px;font:700 12px/1 var(--font-body);cursor:pointer}
-@media (max-width:520px){.netbar{top:auto;bottom:calc(var(--sheet-h) + 70px);max-width:calc(100vw - 32px)}}
+@media (max-width:520px){.netbar{top:auto;bottom:calc(var(--sheet-b) + 70px);max-width:calc(100vw - 32px)}}
 @media (max-width:520px){.updbar{top:calc(10px + env(safe-area-inset-top,0px));bottom:auto;left:16px;transform:none;max-width:calc(100vw - 92px)}}
 .check-row{margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .check-ok{color:#15803d;font-weight:600}
@@ -933,7 +936,7 @@ a{color:var(--accent)}
 .obs-menu button{display:flex;gap:10px;align-items:center;min-height:44px;padding:6px 12px 6px 6px;border:0;border-radius:10px;background:none;color:var(--fg);font:600 15px/1 var(--font-body);white-space:nowrap;cursor:pointer}
 .obs-menu button:hover,.obs-menu button:focus-visible{background:var(--surface-2)}
 .obs-row{display:flex;gap:8px;align-items:flex-start;width:100%;text-align:left;border:0;background:none;padding:6px 0;border-bottom:1px solid var(--line);color:inherit;font:inherit}
-.wind-chip{position:fixed;z-index:900;left:calc(14px + env(safe-area-inset-left,0px));bottom:calc(var(--sheet-h) + 14px);display:flex;align-items:center;gap:6px;padding:8px 12px 8px 8px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg);box-shadow:0 2px 10px rgba(0,0,0,.18);font:500 14px/1 var(--font-body)}
+.wind-chip{position:fixed;z-index:900;left:calc(14px + env(safe-area-inset-left,0px));bottom:calc(var(--sheet-b) + 14px);display:flex;align-items:center;gap:6px;padding:8px 12px 8px 8px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg);box-shadow:0 2px 10px rgba(0,0,0,.18);font:500 14px/1 var(--font-body)}
 .wind-chip svg{width:22px;height:22px;color:#1a73e8;flex:none}
 @media (min-width:860px){.wind-chip{left:calc(var(--panel-w) + 14px)}}
 .wind-arrows{position:absolute;left:0;top:0;pointer-events:none;opacity:.55}
@@ -957,7 +960,7 @@ a{color:var(--accent)}
 /* Placering */
 .crosshair{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;z-index:800;pointer-events:none;color:var(--accent)}
 .crosshair svg{width:100%;height:100%;filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 1px #fff)}
-.placebar{position:fixed;z-index:1100;left:50%;transform:translateX(-50%);bottom:calc(var(--sheet-h) + 14px);width:min(440px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:12px;display:grid;gap:10px}
+.placebar{position:fixed;z-index:1100;left:50%;transform:translateX(-50%);bottom:calc(var(--sheet-b) + 14px);width:min(440px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:12px;display:grid;gap:10px}
 @media (min-width:860px){.placebar{left:calc(var(--panel-w) + (100vw - var(--panel-w))/2);bottom:28px}}
 .placebar p{margin:0;font-size:14px;color:var(--muted)}
 .placebar .coords{font:500 13px/1.3 var(--font-mono);color:var(--fg)}
@@ -965,7 +968,7 @@ a{color:var(--accent)}
 .btnrow > *{flex:1 1 auto}
 
 /* Panel / bottenlåda */
-#panel{position:fixed;z-index:1000;left:0;right:0;bottom:0;height:var(--sheet-h);background:var(--surface);border-radius:18px 18px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.18);display:flex;flex-direction:column;transition:height .25s ease;padding-bottom:env(safe-area-inset-bottom,0px);overflow:hidden}
+#panel{position:fixed;z-index:1000;left:0;right:0;bottom:0;height:var(--sheet-h);background:var(--surface);border-radius:18px 18px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.18);display:flex;flex-direction:column;transition:height .25s ease;padding-bottom:var(--sab);overflow:hidden}
 #panel.dragging{transition:none}
 #panel.peek:not(.dragging) .p-body{visibility:hidden}
 .handle{flex:none;height:22px;display:grid;place-items:center;touch-action:none;cursor:grab;border:0;background:none;width:100%;padding:0}
@@ -1193,7 +1196,7 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
 .pp .pbtns > *{flex:1 1 auto}
 .pp .src{font-size:12px;color:var(--muted)}
 
-.toast{position:fixed;z-index:3000;left:50%;transform:translateX(-50%);bottom:calc(var(--sheet-h) + 84px);background:var(--fg);color:var(--bg);padding:10px 14px;border-radius:12px;box-shadow:var(--shadow);font-size:14px;max-width:min(460px,calc(100vw - 32px));transition:opacity .2s}
+.toast{position:fixed;z-index:3000;left:50%;transform:translateX(-50%);bottom:calc(var(--sheet-b) + 84px);background:var(--fg);color:var(--bg);padding:10px 14px;border-radius:12px;box-shadow:var(--shadow);font-size:14px;max-width:min(460px,calc(100vw - 32px));transition:opacity .2s}
 @media (min-width:860px){.toast{left:calc(var(--panel-w) + (100vw - var(--panel-w))/2);bottom:28px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -1804,22 +1807,27 @@ function setSheet(s, noAnim){
   const panel = $('#panel');
   if(noAnim) panel.classList.add('dragging');
   document.documentElement.style.setProperty('--sheet-h', px + 'px');
-  panel.style.height = `calc(${px}px + env(safe-area-inset-bottom, 0px))`;
+  panel.style.height = `calc(${px}px + var(--sab))`;
   if(typeof renderCompass === 'function') renderCompass();
   if(noAnim) requestAnimationFrame(() => panel.classList.remove('dragging'));
   setTimeout(syncCross, 280);
 }
 /* Efter placering och ritning: tillbaka från lägsta läget så att flikarna syns. */
 function sheetRestore(){ if(sheet === 'min' && !placing && !drawing && !(typeof cal !== 'undefined' && cal) && !(typeof adj !== 'undefined' && adj)) setSheet('peek'); }
-function bottomPad(){ return isDesktop() ? 0 : (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-h')) || 0); }
+/* Höjden på --sab i pixlar (env() går inte att läsa direkt från JavaScript). */
+const sabProbe = document.createElement('div');
+sabProbe.style.cssText = 'position:fixed;left:0;bottom:0;width:0;height:var(--sab);visibility:hidden;pointer-events:none';
+document.body.appendChild(sabProbe);
+const safeBottom = () => sabProbe.offsetHeight || 0;
+function bottomPad(){ return isDesktop() ? 0 : (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-h')) || 0) + safeBottom(); }
 (function sheetDrag(){
   const panel = $('#panel'); let startY = 0, startH = 0, moved = false, active = false;
   const down = e => { if(isDesktop() || (e.currentTarget.id === 'pHead' && e.target.closest('button'))) return; active = true; moved = false; startY = e.clientY; startH = panel.getBoundingClientRect().height; panel.classList.add('dragging'); e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId); };
   const move = e => { if(!active) return; const dy = startY - e.clientY; if(Math.abs(dy) > 6) moved = true; if(!moved) return;
-    const hpx = Math.max(minH(), Math.min(window.innerHeight - 40, startH + dy)); panel.style.height = hpx + 'px'; document.documentElement.style.setProperty('--sheet-h', hpx + 'px'); syncCross(); if(typeof renderCompass === 'function') renderCompass(); };
+    const hpx = Math.max(minH() + safeBottom(), Math.min(window.innerHeight - 40, startH + dy)); panel.style.height = hpx + 'px'; document.documentElement.style.setProperty('--sheet-h', (hpx - safeBottom()) + 'px'); syncCross(); if(typeof renderCompass === 'function') renderCompass(); };
   const up = e => { if(!active) return; active = false; panel.classList.remove('dragging');
     if(!moved){ if(e.currentTarget.id === 'handle') setSheet(sheet === 'min' ? 'peek' : sheet === 'peek' ? 'half' : sheet === 'half' ? 'full' : 'peek'); else setSheet(sheet); return; }
-    const hpx = panel.getBoundingClientRect().height, opts = ['min','peek','half','full'];
+    const hpx = panel.getBoundingClientRect().height - safeBottom(), opts = ['min','peek','half','full'];
     let best = 'peek', bd = Infinity; for(const o of opts){ const d = Math.abs(sheetHeight(o) - hpx); if(d < bd){ bd = d; best = o; } }
     setSheet(best); };
   for(const el of [$('#handle'), $('#pHead')]){
