@@ -76,12 +76,23 @@ a{color:var(--accent)}
 
 /* Kontroller på kartan */
 .ctrls{position:fixed;z-index:900;top:calc(12px + env(safe-area-inset-top,0px));right:calc(12px + env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:8px}
+.ctrl.bell{position:relative}.ctrl.bell.on{color:var(--danger)}
+.ctrl.bell .bell-n{position:absolute;top:-5px;right:-5px;min-width:19px;height:19px;padding:0 5px;border-radius:10px;background:var(--danger);color:#fff;font:700 11px/19px var(--font-body);display:none}
+.ctrl.bell.on .bell-n{display:block}
+.stab .badge{display:inline-block;min-width:18px;height:18px;margin-left:5px;padding:0 5px;border-radius:9px;background:var(--danger);color:#fff;font:700 11px/18px var(--font-body);letter-spacing:0;vertical-align:1px}
 .ctrl{width:44px;height:44px;border-radius:12px;background:var(--surface);color:var(--fg);border:1px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.18);display:grid;place-items:center;padding:0}
 .ctrl svg{width:22px;height:22px}
 .ctrl[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
 .ctrl-gap{height:4px}
 .mode-chip{position:fixed;z-index:900;top:calc(12px + env(safe-area-inset-top,0px));left:calc(12px + env(safe-area-inset-left,0px));background:var(--accent);color:var(--accent-fg);font:700 13px/1 var(--font-display);letter-spacing:.08em;text-transform:uppercase;padding:9px 12px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.2);border:0;display:flex;gap:6px;align-items:center}
 @media (min-width:860px){.mode-chip{left:calc(var(--panel-w) + 12px)}}
+.follow-chip{position:fixed;z-index:960;top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;max-width:calc(100vw - 150px);border:0;border-radius:999px;padding:9px 14px;background:#1d4ed8;color:#fff;font:600 13px/1.2 var(--font-body);box-shadow:var(--shadow);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.follow-chip[hidden]{display:none}.follow-chip .fc-x{text-decoration:underline;font-weight:700}
+@media (min-width:860px){.follow-chip{left:calc(50% + var(--panel-w) / 2);top:56px}}
+.pos-chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}.pos-chips:empty{display:none}
+.pos-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 10px 3px 3px;background:var(--surface);color:var(--fg);font:inherit;font-size:13px;cursor:pointer}
+.pos-chip.on{border-color:#1d4ed8;box-shadow:0 0 0 2px rgba(29,78,216,.25)}.pos-chip .muted{font-size:12px}
+.pc-dot{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;color:#fff;font:700 10px/1 var(--font-body)}
 .fab{position:fixed;z-index:950;right:calc(14px + env(safe-area-inset-right,0px));bottom:calc(var(--sheet-b) + 14px);width:56px;height:56px;border-radius:18px;border:0;background:var(--accent);color:var(--accent-fg);box-shadow:0 6px 18px rgba(0,0,0,.3);display:grid;place-items:center;transition:bottom .25s ease}
 .fab svg{width:28px;height:28px}
 @media (min-width:860px){.fab{bottom:28px}}
@@ -532,6 +543,12 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
 .pp .pnote{margin:6px 0;white-space:pre-wrap}
 .pp .pc{font:400 12px/1.5 var(--font-mono);color:var(--muted);margin:6px 0 8px}
 .pp .pbtns{display:flex;gap:6px;flex-wrap:wrap}
+.msg-q{display:block;width:100%;text-align:left;border:0;border-left:3px solid var(--accent);border-radius:6px;background:rgba(127,127,127,.12);color:var(--fg);padding:4px 8px;margin:3px 0 4px;font:inherit;font-size:12.5px;line-height:1.35;cursor:pointer}
+.msg-q b{display:block;font-size:12px}.msg-q:disabled{cursor:default}div.msg-q{cursor:default}
+.msg.flash{outline:2px solid var(--accent);outline-offset:2px;transition:outline-color .3s}
+.mt-list{max-height:50vh;overflow:auto}
+.mt-pin{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 10px;margin:0 0 6px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);font:inherit;cursor:pointer}
+.mt-pin[hidden]{display:none}.mt-pin:disabled{opacity:.5;cursor:default}.mt-pin .swatch{flex:none}
 .pp .pbtns > *{flex:1 1 auto}
 .pp .src{font-size:12px;color:var(--muted)}
 
@@ -543,12 +560,14 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
 <body>
 <div id="map" aria-label="Karta"></div>
 
+<button class="follow-chip" id="followChip" hidden type="button" title="Sluta följa"></button>
 <button class="mode-chip" id="modeChip" hidden type="button" title="Stäng svampkartan">
   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 11.5C3.5 6.8 7.3 3.5 12 3.5s8.5 3.3 8.5 8z" fill="currentColor"/><path d="M9.5 11.5 9 19a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2l-.5-7.5"/></svg>
   Svampkarta
 </button>
 
 <div class="ctrls" role="toolbar" aria-label="Kartverktyg">
+  <button class="ctrl bell" id="btnBell" type="button" title="Meddelanden" aria-label="Meddelanden" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg><span class="bell-n"></span></button>
   <button class="ctrl" id="btnLayers" type="button" title="Bakgrund och svampkarta" aria-label="Bakgrund och svampkarta" aria-expanded="false">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2.5 8 12 13l9.5-5Z"/><path d="m2.5 12.5 9.5 5 9.5-5"/><path d="m2.5 17 9.5 5 9.5-5"/></svg>
   </button>
@@ -1210,8 +1229,9 @@ function renderNav(){
   const g = nav.team && typeof cloud !== 'undefined' ? cloud.groups[nav.team] : null, a = nav.area ? areaById(nav.area) : null;
   $('#pTitle').textContent = nav.tab === 'jakt' && g ? gname(g) : nav.tab === 'area' ? (a ? a.name : 'Område') : NAV_TITLE[nav.tab] || '';
   $('#pBack').hidden = !((nav.tab === 'jakt' && g) || nav.tab === 'area');
-  const st = $('#subTabs'), tabs = !!(nav.tab === 'jakt' && g && g.kind === 'member');
-  if(tabs) st.innerHTML = Object.entries(TEAM_TABS).map(([k, l]) => `<button class="stab" type="button" role="tab" data-sub="${k}" aria-selected="${nav.sub === k}" id="sub-${k}">${l}</button>`).join('');
+  const tt = g ? teamTabs(g) : {}, st = $('#subTabs'), tabs = !!(nav.tab === 'jakt' && g && Object.keys(tt).length);
+  const sel = tt[nav.sub] ? nav.sub : 'jakt', unread = g ? msgUnread(g) : 0;
+  if(tabs) st.innerHTML = Object.entries(tt).map(([k, l]) => `<button class="stab" type="button" role="tab" data-sub="${k}" aria-selected="${sel === k}" id="sub-${k}">${l}${k === 'chat' && unread ? `<span class="badge" aria-label="${unread} olästa">${unread > 9 ? '9+' : unread}</span>` : ''}</button>`).join('');
   if(st.hidden === tabs){ st.hidden = !tabs; if(!isDesktop()) setSheet(sheet, true); }   // höjden i nedfällt läge ändras
   if(typeof renderDrawerTeams === 'function') renderDrawerTeams();
 }
@@ -1800,6 +1820,8 @@ $('#layerPop').addEventListener('change', e => {
   else if(e.target.id === 'popRoads'){ state.settings.roads = e.target.checked; save(); roadsUpdate(); }
 });
 $('#modeChip').addEventListener('click', () => setSvampMode(false));
+$('#followChip').addEventListener('click', () => followStop());
+$('#btnBell').addEventListener('click', () => msgBellOpen());
 
 /* ---------- Export ---------- */
 function download(name, text, mime){
@@ -2029,7 +2051,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {NAT, natTok, natId, joinByCode, pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {NAT, natTok, natId, joinByCode, renderPositions, follow, posFocus, pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

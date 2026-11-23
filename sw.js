@@ -5,7 +5,7 @@
    - Kartrutor som man har tittat på sparas, högst TILE_MAX stycken, och visas när det inte finns nät.
      Inget laddas ned i förväg: OpenStreetMaps regler förbjuder det.
    Positioner, meddelanden och annat i jakten går via Firebase och påverkas inte. */
-const VERSION = '29dcd70c93';
+const VERSION = '02544cb46f';
 const APP = 'jk-app-' + VERSION, LIBS = 'jk-libs-v1', TILES = 'jk-tiles-v1', TILE_MAX = 2500;
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 const TILE_HOSTS = /(^|\.)tile\.openstreetmap\.org$|(^|\.)tile\.opentopomap\.org$|^server\.arcgisonline\.com$/;
@@ -68,6 +68,14 @@ async function trim(cache){
   for(let i = 0; i < keys.length - TILE_MAX; i++) await cache.delete(keys[i]);   // äldst först
 }
 
+/* Ett tryck på en avisering (nödlarm, meddelande) öppnar appen, eller visar den om den redan är öppen. */
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({type:'window', includeUncontrolled:true}).then(list => {
+    for(const c of list) if('focus' in c) return c.focus();
+    return self.clients.openWindow ? self.clients.openWindow('./') : null;
+  }));
+});
 self.addEventListener('fetch', e => {
   const req = e.request; if(req.method !== 'GET') return;
   const url = new URL(req.url);

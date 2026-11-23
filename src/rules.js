@@ -16,10 +16,14 @@ const owner = `data.parent().parent().child('meta/owner').val()`;
 const invite = `root.child('invites/'+newData.child('code').val())`;
 const hunt = `root.child(${G}+'/hunts/'+$hid)`;
 // Jakten pågår: sluttiden har inte passerat och starttiden (om den finns) har passerat.
+// Inbjuden till jakten: jakten har ingen lista (hela laget är inbjudet) eller så står man på listan (invited/<uid>).
+const invitedOk = `(!root.child(${G}+'/hunts/'+$hid+'/invited').exists() || root.child(${G}+'/hunts/'+$hid+'/invited/'+auth.uid).val() === true)`;
 const huntLive = `(${hunt}.child('expires').val() > now && (!${hunt}.child('starts').exists() || ${hunt}.child('starts').val() <= now))`;
 // Nycklar som deltagare själva väljer: bara bokstäver, siffror, - och _. Då kan en nyckel aldrig bära med sig kod in i sidan.
 const KEY = v => `(${v}.matches(/^[A-Za-z0-9_-]+$/) && ${v}.length <= 64)`;
 const hcode = `root.child('huntCodes/'+newData.child('code').val())`;
+// Telefonnummer: siffror, mellanslag och bindestreck, gärna med + först (6–20 tecken)
+const PHONE = "newData.isString() && newData.val().matches(/^[+]?[0-9][0-9 -]{4,18}[0-9]$/)";
 // Databasen som den blir efter skrivningen, sett från groups/$gid/<nod>/$uid (fyra nivåer upp). Används när flera ställen
 // skrivs i samma uppdatering: en engångskod måste markeras som använd (invites/<kod>/usedBy) i samma skrivning som man går med.
 const newRoot = 'newData.parent().parent().parent().parent()';
@@ -30,6 +34,11 @@ const rules = { rules: {
   '.read': false, '.write': false,
   owner: { '.read': signed, '.write': `${signed} && !data.exists() && newData.val() === auth.uid && auth.token.firebase.sign_in_provider !== 'anonymous'` },
   creators: { '$uid': { '.read': `${signed} && (auth.uid === $uid || root.child('owner').val() === auth.uid)`, '.write': `${signed} && root.child('owner').val() === auth.uid`, '.validate': 'newData.isBoolean()' } },
+  // Egen profil (telefonnummer och om det ska delas). Bara man själv läser och skriver.
+  profiles: { '$uid': {
+    '.read': `${signed} && auth.uid === $uid`, '.write': `${signed} && auth.uid === $uid`,
+    phone: {'.validate': PHONE}, share: {'.validate': 'newData.isBoolean()'}, '$other': {'.validate': false}
+  } },
   userGroups: { '$uid': { '.read': `${signed} && auth.uid === $uid`, '.write': `${signed} && auth.uid === $uid` } },
   // Inbjudningar till ett jaktlag. Admin skapar och återkallar. once: engångskod, approve: admin godkänner den som går med.
   invites: { '$code': {
@@ -116,7 +125,9 @@ const rules = { rules: {
       '$hid': {
         '.read': `${isGuest} && ${guest}.child('hid').val() === $hid`,
         '.write': canLead,
-        '.validate': `${KEY('$hid')} && newData.hasChildren(['name','expires','code']) && newData.child('expires').isNumber() && (!newData.child('starts').exists() || (newData.child('starts').isNumber() && newData.child('starts').val() < newData.child('expires').val()))`
+        '.validate': `${KEY('$hid')} && newData.hasChildren(['name','expires','code']) && newData.child('expires').isNumber() && (!newData.child('starts').exists() || (newData.child('starts').isNumber() && newData.child('starts').val() < newData.child('expires').val()))`,
+        // Utvalda medlemmar som bjuds in. Saknas listan är hela laget inbjudet.
+        invited: { '$uid': { '.validate': `${KEY('$uid')} && newData.val() === true` } }
       }
     },
     guests: {
@@ -133,7 +144,7 @@ const rules = { rules: {
         '.read': `(${isMember} || (${isGuest} && ${guest}.child('hid').val() === $hid)) && ${huntLive}`,
         '.write': `${canLead} && !newData.exists()`,
         '$uid': {
-          '.write': `${signed} && $uid === auth.uid && ${huntLive} && (${me}.exists() || (${isGuest} && ${guest}.child('hid').val() === $hid))`,
+          '.write': `${signed} && $uid === auth.uid && ${huntLive} && ((${me}.exists() && ${invitedOk}) || (${isGuest} && ${guest}.child('hid').val() === $hid))`,
           '.validate': `newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber()`
         }
       }
@@ -256,12 +267,28 @@ const rules = { rules: {
     },
     // Vilka medlemmar som deltar i en jakt ("Jag deltar"). Hos den som deltar delas positionen automatiskt
     // medan jakten pågår. Laget ser vilka som deltar. Man svarar bara för sig själv. Tas bort när jakten avslutas.
+    // Telefonnummer per jakt. Den som deltar och valt att dela lägger in sitt nummer. Bara jaktens deltagare
+    // (medlemmar som svarat Jag deltar, och jaktens gäster) och jaktledare ser numren, och bara medan jakten pågår.
+    huntPhone: {
+      '$hid': {
+        '.read': `${huntLive} && ((${isMember} && (${canLead} || (root.child(${G}+'/huntRsvp/'+$hid+'/'+auth.uid).exists() && root.child(${G}+'/huntRsvp/'+$hid+'/'+auth.uid+'/no').val() !== true))) || (${isGuest} && ${guest}.child('hid').val() === $hid))`,
+        '.write': `${canLead} && !newData.exists()`,
+        '$uid': {
+          '.write': `${signed} && $uid === auth.uid && (!newData.exists() || (${hunt}.child('expires').val() > now && (${me}.exists() || (${isGuest} && ${guest}.child('hid').val() === $hid))))`,
+          '.validate': `newData.hasChildren(['name','phone','t'])`,
+          name: {'.validate': 'newData.isString() && newData.val().length <= 60'},
+          phone: {'.validate': PHONE},
+          t: {'.validate': 'newData.isNumber() && newData.val() <= now + 60000'},
+          '$other': {'.validate': false}
+        }
+      }
+    },
     huntRsvp: {
       '.read': isMember,
       '$hid': {
         '.write': `${canLead} && !newData.exists()`,
         '$uid': {
-          '.write': `${signed} && $uid === auth.uid && ${me}.exists() && (${hunt}.exists() || !newData.exists())`,
+          '.write': `${signed} && (($uid === auth.uid && ${me}.exists() && ((${hunt}.exists() && ${invitedOk}) || !newData.exists())) || (${canLead} && !newData.exists()))`,
           '.validate': `newData.hasChildren(['name','t'])`,
           name: {'.validate': 'newData.isString() && newData.val().length <= 60'},
           t: {'.validate': 'newData.isNumber() && newData.val() <= now + 60000'},
@@ -307,6 +334,8 @@ const rules = { rules: {
           all: {'.validate': 'newData.isBoolean()'},
           to: {'$uid': {'.validate': 'newData.val() === true'}},
           keys: {'$k': {'.validate': 'newData.isString() && newData.val().length <= 200'}},
+          // Svar: vilket meddelande det svarar på (bara id:t, texten citeras från mottagarens egen kopia)
+          re: {'.validate': `newData.isString() && ${KEY('newData.val()')}`},
           '$other': {'.validate': false}
         }
       }
@@ -349,7 +378,7 @@ const rules = { rules: {
         '.read': `(${isMember} || (${isGuest} && ${guest}.child('hid').val() === $hid)) && ${huntLive}`,
         '.write': `${canLead} && !newData.exists()`,
         '$uid': {
-          '.write': `${signed} && $uid === auth.uid && ${huntLive} && (${me}.exists() || (${isGuest} && ${guest}.child('hid').val() === $hid))`,
+          '.write': `${signed} && $uid === auth.uid && ${huntLive} && ((${me}.exists() && ${invitedOk}) || (${isGuest} && ${guest}.child('hid').val() === $hid))`,
           '$pt': { '.validate': `${KEY('$pt')} && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000` }
         }
       }

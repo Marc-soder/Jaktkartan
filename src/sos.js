@@ -71,7 +71,7 @@ function sosAlarm(x){
     <p><b>${esc(s.name || 'En deltagare')}</b> skickade ett nödlarm kl. ${esc(fmtClock(s.t))} och behöver hjälp.</p>
     <p>${has ? `${dist ? `Avstånd: <b>${esc(dist)}</b>.<br>` : ''}<span class="small muted">${fmtLatLng(s.lat, s.lng)} · SWEREF 99 TM ${fmtSweref(s.lat, s.lng)}</span>` : '<b>Positionen är okänd.</b> Ring personen eller 112.'}</p>
     <p class="small muted">Vill du navigera till ${esc(s.name || 'personen')}?</p>
-    <div class="actions">${has ? `<a class="btn sos-btn grow" id="sosNav" href="${esc(navUrl(s.lat, s.lng))}" target="_blank" rel="noopener">${ICON_NAV}Navigera till ${esc(s.name || 'personen')}</a><button class="btn" type="button" id="sosShow">Visa på kartan</button>` : ''}<a class="btn" href="tel:112">Ring 112</a><button class="btn ghost" type="button" id="sosClose">Stäng</button></div></div>`, m => {
+    <div class="actions">${has ? `<a class="btn sos-btn grow" id="sosNav" href="${esc(navUrl(s.lat, s.lng))}" target="_blank" rel="noopener">${ICON_NAV}Navigera till ${esc(s.name || 'personen')}</a><button class="btn" type="button" id="sosShow">Visa på kartan</button>` : ''}${phoneOf(x.uid) ? `<a class="btn" id="sosTel" href="${esc(telHref(phoneOf(x.uid)))}">Ring ${esc(s.name || 'personen')}</a>` : ''}<a class="btn" href="tel:112">Ring 112</a><button class="btn ghost" type="button" id="sosClose">Stäng</button></div></div>`, m => {
     m.querySelector('#sosClose').addEventListener('click', closeModal);
     const sh = m.querySelector('#sosShow'); if(sh) sh.addEventListener('click', () => { closeModal(); map.setView([s.lat, s.lng], Math.max(map.getZoom(), 16)); if(!isDesktop()) setSheet('peek'); });
   });

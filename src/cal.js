@@ -5,7 +5,7 @@
    Jaktledare kan planera en ny jakt direkt från en dag i kalendern. */
 const WDAY = ['sön', 'mån', 'tis', 'ons', 'tor', 'fre', 'lör'];
 const MONTH = ['januari', 'februari', 'mars', 'april', 'maj', 'juni', 'juli', 'augusti', 'september', 'oktober', 'november', 'december'];
-const ME_TAG = {going:'Du deltar', no:'Du har avböjt', invite:'Inbjudan', guest:'Gäst'};
+const ME_TAG = {going:'Du deltar', no:'Du har avböjt', invite:'Inbjudan', guest:'Gäst', notinv:'Inte inbjuden'};
 const calUi = {month:null, sel:null};
 const isoOf = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 /* Veckonummer enligt ISO 8601 (vecka 1 är veckan med årets första torsdag) */
@@ -22,7 +22,9 @@ function calHunts(){
     for(const [hid, h] of Object.entries(g.hunts || {})){
       if(!h || (g.kind !== 'member' && !(g.guest && g.guest.hid === hid))) continue;
       const st = huntState(h); if(st === 'gone') continue;
-      out.push({g, hid, h, day:huntDay(h), st, me:g.kind !== 'member' ? 'guest' : accepted(g, hid) ? 'going' : declined(g, hid) ? 'no' : 'invite'});
+      // En jakt med utvalda inbjudna syns bara för dem, och för jaktledare (som Inte inbjuden)
+      if(!invitedTo(g, hid) && !canLeadGroup(g)) continue;
+      out.push({g, hid, h, day:huntDay(h), st, me:g.kind !== 'member' ? 'guest' : !invitedTo(g, hid) ? 'notinv' : accepted(g, hid) ? 'going' : declined(g, hid) ? 'no' : 'invite'});
     }
   }
   return out.sort((a, b) => huntSort(a.h) - huntSort(b.h));
