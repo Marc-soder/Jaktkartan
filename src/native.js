@@ -7,6 +7,7 @@
    - FirebaseAuthentication: inloggning med Google i telefonens eget system. Google tillåter inte inloggning i webbvyer.
    - LocalNotifications: aviseringar om nödlarm, och en påminnelse när en jakt man deltar i startar.
    - Filesystem och Share: export (säkerhetskopia, GPX, GeoJSON). Webbvyn kan inte ladda ned filer.
+   - AppUpdate (appens eget, android/.../AppUpdatePlugin.java): ny version av appen från GitHub Releases.
    I en vanlig webbläsare finns inget window.Capacitor. Då är NAT.on false och inget här används.
    Skalet anropas direkt via Capacitors brygga (nativePromise och nativeCallback), så sidan behöver inga extra filer. */
 const NAT = (() => {
@@ -27,6 +28,12 @@ function natInit(){
     NAT.call('LocalNotifications', 'createChannel', {id:'sos', name:'Nödlarm', description:'Nödlarm från jaktlaget', importance:5, visibility:1, vibration:true}).catch(() => {});
     NAT.call('LocalNotifications', 'createChannel', {id:'jakt', name:'Jakten börjar', description:'När en jakt du deltar i startar', importance:4, visibility:1, vibration:true}).catch(() => {});
     NAT.call('LocalNotifications', 'checkPermissions').then(r => { NAT.notif = (r && r.display) || 'unknown'; renderJakt(); }).catch(() => {});
+  }
+  if(NAT.has('AppUpdate')){
+    natUpdateCheck();
+    document.addEventListener('visibilitychange', () => { if(!document.hidden) natUpdateCheck(); });
+    const bar = document.getElementById('appUpdBar');
+    if(bar) bar.addEventListener('click', e => { if(e.target.closest('[data-natupd]')) natUpdateGo(); });
   }
 }
 setTimeout(natInit, 0);
@@ -145,6 +152,63 @@ async function natShareFile(name, text){
     const m = String((e && (e.message || e.code)) || e || '');
     if(!/cancel/i.test(m)) toast('Filen kunde inte delas. ' + m.slice(0, 120), 7000);
     return false;
+  }
+}
+
+/* ---------- Ny version av appen ----------
+   Appen frågar GitHub efter den senaste releasen (app-1.<nr>, nr = versionCode, se .github/workflows/android.yml),
+   högst var sjätte timme. Finns en nyare visas raden "Ny version av appen". Uppdatera laddar ned APK-filen och öppnar
+   Androids installerare, som frågar en gång till. Första gången måste Jaktkartan få installera appar ("Tillåt från
+   den här källan"). Android installerar bara en uppdatering som är signerad med samma nyckel. */
+const NAT_UPD_KEY = 'jk.natUpd', NAT_UPD_MS = 6 * 3600000;
+const NAT_RELEASE = 'https://api.github.com/repos/Marc-soder/Jaktkartan/releases/latest';
+async function natUpdateCheck(force){
+  if(!NAT.has('AppUpdate')) return null;
+  try {
+    NAT.app = await NAT.call('AppUpdate', 'info');
+    let c = {}; try { c = JSON.parse(lsGet(NAT_UPD_KEY) || '{}') || {}; } catch(e){}
+    if(force || !c.t || Date.now() - c.t > NAT_UPD_MS){
+      const r = await fetch(NAT_RELEASE, {headers:{Accept:'application/vnd.github+json'}, cache:'no-store'});
+      if(!r.ok) throw new Error('GitHub svarade ' + r.status);
+      const j = await r.json(), m = /^app-1\.(\d+)$/.exec(j.tag_name || ''), a = (j.assets || []).find(x => x && /\.apk$/.test(x.name || ''));
+      c = {t:Date.now(), code:m ? +m[1] : 0, name:m ? '1.' + m[1] : '', url:a ? a.browser_download_url : ''};
+      lsSet(NAT_UPD_KEY, JSON.stringify(c));
+    }
+    NAT.upd = c.code > (+NAT.app.versionCode || 0) && c.url ? c : null;
+  } catch(e){ if(force) toast('Kunde inte söka efter uppdateringar. ' + String(e && e.message || '').slice(0, 80), 6000); }
+  natUpdBar(); renderKonto();
+  return NAT.upd;
+}
+function natUpdBar(text){
+  const bar = document.getElementById('appUpdBar'); if(!bar) return;
+  bar.hidden = !NAT.upd;
+  if(!NAT.upd) return;
+  bar.innerHTML = text ? esc(text) : `Ny version av appen: ${esc(NAT.upd.name)}. <button type="button" data-natupd>Uppdatera</button>`;
+}
+async function natUpdateGo(){
+  const u = NAT.upd; if(!u || NAT.updBusy) return;
+  const info = await NAT.call('AppUpdate', 'info').catch(() => null);
+  if(info && !info.canInstall){
+    openModal(`<h2>Tillåt uppdateringar</h2><p>Android behöver tillåta att Jaktkartan installerar sina egna uppdateringar. Det görs en gång.</p>
+      <ol><li>Tryck <b>Öppna inställningar</b>.</li><li>Slå på <b>Tillåt från den här källan</b>.</li><li>Gå tillbaka till Jaktkartan och tryck <b>Uppdatera</b> igen.</li></ol>
+      <div class="actions"><button class="btn primary grow" type="button" id="natUpdSet">Öppna inställningar</button><button class="btn ghost" type="button" id="natUpdNo">Avbryt</button></div>`, m => {
+      m.querySelector('#natUpdNo').addEventListener('click', closeModal);
+      m.querySelector('#natUpdSet').addEventListener('click', () => { closeModal(); NAT.call('AppUpdate', 'openInstallSettings').catch(() => {}); });
+    });
+    return;
+  }
+  NAT.updBusy = true; natUpdBar('Laddar ned uppdateringen …');
+  const lid = NAT.listen('AppUpdate', 'addListener', {eventName:'progress'}, d => { if(d && d.percent >= 0 && NAT.updBusy) natUpdBar(`Laddar ned uppdateringen … ${d.percent} %`); });
+  try {
+    await NAT.call('AppUpdate', 'install', {url:u.url});
+    toast('Tryck Uppdatera i Androids ruta. Appen startar om med den nya versionen.', 8000);
+  } catch(e){
+    const m = String((e && (e.message || e.code)) || e || '');
+    toast('Uppdateringen kunde inte laddas ned. ' + m.slice(0, 120), 7000);
+  } finally {
+    NAT.updBusy = false;
+    if(lid) NAT.call('AppUpdate', 'removeListener', {callbackId:lid, eventName:'progress'}).catch(() => {});
+    natUpdBar();
   }
 }
 
