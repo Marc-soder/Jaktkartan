@@ -89,12 +89,15 @@ Fingeravtrycket är inte hemligt.
 4. Fyll i:
    - **Android-paketnamn** (Android package name): `io.github.marcsoder.jaktkartan`. Det måste vara exakt så.
    - **Appens smeknamn** (App nickname): `Jaktkartan Android`.
-   - **SHA-1 för felsökningscertifikat** (Debug signing certificate SHA-1): klistra in fingeravtrycket från steg 1.4.
+   - Finns ett fält för **SHA-1** kan du klistra in fingeravtrycket från steg 1.4 där. Finns det inte, lägg in det i punkt 7.
 5. Klicka **Registrera app** (Register app).
-6. Klicka **Ladda ned google-services.json** (Download google-services.json). Spara filen.
-7. Resten av guiden i Firebase (Gradle och SDK) är redan gjord i repot. Klicka **Nästa** tills du kommer tillbaka till konsolen.
-8. Kontrollera att fingeravtrycket kom med: under **Dina appar** → **Jaktkartan Android** ska det stå under **SHA-certifikatfingeravtryck**.
-   Saknas det: klicka **Lägg till fingeravtryck** (Add fingerprint), klistra in det och **ladda ned google-services.json igen**.
+6. Hoppa över nedladdningen av `google-services.json` i guiden. Klicka **Nästa** (Next) genom resten
+   (Gradle och SDK är redan gjort i repot) och sedan **Fortsätt till konsolen** (Continue to console).
+7. Kugghjulet → **Projektinställningar** (Project settings) → **Allmänt** (General) → **Dina appar** (Your apps) → **Jaktkartan Android**.
+   Står fingeravtrycket inte under **SHA-certifikatfingeravtryck** (SHA certificate fingerprints): klicka **Lägg till fingeravtryck**
+   (Add fingerprint), klistra in det från steg 1.4 och klicka **Spara** (Save).
+8. Klicka på **google-services.json** på samma ställe och spara filen. Den måste hämtas **efter** att fingeravtrycket är tillagt,
+   annars saknar den det som inloggningen med Google behöver (bygget i steg 4 stoppar då med ett tydligt fel).
 9. Gå till **Authentication** → **Sign-in method**. **Google** och **Anonym** ska vara påslagna, som för webben.
 
 ### 2.1 Begränsa appens API-nyckel i Google Cloud
@@ -162,7 +165,7 @@ Den finns också under **Artifacts** längst ned i körningen (som en zip-fil, k
 |---|---|
 | Hemligheter saknas | Steg 3. Namnen måste stavas exakt som i tabellen. |
 | Signeringsnyckeln gick inte att läsa | Fel lösenord, eller texten i `JK_KEYSTORE_BASE64` blev avklippt. Gör om 3.1 och lägg in den igen. |
-| SHA-1 finns inte i google-services.json | Steg 2.8, och lägg sedan in den nya filen i `JK_GOOGLE_SERVICES_JSON`. |
+| SHA-1 finns inte i google-services.json | Steg 2.7 och 2.8, och lägg sedan in den nya filen i `JK_GOOGLE_SERVICES_JSON`. |
 | google-services.json saknar Android-appen | Paketnamnet i Firebase är fel. Lägg till appen igen med `io.github.marcsoder.jaktkartan`. |
 
 APK-filen innehåller inga hemligheter. Den kräver inloggning i jaktlaget som vanligt, så det gör inget att den är publik.
@@ -270,7 +273,7 @@ Versionsnumret räknas upp av sig själv. Samma nyckel måste användas varje g�
 
 | Problem | Orsak och åtgärd |
 |---|---|
-| "Inloggningen med Google misslyckades" med en kod som innehåller `10` eller `DEVELOPER_ERROR` | Fingeravtrycket (SHA-1) saknas eller är fel i Firebase. Steg 2.8, lägg in nya `google-services.json` i `JK_GOOGLE_SERVICES_JSON`, bygg och installera igen. |
+| "Inloggningen med Google misslyckades" med en kod som innehåller `10` eller `DEVELOPER_ERROR` | Fingeravtrycket (SHA-1) saknas eller är fel i Firebase. Steg 2.7 och 2.8, lägg in nya `google-services.json` i `JK_GOOGLE_SERVICES_JSON`, bygg och installera igen. |
 | "Appen har inte installerats" vid uppdatering | Den nya APK-filen är signerad med en annan nyckel. Använd samma `jaktkartan.jks`. Annars: avinstallera den gamla först. |
 | Positionen slutar komma fram med släckt skärm | Batteriinställningarna i steg 5.3. |
 | "Positionen är blockerad" | Inställningar → Appar → Jaktkartan → Behörigheter → Plats → **När appen används** och **Använd exakt plats**. |
