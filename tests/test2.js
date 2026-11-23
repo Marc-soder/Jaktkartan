@@ -485,6 +485,29 @@ async function inviteRevokeAll(){
   const rw = await C.evaluate(([g, h]) => firebase.database().ref('groups/' + g + '/huntRsvp/' + h + '/bob').set({name:'Bob', t:Date.now()}).then(() => 'ok', () => 'denied'), [gid, hid]);
   const rw2 = await B.evaluate(([g, h]) => firebase.database().ref('groups/' + g + '/huntRsvp/' + h + '/alice').set({name:'Fejk', t:Date.now()}).then(() => 'ok', () => 'denied'), [gid, hid]);
   check(rw === 'denied' && rw2 === 'denied', 'man kan bara svara för sig själv');
+  // ---- Telefonnummer: delas med deltagarna i jakter man deltar i ----
+  await go(A, 'konto');
+  check(await A.isVisible('#phNum') && !(await A.isChecked('#phShare')), 'Mitt konto har fält för telefonnummer och val för att dela det');
+  await A.fill('#phNum', 'ring mig'); await A.check('#phShare', {force:true}); await A.click('[data-j="phone-save"]'); await W(A, 300);
+  check(!(data.profiles || {}).alice && (await A.innerText('#toast')).includes('siffror'), 'ett ogiltigt nummer sparas inte');
+  await A.fill('#phNum', '070-111 22 33'); await A.click('[data-j="phone-save"]'); await W(A, 700);
+  const php = () => ((data.groups[gid].huntPhone || {})[hid] || {});
+  check(data.profiles.alice.phone === '070-111 22 33' && data.profiles.alice.share === true && php().alice && php().alice.phone === '070-111 22 33' && php().alice.name === 'Alice Test', 'Alice sparar och delar sitt nummer: det läggs i jakten hon deltar i');
+  await go(C, 'konto'); await C.fill('#phNum', '+46 70 444 55 66'); await C.check('#phShare', {force:true}); await C.click('[data-j="phone-save"]'); await W(C, 700);
+  check(php()['anon-carl'] && php()['anon-carl'].phone === '+46 70 444 55 66', 'gästen Carl delar sitt nummer i jakten');
+  await team(A, 'jakt'); await W(A, 300);
+  check(await A.locator('.rsvp-list a.tel[href="tel:+46704445566"]').count() === 1 && (await A.innerText('.rsvp-list')).includes('+46 70 444 55 66'), 'Alice ser Carls nummer i deltagarlistan och kan ringa');
+  await team(B, 'jakt'); await W(B, 300);
+  const bPh = await B.evaluate(([g, h]) => firebase.database().ref(`groups/${g}/huntPhone/${h}`).get().then(() => 'ok', () => 'denied'), [gid, hid]);
+  check(bPh === 'ok' && await B.locator('.rsvp-list a.tel').count() === 2, `jaktledaren Bob ser deltagarnas nummer (${bPh})`);
+  await C.evaluate(() => __fk.map.closePopup()); await C.locator('.pos-icon').first().click(); await W(C, 300);
+  check((await C.getAttribute('.leaflet-popup a[data-tel]', 'href')) === 'tel:0701112233', 'Carl kan ringa Alice från hennes position på kartan');
+  await C.evaluate(() => __fk.map.closePopup());
+  await go(A, 'konto'); await A.uncheck('#phShare', {force:true}); await A.click('[data-j="phone-save"]'); await W(A, 700);
+  check(data.profiles.alice.share === false && !php().alice && php()['anon-carl'], 'slutar Alice dela tas numret bort ur jakten');
+  await A.check('#phShare', {force:true}); await A.click('[data-j="phone-save"]'); await W(A, 700);
+  check(php().alice && php().alice.phone === '070-111 22 33', 'delar hon igen läggs det tillbaka');
+  await team(A, 'jakt'); await team(C, 'jakt');   // tillbaka till jakten, som testerna nedan utgår från
   // ---- Ändra en pågående jakt utan att bryta den ----
   await team(B, 'jakt');
   check(await B.locator(`[data-j="hunt-edit"][data-h="${hid}"]`).count() === 1 && await C.locator('[data-j="hunt-edit"]').count() === 0, 'jaktledaren kan ändra jakten, gästen kan inte');
@@ -701,6 +724,7 @@ async function inviteRevokeAll(){
   check(!BN.errs.length, `inga JS-fel i appen: ${BN.errs.slice(0, 3)}`);
   for(let i = subs.length - 1; i >= 0; i--) if(subs[i].page === BN) subs.splice(i, 1);
   await BN.context().close();
+  check((await A.getAttribute('#sosTel', 'href')) === 'tel:+46704445566' && (await A.innerText('#sosTel')).includes('Ring Carl Gäst'), 'nödlarmet har knappen Ring Carl, eftersom han delar sitt nummer');
   await A.screenshot({path:shot('a_sos.png')});
   check(await C.isVisible('#sosBar') && await C.evaluate(() => document.getElementById('btnSos').classList.contains('on')), 'Carl ser att hans larm är aktivt');
   await A.click('#sosClose'); await B.click('#sosClose'); await W(A, 200);
@@ -865,7 +889,7 @@ async function inviteRevokeAll(){
   // ---- Avsluta jakten ----
   await B.click('[data-j="hunt-end"]'); await B.click('[data-j="hunt-end"]'); await W(B, 900);
   check(!data.groups[gid].hunts && !data.huntCodes && !(data.groups[gid].guests || {})['anon-carl'], 'jakten, koden och gästposten är borta');
-  check(!data.groups[gid].huntPos && !data.groups[gid].huntTrail && !data.groups[gid].huntObs && !data.groups[gid].huntPlan && !data.groups[gid].huntRsvp && !data.groups[gid].huntMsg && !data.groups[gid].huntCheck && !(data.groups[gid].msgKeys || {})['anon-carl'], 'jaktens positioner, spår, observationer, plan, svar, meddelanden och gästens nyckel raderades när jakten avslutades');
+  check(!data.groups[gid].huntPos && !data.groups[gid].huntTrail && !data.groups[gid].huntObs && !data.groups[gid].huntPlan && !data.groups[gid].huntRsvp && !data.groups[gid].huntMsg && !data.groups[gid].huntCheck && !data.groups[gid].huntPhone && !(data.groups[gid].msgKeys || {})['anon-carl'], 'jaktens positioner, spår, observationer, plan, svar, meddelanden, telefonnummer och gästens nyckel raderades när jakten avslutades');
   const arch = Object.values(data.groups[gid].obsArchive || {});
   check(arch.length === 2 && arch.every(o => !o.by && !o.name && !o.note && o.hid === hid && o.kind === 'obs') && arch.map(o => o.sp + o.n).sort().join() === 'Rådjur2,Vildsvin1', 'observationerna arkiverades utan namn när jakten avslutades');
   // ---- Värmekarta ----
@@ -920,6 +944,24 @@ async function inviteRevokeAll(){
   const D = (uid, now) => { const d = targaryen.database(rules, base, now || t0).as(uid ? tok(uid) : null);
     return {read: p => d.read(p, now || t0), write: (p, v) => d.write(p, v, undefined, now || t0), update: (p, v) => d.update(p, v, now || t0)}; };
   const m = (role, extra) => Object.assign({role, name:'N'}, extra || {});
+  // Telefonnummer per jakt och profil
+  const baseP = {owner:'o', groups:{g:{meta:{name:'L', owner:'o'}, members:{o:{role:'admin', name:'O'}, a2:{role:'admin', name:'A2'}, l:{role:'leader', name:'L'}, e:{role:'editor', name:'E'}, v:{role:'viewer', name:'V'}, n:{role:'editor', name:'N'}},
+    hunts:{h:{name:'J', expires:t0 + 1000, code:'HUNTCODE'}, h2:{name:'J2', starts:t0 + 500, expires:t0 + 1000, code:'HUNTCOD2'}},
+    guests:{gu:{hid:'h', code:'HUNTCODE', name:'G', expires:t0 + 1000}},
+    huntRsvp:{h:{e:{name:'E', t:1}, v:{name:'V', t:1, no:true}}, h2:{e:{name:'E', t:1}}},
+    huntPhone:{h:{e:{name:'E', phone:'070-123 45 67', t:1}}, h2:{e:{name:'E', phone:'070-123 45 67', t:1}}}}}};
+  const DP = (uid, now) => { const d = targaryen.database(rules, baseP, now || t0).as(uid ? tok(uid) : null);
+    return {read: p => d.read(p, now || t0).allowed, write: (p, v) => d.write(p, v, undefined, now || t0).allowed}; };
+  const PH = (phone, extra) => Object.assign({name:'N', phone:phone || '+46 70 123 45 67', t:1}, extra || {});
+  check(DP('e').write('/groups/g/huntPhone/h/e', PH()) && DP('gu').write('/groups/g/huntPhone/h/gu', PH('0701234567')), 'regel: telefon: deltagare och jaktens gäst kan dela sitt nummer');
+  check(!DP('e').write('/groups/g/huntPhone/h/v', PH()) && !DP('x').write('/groups/g/huntPhone/h/x', PH()) && !DP('gu').write('/groups/g/huntPhone/h2/gu', PH()), 'regel: telefon: bara sitt eget, bara med åtkomst till jakten');
+  check(!DP('e').write('/groups/g/huntPhone/h/e', PH('ring mig')) && !DP('e').write('/groups/g/huntPhone/h/e', PH('<script>')) && !DP('e').write('/groups/g/huntPhone/h/e', PH('12')) && !DP('e').write('/groups/g/huntPhone/h/e', PH(undefined, {x:1})), 'regel: telefon: bara giltiga nummer, inga extra fält');
+  check(DP('e').read('/groups/g/huntPhone/h') && DP('gu').read('/groups/g/huntPhone/h') && DP('l').read('/groups/g/huntPhone/h') && DP('o').read('/groups/g/huntPhone/h'), 'regel: telefon: deltagare, gäst och jaktledare ser numren under jakten');
+  check(!DP('v').read('/groups/g/huntPhone/h') && !DP('n').read('/groups/g/huntPhone/h') && !DP('x').read('/groups/g/huntPhone/h'), 'regel: telefon: den som avböjt, inte svarat eller är utomstående ser inget');
+  check(!DP('e').read('/groups/g/huntPhone/h2') && DP('e', t0 + 600).read('/groups/g/huntPhone/h2') && !DP('e', t0 + 2000).read('/groups/g/huntPhone/h'), 'regel: telefon: bara medan jakten pågår');
+  check(DP('e').write('/groups/g/huntPhone/h2/e', PH()) && !DP('e', t0 + 2000).write('/groups/g/huntPhone/h/e', PH()) && DP('e', t0 + 2000).write('/groups/g/huntPhone/h/e', null), 'regel: telefon: kan läggas in före jakten, inte efter, men alltid tas bort');
+  check(DP('o').write('/groups/g/huntPhone/h', null) && !DP('e').write('/groups/g/huntPhone/h', null), 'regel: telefon: jaktledare och admin kan radera jaktens nummer');
+  check(DP('e').write('/profiles/e', {phone:'070-123 45 67', share:true}) && DP('e').read('/profiles/e') && !DP('o').read('/profiles/e') && !DP('o').write('/profiles/e', {share:false}) && !DP('e').write('/profiles/e', {phone:'x'}), 'regel: profil: bara man själv läser och skriver, och bara giltigt nummer');
   check(!D(null).read('/groups/g/pins').allowed && !D('x').read('/groups/g/pins').allowed && !D('x').read('/groups/g/meta').allowed, 'regel: utloggad och utomstående kan inte läsa laget');
   check(!D('x').read('/invites').allowed && !D('x').read('/groups').allowed && !D('x').read('/huntCodes').allowed, 'regel: ingen kan lista inbjudningar, jaktkoder eller alla lag');
   check(D('x').write('/groups/g/members/x', m('editor', {code:'INVITECODE1'})).allowed, 'regel: gå med via giltig inbjudan tillåts');

@@ -5,7 +5,7 @@ const RULES_TEXT = /*RULES_JSON*/'';
 const ROLES = {admin:'Admin', leader:'Jaktledare', editor:'Medlem', viewer:'Läsare'};
 const ROLE_HELP = {admin:'Allt, även medlemmar och rättigheter', leader:'Skapa jakter, ändra nålar', editor:'Lägga till och ändra nålar', viewer:'Bara titta'};
 let fb = null;
-const cloud = {autoOff:{}, autoShared:false, cleanAfter:3600000, cleaning:{}, owner:undefined, creator:false, ownRef:null, cfg:null, status:'off', user:null, groups:{}, ugRef:null, sharing:false, watchId:null, lastSent:0, err:'', pending:null, pend:{}};
+const cloud = {autoOff:{}, autoShared:false, cleanAfter:3600000, cleaning:{}, owner:undefined, creator:false, ownRef:null, cfg:null, status:'off', user:null, groups:{}, ugRef:null, sharing:false, watchId:null, lastSent:0, err:'', pending:null, pend:{}, profile:null, profRef:null};
 const newCode = n => { const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', a = new Uint32Array(n); crypto.getRandomValues(a); return Array.from(a, x => abc[x % 32]).join(''); };
 const canon = o => JSON.stringify(o, (k, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.keys(v).sort().reduce((r, key) => { r[key] = v[key]; return r; }, {}) : v);
 const lsGet = k => { try { return localStorage.getItem(k); } catch(e){ return null; } };
@@ -59,6 +59,7 @@ function onAuth(user){
   for(const gid of Object.keys(cloud.pend)) pendStop(gid);
   if(cloud.ugRef){ cloud.ugRef.off(); cloud.ugRef = null; }
   if(cloud.ownRef){ cloud.ownRef.off(); cloud.ownRef = null; }
+  if(cloud.profRef){ cloud.profRef.off(); cloud.profRef = null; } cloud.profile = null;
   cloud.owner = undefined; cloud.creator = false;
   stopSharing(true);
   cloud.user = user; cloud.status = user ? 'in' : 'out';
@@ -71,6 +72,8 @@ function onAuth(user){
       for(const gid of Object.keys(v)) if(v[gid] === 'pending') pendWatch(gid); else if(!cloud.groups[gid]) subGroup(gid, v[gid] === 'guest' ? 'guest' : 'member');
       scheduleRender();
     }, () => {});
+    cloud.profRef = fb.db.ref('profiles/' + user.uid);
+    cloud.profRef.on('value', s => { cloud.profile = s.val() || {}; phoneSync(); scheduleRender(); }, () => { cloud.profile = {}; });
     // Den första som loggar in med Google blir ägare. Bara ägaren (och de ägaren godkänt) kan skapa jaktlag.
     cloud.ownRef = fb.db.ref('owner');
     cloud.ownRef.on('value', s => {
@@ -90,12 +93,12 @@ function purgeLocal(gid){
 }
 function dropGroup(gid){
   const g = cloud.groups[gid]; if(!g) return;
-  g.refs.forEach(r => r.off()); Object.values(g.posRefs).forEach(r => r.off()); Object.values(g.trailRefs).forEach(r => r.off()); Object.values(g.obsRefs).forEach(r => r.off()); Object.values(g.msgRefs).forEach(r => r.off()); Object.values(g.checkRefs).forEach(r => r.off()); delete cloud.groups[gid];
+  g.refs.forEach(r => r.off()); Object.values(g.posRefs).forEach(r => r.off()); Object.values(g.trailRefs).forEach(r => r.off()); Object.values(g.obsRefs).forEach(r => r.off()); Object.values(g.msgRefs).forEach(r => r.off()); Object.values(g.checkRefs).forEach(r => r.off()); Object.values(g.phoneRefs).forEach(r => r.off()); delete cloud.groups[gid];
   purgeLocal(gid); scheduleRender(); renderPositions();
 }
 function forgetGroup(gid){ if(fb && cloud.user) fb.db.ref('userGroups/' + myUid() + '/' + gid).remove().catch(() => {}); dropGroup(gid); }
 function subGroup(gid, kind){
-  const g = cloud.groups[gid] = {id:gid, kind, meta:null, members:{}, areas:{}, pins:{}, types:{}, hunts:{}, guests:{}, guest:null, refs:[], areaRefs:{}, huntRef:null, posRefs:{}, huntPos:{}, trailRefs:{}, huntTrail:{}, obsRefs:{}, huntObs:{}, huntPlan:{}, huntRsvp:{}, msgRefs:{}, huntMsg:{}, msgKeys:{}, checkRefs:{}, huntCheck:{}, sos:{}, disc:{}};
+  const g = cloud.groups[gid] = {id:gid, kind, meta:null, members:{}, areas:{}, pins:{}, types:{}, hunts:{}, guests:{}, guest:null, refs:[], areaRefs:{}, huntRef:null, posRefs:{}, huntPos:{}, trailRefs:{}, huntTrail:{}, obsRefs:{}, huntObs:{}, huntPlan:{}, phoneRefs:{}, huntPhone:{}, huntRsvp:{}, msgRefs:{}, huntMsg:{}, msgKeys:{}, checkRefs:{}, huntCheck:{}, sos:{}, disc:{}};
   const on = (path, fn) => { const r = fb.db.ref('groups/' + gid + '/' + path); r.on('value', s => { if(cloud.groups[gid] === g) fn(s.val()); }, () => { if(cloud.groups[gid] === g) fn(null, true); }); g.refs.push(r); return r; };
   on('meta', v => { g.meta = v; if(!v){ forgetGroup(gid); toast('Du har inte längre åtkomst till ett jaktlag eller en jakt.'); return; } scheduleRender(); });
   on('types', v => { g.types = v || {}; applyRemote(gid); });
@@ -111,7 +114,7 @@ function subGroup(gid, kind){
       } });
     on('areas', v => { g.areas = v || {}; applyRemote(gid); });
     on('pins', v => { g.pins = v || {}; applyRemote(gid); });
-    on('hunts', v => { g.hunts = v || {}; scheduleRender(); syncHuntPos(); });
+    on('hunts', v => { g.hunts = v || {}; g.huntsLoaded = true; scheduleRender(); syncHuntPos(); });
     on('guests', v => { g.guests = v || {}; scheduleRender(); });
     on('huntPlan', v => { const prev = g.planLoaded ? g.huntPlan : undefined; g.huntPlan = v || {}; g.planLoaded = true; planOnData(g, prev); scheduleRender(); });
     on('huntRsvp', v => { g.huntRsvp = v || {}; syncHuntPos(); });
@@ -137,7 +140,7 @@ function subGroup(gid, kind){
       };
       const subHunt = () => { g.huntRef = on('hunts/' + v.hid, (hv, err) => {
         if(err){ g.huntRef = null; setTimeout(() => { if(alive() && !g.huntRef) subHunt(); }, 3000); return; }
-        g.hunts = hv ? {[v.hid]: hv} : {}; syncHuntPos(); areasFor(hv);
+        g.hunts = hv ? {[v.hid]: hv} : {}; g.huntsLoaded = true; syncHuntPos(); areasFor(hv);
       }); };
       subHunt();
     });
@@ -253,7 +256,14 @@ function syncHuntPos(){
     for(const hid of Object.keys(g.obsRefs)) if(!live.has(hid)){ g.obsRefs[hid].off(); delete g.obsRefs[hid]; delete g.huntObs[hid]; }
     for(const hid of Object.keys(g.msgRefs)) if(!live.has(hid)){ g.msgRefs[hid].off(); delete g.msgRefs[hid]; delete g.huntMsg[hid]; }
     for(const hid of Object.keys(g.checkRefs)) if(!live.has(hid)){ g.checkRefs[hid].off(); delete g.checkRefs[hid]; delete g.huntCheck[hid]; }
+    for(const hid of Object.keys(g.phoneRefs)) if(!live.has(hid)){ g.phoneRefs[hid].off(); delete g.phoneRefs[hid]; delete g.huntPhone[hid]; }
     for(const hid of live){
+      // Telefonnummer: bara deltagare och jaktledare får läsa. Nekas det (man deltar inte) försöker vi igen när svaret ändras.
+      if(!g.phoneRefs[hid]){
+        const pr = fb.db.ref(`groups/${g.id}/huntPhone/${hid}`);
+        pr.on('value', s => { if(g.phoneRefs[hid] === pr){ g.huntPhone[hid] = s.val() || {}; renderPositions(); scheduleRender(); } }, () => { if(g.phoneRefs[hid] === pr){ delete g.phoneRefs[hid]; delete g.huntPhone[hid]; } });
+        g.phoneRefs[hid] = pr;
+      }
       if(!g.checkRefs[hid]){
         const cr = fb.db.ref(`groups/${g.id}/huntCheck/${hid}`);
         cr.on('value', s => { if(g.checkRefs[hid] === cr){ const prev = g.huntCheck[hid]; g.huntCheck[hid] = s.val() || {}; checkNotify(g, hid, prev); scheduleRender(); } }, () => { if(g.checkRefs[hid] === cr){ delete g.checkRefs[hid]; delete g.huntCheck[hid]; } });
@@ -286,7 +296,7 @@ function syncHuntPos(){
     for(const h of Object.values(g.hunts || {})) if(h){ for(const t of [h.starts, h.expires, h.expires + cloud.cleanAfter]) if(t > Date.now() && t < next) next = t; }
   }
   if(cloud.sharing && !anyLiveHunt()){ stopSharing(); toast('Jakten är slut. Din position delas inte längre.', 5000); }
-  autoShare();
+  autoShare(); phoneSync();
   if(typeof checkPass === 'function') checkPass();
   renderPositions(); renderObs(); scheduleRender();
   clearTimeout(huntPosTimer);
@@ -304,7 +314,7 @@ function renderPositions(){
   posLayer.clearLayers();
   for(const p of activePositions()){
     const m = L.marker([p.lat, p.lng], {icon:L.divIcon({className:'pos-icon', html:`<span class="pos-dot" style="background:${personColor(p.uid)}">${esc(initials(p.name))}</span><span class="pos-name">${esc(p.name || 'Jägare')}</span>`, iconSize:[32,32], iconAnchor:[16,16], popupAnchor:[0,-14]}), zIndexOffset:500});
-    m.bindPopup(() => h(`<div class="pp"><h4>${esc(p.name || 'Jägare')}</h4><div class="pnote">Position ${ago(p.t)}${p.acc ? ` · ±${Math.round(p.acc)} m` : ''}${myPos ? `<br>${fmtDist(distM(myPos, p))} bort` : ''}</div><div class="pbtns"><a class="navbtn" href="${navUrl(p.lat, p.lng)}" target="_blank" rel="noopener">${ICON_NAV}Navigera</a></div></div>`), {maxWidth:260});
+    m.bindPopup(() => h(`<div class="pp"><h4>${esc(p.name || 'Jägare')}</h4><div class="pnote">Position ${ago(p.t)}${p.acc ? ` · ±${Math.round(p.acc)} m` : ''}${myPos ? `<br>${fmtDist(distM(myPos, p))} bort` : ''}</div><div class="pbtns"><a class="navbtn" href="${navUrl(p.lat, p.lng)}" target="_blank" rel="noopener">${ICON_NAV}Navigera</a>${phoneOf(p.uid) ? `<a class="btn sm" data-tel href="${esc(telHref(phoneOf(p.uid)))}">Ring</a>` : ''}</div></div>`), {maxWidth:260});
     m.addTo(posLayer);
   }
   const el = $('#posCount'); if(el) el.textContent = posCountText();
@@ -553,6 +563,46 @@ function createGroup(name){
   up[`userGroups/${u}/${gid}`] = 'member';
   return fb.db.ref().update(up).then(() => toast(`Jaktlaget ”${name}” skapades`)).catch(fail());
 }
+/* ---------- Telefonnummer ----------
+   Profilen (profiles/<uid>: phone, share) läser och skriver bara man själv. Har man valt att dela läggs numret i varje jakt
+   man deltar i (groups/<lag>/huntPhone/<jakt>/<uid>), som bara jaktens deltagare och jaktledare kan läsa medan jakten pågår.
+   Vilka jakter numret ligger i sparas på enheten, så att det tas bort när man avböjer eller slutar dela. */
+const PHONE_RE = /^[+]?[0-9][0-9 -]{4,18}[0-9]$/;
+const normPhone = v => String(v || '').trim().replace(/\s+/g, ' ');
+const telHref = v => 'tel:' + String(v || '').replace(/[^+0-9]/g, '');
+const phonePubKey = () => 'jk.phonePub.' + myUid();
+function phoneOf(uid){
+  for(const g of Object.values(cloud.groups)) for(const hid of liveHunts(g)){ const p = ((g.huntPhone || {})[hid] || {})[uid]; if(p && p.phone) return p.phone; }
+  return '';
+}
+function phoneSave(){
+  const num = normPhone($('#phNum').value), share = $('#phShare').checked;
+  if(num && !PHONE_RE.test(num)){ toast('Skriv numret med siffror, till exempel 070-123 45 67 eller +46 70 123 45 67.', 6000); return; }
+  if(share && !num){ toast('Fyll i ett nummer för att kunna dela det.'); return; }
+  const val = num ? {phone:num, share} : null;
+  fb.db.ref('profiles/' + myUid()).set(val).then(() => toast(!num ? 'Numret är borttaget.' : share ? 'Numret är sparat och delas med deltagarna i jakter du deltar i.' : 'Numret är sparat. Det delas inte.', 5000)).catch(fail());
+}
+function phoneSync(){
+  if(!fb || !cloud.user || !cloud.profile) return;
+  const pf = cloud.profile, now = Date.now(), want = {};
+  let pub = {}; try { pub = JSON.parse(lsGet(phonePubKey()) || '{}') || {}; } catch(e){}
+  for(const g of Object.values(cloud.groups)) if(g.huntsLoaded) for(const [hid, h] of Object.entries(g.hunts || {}))
+    if(h && h.expires > now && pf.share && pf.phone && accepted(g, hid)) want[g.id + '/' + hid] = pf.phone;
+  let changed = false;
+  for(const [k, num] of Object.entries(want)) if(pub[k] !== num){
+    const [gid, hid] = k.split('/');
+    fb.db.ref(`groups/${gid}/huntPhone/${hid}/${myUid()}`).set({name:myName(), phone:num, t:Date.now()}).catch(() => {});
+    pub[k] = num; changed = true;
+  }
+  for(const k of Object.keys(pub)) if(!want[k]){
+    const [gid, hid] = k.split('/'), g = cloud.groups[gid];
+    if(g && !g.huntsLoaded) continue;   // laget laddas fortfarande: vänta
+    const h = g && (g.hunts || {})[hid];
+    if(h && h.expires > now) fb.db.ref(`groups/${gid}/huntPhone/${hid}/${myUid()}`).remove().catch(() => {});
+    delete pub[k]; changed = true;
+  }
+  if(changed) lsSet(phonePubKey(), JSON.stringify(pub));
+}
 /* Förfrågan som väntar på godkännande (userGroups = 'pending'). Den som frågat ser sin egen förfrågan. När den
    försvinner har admin antingen godkänt (då finns medlemskapet) eller nekat. */
 function pendWatch(gid){
@@ -670,12 +720,14 @@ function huntPlace(g, hunt){
 function rsvpHtml(g, hid){
   const auto = 'Din position delas automatiskt med jaktlaget medan jakten pågår och appen är öppen.';
   if(g.kind !== 'member') return `<p class="note">${auto}</p>`;
-  const names = Object.values((g.huntRsvp || {})[hid] || {}).filter(going).map(v => v.name || 'Medlem')
-    .concat(Object.values(g.guests || {}).filter(v => v && v.hid === hid).map(v => (v.name || 'Gäst') + ' (gäst)'))
-    .sort((a, b) => a.localeCompare(b, 'sv'));
+  const ph = (g.huntPhone || {})[hid] || {};
+  const person = (pu, name) => esc(name) + (ph[pu] && ph[pu].phone ? ` <a class="tel" href="${esc(telHref(ph[pu].phone))}">${esc(ph[pu].phone)}</a>` : '');
+  const names = Object.entries((g.huntRsvp || {})[hid] || {}).filter(([, v]) => going(v)).map(([pu, v]) => [v.name || 'Medlem', person(pu, v.name || 'Medlem')])
+    .concat(Object.entries(g.guests || {}).filter(([, v]) => v && v.hid === hid).map(([pu, v]) => [(v.name || 'Gäst') + ' (gäst)', person(pu, (v.name || 'Gäst') + ' (gäst)')]))
+    .sort((a, b) => a[0].localeCompare(b[0], 'sv')).map(x => x[1]);
   const me = accepted(g, hid), no = declined(g, hid);
   const nos = Object.values((g.huntRsvp || {})[hid] || {}).filter(v => v && v.no).map(v => v.name || 'Medlem').sort((a, b) => a.localeCompare(b, 'sv'));
-  return `<div class="lbl">Deltar${names.length ? ' (' + names.length + ')' : ''}</div><div class="small rsvp-list">${names.length ? names.map(esc).join(', ') : '<span class="muted">Ingen deltar ännu.</span>'}${nos.length ? `<br><span class="muted">Avböjt: ${nos.map(esc).join(', ')}</span>` : ''}</div>
+  return `<div class="lbl">Deltar${names.length ? ' (' + names.length + ')' : ''}</div><div class="small rsvp-list">${names.length ? names.join(', ') : '<span class="muted">Ingen deltar ännu.</span>'}${nos.length ? `<br><span class="muted">Avböjt: ${nos.map(esc).join(', ')}</span>` : ''}</div>
     <div class="btnrow" style="margin-top:6px">${me ? `<span class="tag on">Du deltar</span><button class="btn sm ghost" type="button" data-j="rsvp-no" data-g="${esc(g.id)}" data-h="${esc(hid)}">Avböj</button>` : no ? `<span class="tag">Du har avböjt</span><button class="btn sm" type="button" data-j="rsvp" data-g="${esc(g.id)}" data-h="${esc(hid)}">Jag deltar ändå</button>` : `<button class="btn sm primary" type="button" data-j="rsvp" data-g="${esc(g.id)}" data-h="${esc(hid)}">Jag deltar</button><button class="btn sm ghost" type="button" data-j="rsvp-no" data-g="${esc(g.id)}" data-h="${esc(hid)}">Avböj</button>`}</div>
     <p class="note" style="margin-top:4px">${me ? auto : 'Deltar du delas din position automatiskt med jaktlaget medan jakten pågår.'}</p>`;
 }
@@ -713,6 +765,10 @@ function renderKonto(){
       ${NAT.on ? (NAT.notif !== 'granted' && NAT.has('LocalNotifications') ? '<div class="btnrow"><button class="btn sm" type="button" data-j="notif">Tillåt aviseringar</button></div><p class="note" style="margin-top:2px">För nödlarm, påminnelse när en jakt du deltar i startar, och aviseringen som visar att positionen delas.</p>' : '')
       : window.Notification && Notification.permission === 'default' ? '<div class="btnrow"><button class="btn sm" type="button" data-j="notif">Tillåt aviseringar om nödlarm</button></div><p class="note" style="margin-top:2px">Då kan ett nödlarm synas även när appen ligger i bakgrunden.</p>' : ''}`;
   }
+  if(cloud.status === 'in' && cloud.user){ const pf = cloud.profile || {};
+    html += `<h3 class="sec">Telefonnummer</h3><label class="field" style="margin-top:0"><span>Ditt nummer</span><input class="input" id="phNum" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" value="${esc(pf.phone || '')}" placeholder="070-123 45 67"></label>
+      <label class="checkline"><input type="checkbox" id="phShare" ${pf.share ? 'checked' : ''}><span>Dela med deltagarna i jakter jag deltar i<br><span class="small muted">Numret syns bara för jaktens deltagare och jaktledare, och bara medan jakten pågår. De kan då ringa dig från deltagarlistan, din position och ett nödlarm.</span></span></label>
+      <div class="btnrow"><button class="btn sm" type="button" data-j="phone-save">Spara</button></div>`; }
   if(NAT.app) html += `<p class="note" style="margin-top:10px">Appen för Android, version ${esc(NAT.app.versionName || '')}.${NAT.upd ? ` Version ${esc(NAT.upd.name)} finns.` : ''}
     <button class="linkbtn" type="button" data-j="${NAT.upd ? 'app-update' : 'app-check'}">${NAT.upd ? 'Uppdatera' : 'Sök efter uppdatering'}</button></p>`;
   html += docsCardHtml();
@@ -969,7 +1025,7 @@ async function endHunt(g, hid, auto){
   for(const [oid, o] of Object.entries(obs)) if(o && typeof o.lat === 'number' && typeof o.lng === 'number' && typeof o.sp === 'string' && o.n >= 1){
     up[`groups/${g.id}/obsArchive/${oid}`] = {sp:o.sp.slice(0, 40), n:Math.min(999, Math.round(o.n)), lat:o.lat, lng:o.lng, t:Math.min(o.t || Date.now(), Date.now()), hid:String(hid).slice(0, 40), kind:o.kind === 'kill' ? 'kill' : 'obs'}; na++;
   }
-  up[`groups/${g.id}/hunts/${hid}`] = null; up[`groups/${g.id}/huntPos/${hid}`] = null; up[`groups/${g.id}/huntTrail/${hid}`] = null; up[`groups/${g.id}/huntObs/${hid}`] = null; up[`groups/${g.id}/huntPlan/${hid}`] = null; up[`groups/${g.id}/huntRsvp/${hid}`] = null; up[`groups/${g.id}/huntMsg/${hid}`] = null; up[`groups/${g.id}/huntCheck/${hid}`] = null;
+  up[`groups/${g.id}/hunts/${hid}`] = null; up[`groups/${g.id}/huntPos/${hid}`] = null; up[`groups/${g.id}/huntTrail/${hid}`] = null; up[`groups/${g.id}/huntObs/${hid}`] = null; up[`groups/${g.id}/huntPlan/${hid}`] = null; up[`groups/${g.id}/huntRsvp/${hid}`] = null; up[`groups/${g.id}/huntMsg/${hid}`] = null; up[`groups/${g.id}/huntCheck/${hid}`] = null; up[`groups/${g.id}/huntPhone/${hid}`] = null;
   for(const [gu, v] of Object.entries(g.guests || {})) if(v && v.hid === hid){ up[`groups/${g.id}/guests/${gu}`] = null; up[`groups/${g.id}/msgKeys/${gu}`] = null; if((g.gear || {})[gu]) up[`groups/${g.id}/gear/${gu}`] = null; }
   // Koden tas bara bort om den finns kvar och hör till jakten (annars nekas hela skrivningen och jakten blir aldrig städad)
   if(hunt && hunt.code){ try { const c = (await fb.db.ref(`huntCodes/${hunt.code}`).get()).val(); if(c && c.hid === hid && c.gid === g.id) up[`huntCodes/${hunt.code}`] = null; } catch(e){} }
@@ -996,6 +1052,7 @@ function jaktClick(e){
   else if(act === 'name') askText('Byt namn', 'Namn som syns för andra', myName(), 'Spara', v => { lsSet(NAMEKEY, v); for(const gr of Object.values(cloud.groups)){ if(gr.kind === 'member'){ fb.db.ref(`groups/${gr.id}/members/${myUid()}/name`).set(v).catch(() => {}); for(const [h, r] of Object.entries(gr.huntRsvp || {})) if(r && r[myUid()]) fb.db.ref(`groups/${gr.id}/huntRsvp/${h}/${myUid()}/name`).set(v).catch(() => {}); } else fb.db.ref(`groups/${gr.id}/guests/${myUid()}/name`).set(v).catch(() => {}); msgPublish(gr); } renderJakt(); }, 40);
   else if(act === 'notif' && NAT.on) natNotifPerm();
   else if(act === 'app-update') natUpdateGo();
+  else if(act === 'phone-save') phoneSave();
   else if(act === 'app-check') natUpdateCheck(true).then(u => { if(NAT.app && !u) toast('Appen är uppdaterad.'); });
   else if(act === 'notif'){ try { Notification.requestPermission().then(p => { toast(p === 'granted' ? 'Aviseringar om nödlarm är tillåtna.' : 'Aviseringar är inte tillåtna. Det går att ändra i webbläsarens inställningar.', 5000); renderJakt(); }); } catch(e){} }
   else if(act === 'group-new') askText('Skapa jaktlag', 'Namn på jaktlaget', '', 'Skapa', v => createGroup(v), 60);
