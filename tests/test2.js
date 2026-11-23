@@ -60,7 +60,7 @@ window.__nat = {calls:[], cbs:{}, http:[], perm:'prompt', n:0, wake:0};
 try { Object.defineProperty(navigator, 'wakeLock', {configurable:true, value:{request(){ window.__nat.wake++; return Promise.resolve({release(){}}); }}}); } catch(e){}
 window.Capacitor = {
   isNativePlatform: () => true, getPlatform: () => 'android',
-  PluginHeaders: ['BackgroundGeolocation', 'CapacitorHttp', 'FirebaseAuthentication', 'LocalNotifications'].map(name => ({name, methods:[]})),
+  PluginHeaders: ['BackgroundGeolocation', 'CapacitorHttp', 'FirebaseAuthentication', 'LocalNotifications', 'Filesystem', 'Share'].map(name => ({name, methods:[]})),
   nativeCallback(plugin, method, opts, cb){ const id = String(++window.__nat.n); window.__nat.calls.push({plugin, method, opts, id}); window.__nat.cbs[id] = cb; return id; },
   nativePromise(plugin, method, opts){
     const N = window.__nat; N.calls.push({plugin, method, opts});
@@ -69,6 +69,7 @@ window.Capacitor = {
     if(plugin === 'LocalNotifications' && method === 'requestPermissions'){ N.perm = 'granted'; return Promise.resolve({display:'granted'}); }
     if(plugin === 'LocalNotifications' && method === 'checkPermissions') return Promise.resolve({display:N.perm});
     if(plugin === 'BackgroundGeolocation' && method === 'removeWatcher') delete N.cbs[opts.id];
+    if(plugin === 'Filesystem' && method === 'writeFile') return Promise.resolve({uri:'file:///data/user/0/app/cache/' + opts.path});
     return Promise.resolve({});
   }
 };
@@ -612,6 +613,15 @@ const team = async (P, sub, g) => { await P.evaluate(([x, t]) => __fk.openTeam(x
   const canc = (await nat('LocalNotifications', 'cancel')).flatMap(c => c.opts.notifications).map(n => n.id);
   check(rem && canc.includes(rem.id), 'avböjer man tas påminnelsen bort');
   await BN.evaluate(g => { delete __fk.cloud.groups[g].hunts.hx; delete __fk.cloud.groups[g].huntRsvp.hx; }, gid);
+  // Export i appen: filen skrivs i appens cache och öppnas i Androids Dela-meny (webbvyn kan inte ladda ned filer)
+  if(await BN.isVisible('#sosClose')) await BN.click('#sosClose');   // nödlarmet från testet ovan
+  await go(BN, 'data'); await BN.click('[data-act="export-json"]'); await W(BN, 300);
+  { const wf = (await nat('Filesystem', 'writeFile'))[0], sh = (await nat('Share', 'share'))[0]; let j = null; try { j = JSON.parse(wf.opts.data); } catch(e){}
+    check(wf && /^export\/jaktkartan-\d{4}-\d\d-\d\d\.json$/.test(wf.opts.path) && wf.opts.directory === 'CACHE' && wf.opts.encoding === 'utf8' && j && j.app === 'Jaktkartan' && Array.isArray(j.pins)
+      && sh && sh.opts.files.length === 1 && sh.opts.files[0] === 'file:///data/user/0/app/cache/' + wf.opts.path, 'Exportera allt i appen sparar säkerhetskopian och öppnar Dela-menyn'); }
+  await BN.evaluate(() => { window.Capacitor.PluginHeaders = window.Capacitor.PluginHeaders.filter(p => p.name !== 'Filesystem' && p.name !== 'Share'); window.__nat.calls = []; });
+  await BN.click('[data-act="export-json"]'); await W(BN, 300);
+  check((await BN.innerText('#toast')).includes('nyare version av appen') && !(await nat('Filesystem')).length, 'en äldre app utan export ber om en nyare version i stället för att inte göra något');
   // Nekad platsåtkomst: delningen stoppas och telefonens inställningar öppnas
   await BN.evaluate(() => window.__natErr('NOT_AUTHORIZED')); await W(BN, 600);
   check(!(await BN.evaluate(() => __fk.cloud.sharing)) && (await nat('BackgroundGeolocation', 'openSettings')).length === 1 && (await nat('BackgroundGeolocation', 'removeWatcher'))[0].opts.id === watch.id && !hp().bob, 'nekas platsåtkomst stoppas delningen, positionen tas bort och inställningarna öppnas');

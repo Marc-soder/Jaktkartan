@@ -6,6 +6,7 @@
      (Android stryper dess anrop efter några minuter), och Firebase tar då inte bort positionen när anslutningen bryts.
    - FirebaseAuthentication: inloggning med Google i telefonens eget system. Google tillåter inte inloggning i webbvyer.
    - LocalNotifications: aviseringar om nödlarm, och en påminnelse när en jakt man deltar i startar.
+   - Filesystem och Share: export (säkerhetskopia, GPX, GeoJSON). Webbvyn kan inte ladda ned filer.
    I en vanlig webbläsare finns inget window.Capacitor. Då är NAT.on false och inget här används.
    Skalet anropas direkt via Capacitors brygga (nativePromise och nativeCallback), så sidan behöver inga extra filer. */
 const NAT = (() => {
@@ -125,6 +126,27 @@ function natPutPos(path, val){
   })();
 }
 function natPushTrail(path, val){ natRest('POST', path, val).catch(() => {}); }
+
+/* ---------- Export ----------
+   Webbvyn i appen sparar inte filer som laddas ned. Filen skrivs i stället i appens cache och öppnas i Androids
+   Dela-meny, där man kan spara den (Filer, Drive) eller skicka den. Appar byggda före export (1.4) saknar
+   insticksprogrammen och får besked om att installera en nyare version. */
+async function natShareFile(name, text){
+  if(!NAT.has('Filesystem') || !NAT.has('Share')){
+    // Efter exportens eget besked ("sparas som fil"), som annars skulle skriva över det här
+    setTimeout(() => toast('Export kräver en nyare version av appen. Installera den senaste från Releases.', 7000), 0);
+    return false;
+  }
+  try {
+    const w = await NAT.call('Filesystem', 'writeFile', {path:'export/' + name, data:text, directory:'CACHE', encoding:'utf8', recursive:true});
+    await NAT.call('Share', 'share', {title:name, files:[w.uri], dialogTitle:'Spara eller dela ' + name});
+    return true;
+  } catch(e){
+    const m = String((e && (e.message || e.code)) || e || '');
+    if(!/cancel/i.test(m)) toast('Filen kunde inte delas. ' + m.slice(0, 120), 7000);
+    return false;
+  }
+}
 
 /* ---------- Inloggning med Google ---------- */
 function natGoogleLogin(){

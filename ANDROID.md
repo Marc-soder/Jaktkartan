@@ -300,6 +300,8 @@ Versionsnumret räknas upp av sig själv. Samma nyckel måste användas varje g�
 - **Inloggning:** `@capacitor-firebase/authentication` loggar in med Google i telefonens eget system och lämnar över till
   webbsidans Firebase (`signInWithCredential`). Google tillåter inte inloggning i webbvyer.
 - **Aviseringar:** `@capacitor/local-notifications` för nödlarm och påminnelse när en jakt man deltar i startar.
+- **Export** (säkerhetskopia, GPX, GeoJSON): `@capacitor/filesystem` och `@capacitor/share`. Webbvyn kan inte ladda ned filer,
+  så filen skrivs i appens cache och öppnas i Androids Dela-meny, där man sparar den (Filer, Drive) eller skickar den.
 - **Säkerhetsreglerna** i Firebase är oförändrade. Appen skriver samma sökvägar och fält som webben.
 - **Tester:** `tests/test2.js` kör sidan med en låtsad telefon (en låtsad `window.Capacitor`) och prövar inloggning, delning,
   förnyad inloggning med släckt skärm, nödlarm, påminnelser och nekad plats. Själva Android-bygget kontrolleras i CI.
