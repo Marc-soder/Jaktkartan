@@ -60,7 +60,7 @@ window.__nat = {calls:[], cbs:{}, lis:{}, http:[], perm:'prompt', n:0, wake:0, v
 try { Object.defineProperty(navigator, 'wakeLock', {configurable:true, value:{request(){ window.__nat.wake++; return Promise.resolve({release(){}}); }}}); } catch(e){}
 window.Capacitor = {
   isNativePlatform: () => true, getPlatform: () => 'android',
-  PluginHeaders: ['BackgroundGeolocation', 'CapacitorHttp', 'FirebaseAuthentication', 'LocalNotifications', 'Filesystem', 'Share', 'AppUpdate'].map(name => ({name, methods:[]})),
+  PluginHeaders: ['JaktGps', 'BackgroundGeolocation', 'CapacitorHttp', 'FirebaseAuthentication', 'LocalNotifications', 'Filesystem', 'Share', 'AppUpdate'].map(name => ({name, methods:[]})),
   nativeCallback(plugin, method, opts, cb){ const id = String(++window.__nat.n); window.__nat.calls.push({plugin, method, opts, id});
     if(method === 'addListener') window.__nat.lis[id] = {plugin, ev:opts.eventName, cb}; else window.__nat.cbs[id] = cb; return id; },
   nativePromise(plugin, method, opts){
@@ -69,7 +69,7 @@ window.Capacitor = {
     if(plugin === 'FirebaseAuthentication' && method === 'signInWithGoogle') return Promise.resolve({credential:{idToken:'google-' + new URLSearchParams(location.search).get('u')}});
     if(plugin === 'LocalNotifications' && method === 'requestPermissions'){ N.perm = 'granted'; return Promise.resolve({display:'granted'}); }
     if(plugin === 'LocalNotifications' && method === 'checkPermissions') return Promise.resolve({display:N.perm});
-    if(plugin === 'BackgroundGeolocation' && method === 'removeWatcher') delete N.cbs[opts.id];
+    if((plugin === 'BackgroundGeolocation' && method === 'removeWatcher') || (plugin === 'JaktGps' && method === 'stop')) delete N.cbs[opts.id];
     if(plugin === 'AppUpdate' && method === 'info') return Promise.resolve({versionCode:N.ver, versionName:'1.' + N.ver, canInstall:N.canInstall});
     if(plugin === 'AppUpdate' && method === 'openInstallSettings'){ N.canInstall = true; return Promise.resolve({}); }
     if(plugin === 'AppUpdate' && method === 'removeListener'){ delete N.lis[opts.callbackId]; return Promise.resolve({}); }
@@ -81,7 +81,7 @@ window.Capacitor = {
   }
 };
 window.__natEmit = (lat, lng, acc) => Object.values(window.__nat.cbs).forEach(cb => cb({latitude:lat, longitude:lng, accuracy:acc, time:Date.now()}));
-window.__natErr = code => Object.values(window.__nat.cbs).forEach(cb => cb(null, {code, message:'Permission denied.'}));`;
+window.__natErr = code => { const cbs = window.__nat.cbs; window.__nat.cbs = {}; Object.values(cbs).forEach(cb => cb(null, {code, message:'Permission denied.'})); };`;
 async function mkPage(browser, who, hash, opts){
   opts = Object.assign({}, opts || {}); const native = opts.native; delete opts.native;
   const ctx = await browser.newContext(Object.assign({viewport:{width:1280, height:900}, geolocation:{latitude:58.72, longitude:14.61, accuracy:12}, permissions:['geolocation', 'accelerometer', 'gyroscope', 'magnetometer']}, opts || {}));
@@ -718,8 +718,8 @@ async function inviteRevokeAll(){
   await BN.click('#paneKonto [data-j="notif"]'); await W(BN, 300);
   check(!(await BN.isVisible('#paneKonto [data-j="notif"]')) && (await BN.evaluate(() => __fk.NAT.notif)) === 'granted', 'aviseringarna tillåts, och knappen försvinner');
   await team(BN, 'jakt'); await BN.locator('#shareToggle').check({force:true}); await W(BN, 400);
-  const watch = (await nat('BackgroundGeolocation', 'addWatcher'))[0];
-  check(watch && watch.opts.backgroundTitle === 'Jaktkartan delar din position' && watch.opts.requestPermissions === true && watch.opts.distanceFilter === 0 && (await BN.evaluate(() => window.__nat.wake)) === 0 && (await BN.innerText('#paneJakt')).includes('även med släckt skärm'), 'delningen använder positionen i bakgrunden med en fast avisering, utan att hålla skärmen tänd');
+  const watch = (await nat('JaktGps', 'start'))[0];
+  check(watch && watch.opts.title === 'Jaktkartan delar din position' && watch.opts.interval === 10000 && !(await nat('BackgroundGeolocation', 'addWatcher')).length && (await BN.evaluate(() => window.__nat.wake)) === 0 && (await BN.innerText('#paneJakt')).includes('även med släckt skärm'), 'delningen använder appens egen GPS i bakgrunden, var 10:e sekund, med en fast avisering och utan att hålla skärmen tänd');
   await BN.evaluate(() => window.__natEmit(58.7215, 14.6115, 6)); await W(BN, 700);
   const bp = () => hp().bob || {}, btr = () => Object.values(((data.groups[gid].huntTrail || {})[hid] || {}).bob || {});
   const puts = await BN.evaluate(() => window.__nat.http.filter(h => h.method === 'PUT').map(h => h.url)), dbUrl = await BN.evaluate(() => __fk.cloud.cfg.databaseURL.replace(/\/+$/, ''));
@@ -730,13 +730,25 @@ async function inviteRevokeAll(){
   await BN.evaluate(() => { Object.defineProperty(document, 'hidden', {configurable:true, get:() => true}); window.__tokLife = 60; __fk.natTok.exp = 0; __fk.cloud.lastSent = 0; window.__natEmit(58.7225, 14.6125, 5); }); await W(BN, 700);
   const ref = await BN.evaluate(() => window.__nat.http.filter(h => h.url.startsWith('https://securetoken.googleapis.com/')));
   check(ref.length === 1 && ref[0].data.refresh_token === 'rt-bob' && ref[0].data.grant_type === 'refresh_token' && ref[0].headers.Referer.includes('jaktkartan.html') && bp().lat === 58.7225, 'med släckt skärm förnyas inloggningen med telefonens HTTP (med Referer för API-nyckeln), och positionen kommer fram');
-  // Med släckt skärm skickas positionen glesare: var 20:e sekund, eller när man rört sig 20 m
+  // Appens egen GPS med släckt skärm: varje mätning skickas när man rör sig. Incheckad på passet mäts och skickas
+  // positionen varje minut, eller direkt när man har rört sig mer än 40 m.
   { const puts = () => BN.evaluate(() => window.__nat.http.filter(h => h.method === 'PUT').length), p0 = await puts();
-    await BN.evaluate(() => { __fk.cloud.lastSent = Date.now() - 9000; window.__natEmit(58.72252, 14.61252, 5); }); await W(BN, 500);
+    const ivs = async () => (await nat('JaktGps', 'setInterval')).map(c => c.opts.interval);
+    const emit = (lat, back) => BN.evaluate(([la, b]) => { if(b) __fk.cloud.lastSent = Date.now() - b; window.__natEmit(la, 14.61252, 5); }, [lat, back || 0]).then(() => W(BN, 500));
+    await emit(58.72252, 9000);
     const p1 = await puts();
-    await BN.evaluate(() => window.__natEmit(58.7228, 14.6128, 5)); await W(BN, 600);
-    const p2 = await puts();
-    check(p1 === p0 && p2 === p0 + 1 && bp().lat === 58.7228, `med släckt skärm skickas inte varje liten rörelse, men en förflyttning på 20 m skickas direkt (${p0}, ${p1}, ${p2})`); }
+    check(p1 === p0 + 1 && bp().lat === 58.72252, `med appens egen GPS skickas varje mätning när man rör sig, även med släckt skärm (${p0}, ${p1})`);
+    await BN.evaluate(([g, h]) => { const G = __fk.cloud.groups[g]; G.huntCheck = G.huntCheck || {}; G.huntCheck[h] = Object.assign({}, G.huntCheck[h], {bob:{pid:'x', in:true, t:Date.now()}}); }, [gid, hid]);
+    await emit(58.72270, 9000);   // 20 m
+    const p2 = await puts(), iv2 = await ivs();
+    check(await BN.evaluate(() => __fk.checkedIn()) && iv2[iv2.length - 1] === 60000 && p2 === p1, `incheckad på passet mäter telefonen varje minut, och 20 m skickas inte direkt (${iv2}, ${p1}, ${p2})`);
+    await emit(58.72300);   // 53 m från den senast skickade
+    const p3 = await puts();
+    check(p3 === p2 + 1 && bp().lat === 58.723, `en förflyttning på mer än 40 m skickas direkt (${p2}, ${p3})`);
+    await BN.evaluate(([g, h]) => { delete __fk.cloud.groups[g].huntCheck[h].bob; }, [gid, hid]);
+    await emit(58.72301, 9000);
+    const iv4 = await ivs();
+    check(!(await BN.evaluate(() => __fk.checkedIn())) && iv4[iv4.length - 1] === 10000 && iv4.length === 2 && (await puts()) === p3 + 1, `utcheckad mäter telefonen var 10:e sekund igen (${iv4})`); }
   // Meddelande när appen ligger i bakgrunden: avisering i telefonen
   await W(BN, 500); await team(C, 'chat'); await C.click(`[data-j="msg-new"][data-h="${hid}"]`); await W(C, 200);
   await C.fill('#msgText', 'Vildsvin mot pass 3'); await C.click('#msgSend'); await W(C, 900); await W(BN, 900); await team(C, 'jakt');
@@ -794,9 +806,20 @@ async function inviteRevokeAll(){
   await BN.evaluate(() => { window.__nat.ver = 6; localStorage.removeItem('jk.natUpd'); Object.defineProperty(document, 'hidden', {configurable:true, get:() => false}); document.dispatchEvent(new Event('visibilitychange')); }); await W(BN, 400);
   await BN.click('#paneKonto [data-j="app-check"]'); await W(BN, 400);
   check(!(await BN.isVisible('#appUpdBar')) && (await BN.innerText('#paneKonto')).includes('version 1.6.') && (await BN.innerText('#toast')).includes('Appen är uppdaterad'), 'efter uppdateringen försvinner raden, och Sök efter uppdatering säger att appen är uppdaterad');
+  // Delningen startade medan appen låg i bakgrunden: Android vägrar, och positionen startas när appen syns igen
+  { const n0 = (await nat('JaktGps', 'start')).length;
+    await BN.evaluate(() => { Object.defineProperty(document, 'hidden', {configurable:true, get:() => true}); window.__natErr('BACKGROUND'); }); await W(BN, 200);
+    const mid = (await nat('JaktGps', 'start')).length;
+    await BN.evaluate(() => { Object.defineProperty(document, 'hidden', {configurable:true, get:() => false}); document.dispatchEvent(new Event('visibilitychange')); }); await W(BN, 300);
+    check(mid === n0 && (await nat('JaktGps', 'start')).length === n0 + 1 && await BN.evaluate(() => __fk.cloud.sharing), 'kan positionen inte starta i bakgrunden startas den när appen syns igen'); }
+  const watch2 = (await nat('JaktGps', 'start')).pop();
   // Nekad platsåtkomst: delningen stoppas och telefonens inställningar öppnas
   await BN.evaluate(() => window.__natErr('NOT_AUTHORIZED')); await W(BN, 600);
-  check(!(await BN.evaluate(() => __fk.cloud.sharing)) && (await nat('BackgroundGeolocation', 'openSettings')).length === 1 && (await nat('BackgroundGeolocation', 'removeWatcher'))[0].opts.id === watch.id && !hp().bob, 'nekas platsåtkomst stoppas delningen, positionen tas bort och inställningarna öppnas');
+  check(!(await BN.evaluate(() => __fk.cloud.sharing)) && (await nat('JaktGps', 'openSettings')).length === 1 && (await nat('JaktGps', 'stop')).some(c => c.opts.id === watch2.id) && !hp().bob, 'nekas platsåtkomst stoppas delningen, positionen tas bort och inställningarna öppnas');
+  // Äldre app utan JaktGps: BackgroundGeolocation, som mäter varje sekund
+  await BN.evaluate(() => { window.Capacitor.PluginHeaders = window.Capacitor.PluginHeaders.filter(p => p.name !== 'JaktGps'); __fk.natGpsStart(); }); await W(BN, 200);
+  { const w = (await nat('BackgroundGeolocation', 'addWatcher')).pop();
+    check(w && w.opts.distanceFilter === 0 && w.opts.backgroundTitle === 'Jaktkartan delar din position' && !(await BN.evaluate(() => __fk.NAT.gps)), 'en äldre app utan egen GPS använder BackgroundGeolocation som tidigare'); }
   check(!BN.errs.length, `inga JS-fel i appen: ${BN.errs.slice(0, 3)}`);
   for(let i = subs.length - 1; i >= 0; i--) if(subs[i].page === BN) subs.splice(i, 1);
   await BN.context().close();

@@ -108,7 +108,7 @@ function subGroup(gid, kind){
   on('meta', v => { g.meta = v; if(!v){ forgetGroup(gid); toast('Du har inte längre åtkomst till ett jaktlag eller en jakt.'); return; } scheduleRender(); });
   on('types', v => { g.types = v || {}; applyRemote(gid); });
   on('msgKeys', v => { g.msgKeys = v || {}; msgPublish(g); scheduleRender(); });
-  if(kind === 'member') on('sos', v => { const prev = g.sosLoaded ? g.sos : undefined; g.sos = v || {}; g.sosLoaded = true; sosOnData(g, prev); });
+  if(kind === 'member') on('sos', v => { const prev = g.sosLoaded ? g.sos : undefined; g.sos = v || {}; g.sosLoaded = true; sosOnData(g, prev); natGpsMode(); });
   if(kind === 'member'){
     on('members', v => { g.members = v || {}; msgPublish(g); scheduleRender(); if(canLeadGroup(g) && !g.gearRef) g.gearRef = on('gear', (gv, err) => { if(err){ g.gearRef = null; return; } g.gear = gv || {}; scheduleRender(); });
       if(isAdminGroup(g) && !g.reqRef){
@@ -129,7 +129,7 @@ function subGroup(gid, kind){
       if(!v) return;
       msgPublish(g);
       if(g.huntRef) return;
-      on('sos', sv => { const prev = g.sosLoaded ? g.sos : undefined; g.sos = sv || {}; g.sosLoaded = true; sosOnData(g, prev); });
+      on('sos', sv => { const prev = g.sosLoaded ? g.sos : undefined; g.sos = sv || {}; g.sosLoaded = true; sosOnData(g, prev); natGpsMode(); });
       on('huntPlan/' + v.hid, pv => { const prev = g.planLoaded ? g.huntPlan : undefined; g.huntPlan = pv ? {[v.hid]: pv} : {}; g.planLoaded = true; planOnData(g, prev); scheduleRender(); });
       // Nekas en läsning (t.ex. om den hinner före gästposten i databasen) försöker vi igen efter en stund,
       // annars skulle gästen sakna jaktens områden och nålar tills sidan laddas om.
@@ -273,7 +273,7 @@ function syncHuntPos(){
       }
       if(!g.checkRefs[hid]){
         const cr = fb.db.ref(`groups/${g.id}/huntCheck/${hid}`);
-        cr.on('value', s => { if(g.checkRefs[hid] === cr){ const prev = g.huntCheck[hid]; g.huntCheck[hid] = s.val() || {}; checkNotify(g, hid, prev); scheduleRender(); } }, () => { if(g.checkRefs[hid] === cr){ delete g.checkRefs[hid]; delete g.huntCheck[hid]; } });
+        cr.on('value', s => { if(g.checkRefs[hid] === cr){ const prev = g.huntCheck[hid]; g.huntCheck[hid] = s.val() || {}; checkNotify(g, hid, prev); natGpsMode(); scheduleRender(); } }, () => { if(g.checkRefs[hid] === cr){ delete g.checkRefs[hid]; delete g.huntCheck[hid]; } });
         g.checkRefs[hid] = cr;
       }
       if(!g.msgRefs[hid] && msgCryptoOk()){
@@ -556,19 +556,21 @@ function startSharing(){
   renderJakt();
 }
 /* GPS: i vanligt läge följs positionen hela tiden. I sparläget görs en mätning var 30:e sekund (fortfarande med hög
-   noggrannhet, så att utcheckningen från passet blir rätt). Positionen skickas var 8:e sekund, i sparläget var 60:e
-   sekund eller direkt om man har rört sig mer än 15 m. */
-const GPS_SAVE_MS = 30000, SEND_MS = 8000, SEND_SAVE_MS = 60000, SEND_MOVE_M = 15, SEND_BG_MS = 20000, SEND_BG_MOVE_M = 20;
-/* I appen med släckt skärm skickas positionen var 20:e sekund, eller direkt när man rört sig 20 m (men högst var 8:e sekund).
-   Ingen tittar då på kartan, och varje sändning väcker telefonens radio. */
+   noggrannhet, så att utcheckningen från passet blir rätt). Positionen skickas var 8:e sekund. Incheckad på passet och
+   i sparläget skickas den varje minut, eller direkt om man har rört sig mer än 40 m (mindre än så är oftast GPS:en
+   som hoppar). I appen mäter telefonen själv var 10:e sekund, och varje mätning skickas (se natGpsWant). */
+const GPS_SAVE_MS = 30000, SEND_MS = 8000, SEND_SAVE_MS = 60000, SEND_MOVE_M = 40, SEND_BG_MS = 20000;
+/* Äldre appar (BackgroundGeolocation, en mätning i sekunden): med släckt skärm skickas positionen var 20:e sekund,
+   eller direkt när man rört sig 40 m (men högst var 8:e sekund). */
 function gpsPos(pos){
   const la = pos.coords.latitude, lo = pos.coords.longitude, ac = pos.coords.accuracy || 0;
   // Med släckt skärm i appen: bara det som behövs (spår, incheckning på passet, nödlarmets position), inte kartan
   if(!document.hidden || !NAT.on) showMe(la, lo, ac);
   else { myPos = {lat:la, lng:lo, acc:ac}; renderDirty = true; trailAdd(la, lo, ac); if(typeof checkPass === 'function') checkPass(); if(typeof sosTrack === 'function') sosTrack(); }
-  const save = powerOn(), bg = NAT.on && document.hidden, moved = cloud.sentAt && myPos ? distM(cloud.sentAt, myPos) : Infinity;
-  const every = save ? SEND_SAVE_MS : bg ? SEND_BG_MS : SEND_MS, moveM = save ? SEND_MOVE_M : SEND_BG_MOVE_M;
-  if(Date.now() - cloud.lastSent < every && !((save || bg) && moved > moveM && Date.now() - cloud.lastSent >= SEND_MS)) return;
+  natGpsMode();
+  const save = powerOn() || (typeof checkedIn === 'function' && checkedIn()), bg = NAT.on && document.hidden && !NAT.gps;
+  const moved = cloud.sentAt && myPos ? distM(cloud.sentAt, myPos) : Infinity, every = save ? SEND_SAVE_MS : bg ? SEND_BG_MS : SEND_MS;
+  if(Date.now() - cloud.lastSent < every && !((save || bg) && moved > SEND_MOVE_M && Date.now() - cloud.lastSent >= SEND_MS)) return;
   cloud.lastSent = Date.now(); cloud.sentAt = myPos ? {lat:myPos.lat, lng:myPos.lng} : null; sendPos();
 }
 /* Bara nekad platsåtkomst stänger av delningen. Tillfälliga fel (ingen GPS-signal, för långsamt svar) är vanliga i skogen:
@@ -592,7 +594,7 @@ function gpsStart(save){
 }
 /* Byt GPS-läge när sparläget slås på eller av (bara medan positionen delas). */
 function gpsSync(){
-  if(NAT.on){ cloud.gpsSave = powerOn(); return; }   // appen: samma GPS i båda lägena, bara sändningen glesas ut (gpsPos)
+  if(NAT.on){ cloud.gpsSave = powerOn(); natGpsMode(); return; }   // appen: intervallet väljs av natGpsWant
   if(cloud.sharing && cloud.gpsSave !== powerOn()) gpsStart(powerOn());
 }
 function stopSharing(silent){

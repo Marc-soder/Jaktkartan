@@ -309,7 +309,11 @@ Versionsnumret räknas upp av sig själv. Samma nyckel måste användas varje g�
 | `src/native.js` | Kopplingen mellan webbsidan och telefonen. Gör ingenting i en vanlig webbläsare. |
 | `.github/workflows/android.yml` | Kontrollbygge i PR:er, och det signerade bygget som startas för hand. |
 
-- **Position i bakgrunden:** `@capacitor-community/background-geolocation` (MIT). En tjänst i förgrunden med en fast avisering.
+- **Position i bakgrunden:** `android/app/src/main/java/.../JaktGpsPlugin.java` och `JaktGpsService.java` (appens egna).
+  En tjänst i förgrunden med en fast avisering. Telefonen mäter var 10:e sekund när man rör sig, varje minut när man är
+  incheckad på passet och var 30:e sekund i sparläget. Mellan mätningarna vilar GPS:en. Sidan väljer intervallet
+  (`natGpsWant` i `src/native.js`) och byter det utan omstart. Appar byggda före detta använder
+  `@capacitor-community/background-geolocation` (MIT), som mäter varje sekund. Därför ligger den kvar i projektet.
 - **Sändning:** med telefonens egen HTTP (`CapacitorHttp`) till Firebase REST, eftersom Android stryper webbvyns nät i bakgrunden.
   Inloggningen förnyas på samma sätt när skärmen är släckt.
 - **onDisconnect:** används inte i appen. Annars skulle Firebase ta bort positionen när skärmen släcks och anslutningen bryts.

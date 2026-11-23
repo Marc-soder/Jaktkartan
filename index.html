@@ -2835,7 +2835,9 @@ let viltDay = null;
 /* ---------- Jaktkartan som app på Android (Capacitor) ----------
    Appen är ett tunt skal som öppnar samma sida som webben. Skalet lägger in window.Capacitor, med anrop till
    telefonens egna funktioner (insticksprogram):
-   - BackgroundGeolocation: positionen även med släckt skärm, via en tjänst i förgrunden med en fast avisering.
+   - JaktGps (appens eget, android/.../JaktGpsPlugin.java): positionen även med släckt skärm, via en tjänst i förgrunden
+     med en fast avisering. Mäter var 10:e sekund när man rör sig och varje minut när man är incheckad på passet.
+     Appar byggda före JaktGps använder BackgroundGeolocation, som mäter varje sekund.
    - CapacitorHttp: positionen skickas med telefonens egen HTTP till Firebase REST. Webbvyn får sämre nät i bakgrunden
      (Android stryper dess anrop efter några minuter), och Firebase tar då inte bort positionen när anslutningen bryts.
    - FirebaseAuthentication: inloggning med Google i telefonens eget system. Google tillåter inte inloggning i webbvyer.
@@ -2887,31 +2889,58 @@ function natNotify(key, title, body, channelId){
   NAT.call('LocalNotifications', 'schedule', {notifications:[{id:natId(key), title, body, channelId:channelId || 'sos'}]}).catch(() => {});
 }
 
-/* ---------- Position i bakgrunden ---------- */
-/* Telefonen ger en position i sekunden, även när man står still (distanceFilter 0). Står man på passet skulle man
-   annars inte skicka något, och försvinna från kartan efter 30 minuter. gpsPos glesar ut sändningen som på webben
-   (var 8:e sekund, i sparläget varje minut). GPS:en är ändå på hela tiden, så batteriet påverkas inte av det. */
+/* ---------- Position i bakgrunden ----------
+   JaktGps mäter med ett intervall som sidan väljer (natGpsWant), och GPS:en vilar mellan mätningarna:
+   var 10:e sekund när man rör sig, varje minut när man är incheckad på passet, var 30:e sekund i sparläget.
+   Under ett eget nödlarm alltid var 10:e sekund. Intervallet byts med setInterval när läget ändras (natGpsMode).
+   Äldre appar har bara BackgroundGeolocation: en position i sekunden, även när man står still (distanceFilter 0),
+   och gpsPos glesar ut sändningen. */
+const NAT_GPS_MS = 10000, NAT_GPS_PASS_MS = 60000, NAT_GPS_SAVE_MS = 30000;
+function natGpsWant(){
+  if(typeof mySos === 'function' && mySos()) return NAT_GPS_MS;
+  if(typeof checkedIn === 'function' && checkedIn()) return NAT_GPS_PASS_MS;
+  return typeof powerOn === 'function' && powerOn() ? NAT_GPS_SAVE_MS : NAT_GPS_MS;
+}
+function natGpsMode(){
+  if(!NAT.gps || NAT.watch == null) return;
+  const ms = natGpsWant(); if(ms === NAT.gpsMs) return;
+  NAT.gpsMs = ms; NAT.call('JaktGps', 'setInterval', {interval:ms}).catch(() => {});
+}
 function natGpsStart(){
   natGpsStop();
   if(NAT.notif !== 'granted') natNotifPerm(true);
-  const opts = {backgroundTitle:'Jaktkartan delar din position', backgroundMessage:'Under jakten. Stoppa delningen i appen.', requestPermissions:true, stale:false, distanceFilter:0};
-  NAT.watch = NAT.listen('BackgroundGeolocation', 'addWatcher', opts, (loc, err) => {
+  NAT.gps = NAT.has('JaktGps'); NAT.gpsRetry = false;
+  const plugin = NAT.gps ? 'JaktGps' : 'BackgroundGeolocation';
+  const onLoc = (loc, err) => {
     if(err){
       if(err.code === 'NOT_AUTHORIZED'){
         gpsErr({code:1});
-        NAT.call('BackgroundGeolocation', 'openSettings').catch(() => {});
-      } else gpsErr({code:2});
+        NAT.call(plugin, 'openSettings').catch(() => {});
+      } else if(err.code === 'BACKGROUND'){ NAT.watch = null; NAT.gpsRetry = true; }   // startas igen när appen syns
+      else gpsErr({code:2});
       return;
     }
     if(loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number')
       gpsPos({coords:{latitude:loc.latitude, longitude:loc.longitude, accuracy:loc.accuracy || 0}});
-  });
+  };
+  if(NAT.gps){
+    NAT.gpsMs = natGpsWant();
+    NAT.watch = NAT.listen('JaktGps', 'start', {interval:NAT.gpsMs, title:'Jaktkartan delar din position', text:'Under jakten. Stoppa delningen i appen.'}, onLoc);
+    return;
+  }
+  const opts = {backgroundTitle:'Jaktkartan delar din position', backgroundMessage:'Under jakten. Stoppa delningen i appen.', requestPermissions:true, stale:false, distanceFilter:0};
+  NAT.watch = NAT.listen('BackgroundGeolocation', 'addWatcher', opts, onLoc);
 }
 function natGpsStop(){
+  NAT.gpsRetry = false;
   if(NAT.watch == null) return;
-  NAT.call('BackgroundGeolocation', 'removeWatcher', {id:NAT.watch}).catch(() => {});
-  NAT.watch = null;
+  if(NAT.gps) NAT.call('JaktGps', 'stop', {id:NAT.watch}).catch(() => {});
+  else NAT.call('BackgroundGeolocation', 'removeWatcher', {id:NAT.watch}).catch(() => {});
+  NAT.watch = null; NAT.gpsMs = 0;
 }
+/* Delningen startade medan appen låg i bakgrunden (till exempel när jakten började): Android tillåter inte att
+   positionen startas då. Den startas när appen syns igen. */
+document.addEventListener('visibilitychange', () => { if(!document.hidden && NAT.gpsRetry && cloud.sharing) natGpsStart(); });
 
 /* ---------- Sändning till Firebase REST med telefonens egen HTTP ----------
    ID-token gäller en timme. När sidan syns hämtas den från Firebase-biblioteket. När skärmen är släckt förnyas den
@@ -3203,7 +3232,7 @@ function subGroup(gid, kind){
   on('meta', v => { g.meta = v; if(!v){ forgetGroup(gid); toast('Du har inte längre åtkomst till ett jaktlag eller en jakt.'); return; } scheduleRender(); });
   on('types', v => { g.types = v || {}; applyRemote(gid); });
   on('msgKeys', v => { g.msgKeys = v || {}; msgPublish(g); scheduleRender(); });
-  if(kind === 'member') on('sos', v => { const prev = g.sosLoaded ? g.sos : undefined; g.sos = v || {}; g.sosLoaded = true; sosOnData(g, prev); });
+  if(kind === 'member') on('sos', v => { const prev = g.sosLoaded ? g.sos : undefined; g.sos = v || {}; g.sosLoaded = true; sosOnData(g, prev); natGpsMode(); });
   if(kind === 'member'){
     on('members', v => { g.members = v || {}; msgPublish(g); scheduleRender(); if(canLeadGroup(g) && !g.gearRef) g.gearRef = on('gear', (gv, err) => { if(err){ g.gearRef = null; return; } g.gear = gv || {}; scheduleRender(); });
       if(isAdminGroup(g) && !g.reqRef){
@@ -3224,7 +3253,7 @@ function subGroup(gid, kind){
       if(!v) return;
       msgPublish(g);
       if(g.huntRef) return;
-      on('sos', sv => { const prev = g.sosLoaded ? g.sos : undefined; g.sos = sv || {}; g.sosLoaded = true; sosOnData(g, prev); });
+      on('sos', sv => { const prev = g.sosLoaded ? g.sos : undefined; g.sos = sv || {}; g.sosLoaded = true; sosOnData(g, prev); natGpsMode(); });
       on('huntPlan/' + v.hid, pv => { const prev = g.planLoaded ? g.huntPlan : undefined; g.huntPlan = pv ? {[v.hid]: pv} : {}; g.planLoaded = true; planOnData(g, prev); scheduleRender(); });
       // Nekas en läsning (t.ex. om den hinner före gästposten i databasen) försöker vi igen efter en stund,
       // annars skulle gästen sakna jaktens områden och nålar tills sidan laddas om.
@@ -3368,7 +3397,7 @@ function syncHuntPos(){
       }
       if(!g.checkRefs[hid]){
         const cr = fb.db.ref(`groups/${g.id}/huntCheck/${hid}`);
-        cr.on('value', s => { if(g.checkRefs[hid] === cr){ const prev = g.huntCheck[hid]; g.huntCheck[hid] = s.val() || {}; checkNotify(g, hid, prev); scheduleRender(); } }, () => { if(g.checkRefs[hid] === cr){ delete g.checkRefs[hid]; delete g.huntCheck[hid]; } });
+        cr.on('value', s => { if(g.checkRefs[hid] === cr){ const prev = g.huntCheck[hid]; g.huntCheck[hid] = s.val() || {}; checkNotify(g, hid, prev); natGpsMode(); scheduleRender(); } }, () => { if(g.checkRefs[hid] === cr){ delete g.checkRefs[hid]; delete g.huntCheck[hid]; } });
         g.checkRefs[hid] = cr;
       }
       if(!g.msgRefs[hid] && msgCryptoOk()){
@@ -3651,19 +3680,21 @@ function startSharing(){
   renderJakt();
 }
 /* GPS: i vanligt läge följs positionen hela tiden. I sparläget görs en mätning var 30:e sekund (fortfarande med hög
-   noggrannhet, så att utcheckningen från passet blir rätt). Positionen skickas var 8:e sekund, i sparläget var 60:e
-   sekund eller direkt om man har rört sig mer än 15 m. */
-const GPS_SAVE_MS = 30000, SEND_MS = 8000, SEND_SAVE_MS = 60000, SEND_MOVE_M = 15, SEND_BG_MS = 20000, SEND_BG_MOVE_M = 20;
-/* I appen med släckt skärm skickas positionen var 20:e sekund, eller direkt när man rört sig 20 m (men högst var 8:e sekund).
-   Ingen tittar då på kartan, och varje sändning väcker telefonens radio. */
+   noggrannhet, så att utcheckningen från passet blir rätt). Positionen skickas var 8:e sekund. Incheckad på passet och
+   i sparläget skickas den varje minut, eller direkt om man har rört sig mer än 40 m (mindre än så är oftast GPS:en
+   som hoppar). I appen mäter telefonen själv var 10:e sekund, och varje mätning skickas (se natGpsWant). */
+const GPS_SAVE_MS = 30000, SEND_MS = 8000, SEND_SAVE_MS = 60000, SEND_MOVE_M = 40, SEND_BG_MS = 20000;
+/* Äldre appar (BackgroundGeolocation, en mätning i sekunden): med släckt skärm skickas positionen var 20:e sekund,
+   eller direkt när man rört sig 40 m (men högst var 8:e sekund). */
 function gpsPos(pos){
   const la = pos.coords.latitude, lo = pos.coords.longitude, ac = pos.coords.accuracy || 0;
   // Med släckt skärm i appen: bara det som behövs (spår, incheckning på passet, nödlarmets position), inte kartan
   if(!document.hidden || !NAT.on) showMe(la, lo, ac);
   else { myPos = {lat:la, lng:lo, acc:ac}; renderDirty = true; trailAdd(la, lo, ac); if(typeof checkPass === 'function') checkPass(); if(typeof sosTrack === 'function') sosTrack(); }
-  const save = powerOn(), bg = NAT.on && document.hidden, moved = cloud.sentAt && myPos ? distM(cloud.sentAt, myPos) : Infinity;
-  const every = save ? SEND_SAVE_MS : bg ? SEND_BG_MS : SEND_MS, moveM = save ? SEND_MOVE_M : SEND_BG_MOVE_M;
-  if(Date.now() - cloud.lastSent < every && !((save || bg) && moved > moveM && Date.now() - cloud.lastSent >= SEND_MS)) return;
+  natGpsMode();
+  const save = powerOn() || (typeof checkedIn === 'function' && checkedIn()), bg = NAT.on && document.hidden && !NAT.gps;
+  const moved = cloud.sentAt && myPos ? distM(cloud.sentAt, myPos) : Infinity, every = save ? SEND_SAVE_MS : bg ? SEND_BG_MS : SEND_MS;
+  if(Date.now() - cloud.lastSent < every && !((save || bg) && moved > SEND_MOVE_M && Date.now() - cloud.lastSent >= SEND_MS)) return;
   cloud.lastSent = Date.now(); cloud.sentAt = myPos ? {lat:myPos.lat, lng:myPos.lng} : null; sendPos();
 }
 /* Bara nekad platsåtkomst stänger av delningen. Tillfälliga fel (ingen GPS-signal, för långsamt svar) är vanliga i skogen:
@@ -3687,7 +3718,7 @@ function gpsStart(save){
 }
 /* Byt GPS-läge när sparläget slås på eller av (bara medan positionen delas). */
 function gpsSync(){
-  if(NAT.on){ cloud.gpsSave = powerOn(); return; }   // appen: samma GPS i båda lägena, bara sändningen glesas ut (gpsPos)
+  if(NAT.on){ cloud.gpsSave = powerOn(); natGpsMode(); return; }   // appen: intervallet väljs av natGpsWant
   if(cloud.sharing && cloud.gpsSave !== powerOn()) gpsStart(powerOn());
 }
 function stopSharing(silent){
@@ -5707,6 +5738,8 @@ function myStands(){
   }
   return out;
 }
+/* Incheckad på ett pass i en pågående jakt: positionen mäts och skickas då glesare (natGpsWant, gpsPos). */
+const checkedIn = () => planHunts().some(({g, hid, hunt}) => huntLive(hunt) && !!(checkOf(g, hid) || {}).in);
 function checkSet(g, hid, pid, inside, manual){
   setTimeout(() => { if(typeof powerUpdate === 'function') powerUpdate(); }, 1500);
   const p = pinById(pid), key = g.id + '/' + hid;
@@ -7185,7 +7218,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {NAT, natTok, natId, joinByCode, renderPositions, follow, posFocus, pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {NAT, natTok, natId, natGpsStart, checkedIn, joinByCode, renderPositions, follow, posFocus, pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>
