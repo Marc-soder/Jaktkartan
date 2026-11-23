@@ -533,6 +533,9 @@ async function inviteRevokeAll(){
   check(Object.keys(keys().alice || {}).length === 1 && Object.keys(keys().bob || {}).length === 1 && carlKey && carlKey.hid === hid && carlKey.name === 'Carl Gäst', 'varje deltagare har publicerat sin nyckel, gästens är märkt med jakten');
   const msgs = () => Object.values(((data.groups[gid].huntMsg || {})[hid]) || {});
   await team(B, 'jakt');
+  check((await B.locator('#subTabs .stab').allInnerTexts()).join() === 'JAKT,CHATT,OMRÅDEN,MEDLEMMAR' && await B.isVisible('#btnBell'), `under en pågående jakt har laget fliken Chatt i stället för Planera, och klockan syns (${(await B.locator('#subTabs .stab').allInnerTexts()).join()})`);
+  check(await B.locator(`#hc-${gid}-${hid} [data-j="plan"]`).count() === 1, 'planeringen nås med knappen Planera i jakten');
+  await team(B, 'chat');
   await B.click(`[data-j="msg-new"][data-h="${hid}"]`); await W(B, 200);
   const opts2 = await B.locator('#msgPeople .checkline').allInnerTexts();
   check(opts2.length === 2 && opts2.some(o => o.includes('Alice Test')) && opts2.some(o => o.includes('Carl Gäst (gäst)')) && await B.isChecked('#msgAll'), `mottagare: alla i jakten, eller valda (${opts2.join(' | ')})`);
@@ -540,17 +543,31 @@ async function inviteRevokeAll(){
   const m1 = msgs()[0];
   check(msgs().length === 1 && m1.from === 'bob' && m1.to && m1.to['anon-carl'] && !m1.all && Object.keys(m1.keys).length === 2, 'meddelandet till Carl sparas med en nyckel till Carl och en till Bob');
   check(!JSON.stringify(data).includes('Hej Carl') && !JSON.stringify(data).includes('pass 1'), 'texten finns inte i klartext någonstans i databasen');
-  await W(C, 600); await team(C, 'jakt'); await W(C, 200);
-  check((await C.innerText('#paneJakt')).includes('Hej Carl, du står på pass 1'), 'Carl kan läsa meddelandet till honom');
+  await W(C, 600);
+  check((await C.locator('#subTabs .stab').allInnerTexts()).map(t => t.replace(/\d+$/, '')).join() === 'JAKT,CHATT' && (await C.innerText('#sub-chat')).includes('1') && await C.isVisible('#btnBell.on') && (await C.innerText('#btnBell')).trim() === '1', 'gästen har flikarna Jakt och Chatt, och ser en markering för ett oläst meddelande på fliken och på klockan');
+  await C.click('#btnBell'); await W(C, 300);
+  check((await C.getAttribute('#sub-chat', 'aria-selected')) === 'true' && (await C.innerText('#paneJakt')).includes('Hej Carl, du står på pass 1'), 'klockan öppnar chatten, och Carl kan läsa meddelandet till honom');
+  check(!(await C.isVisible('#btnBell.on')) && !(await C.innerText('#sub-chat')).includes('1'), 'när chatten är öppen är meddelandet läst och markeringarna borta');
   check(!(await A.innerText('#paneJakt')).includes('Hej Carl') && (await A.evaluate(() => Object.values(__fk.msgPlain()).filter(Boolean).filter(p => p.text).length)) === 0, 'Alice ser inte meddelandet, och kan inte låsa upp det');
   await B.click(`[data-j="msg-new"][data-h="${hid}"]`); await W(B, 200);
   await B.fill('#msgText', 'Samling vid bilarna 15.00'); await B.click('#msgSend'); await W(B, 900);
   await W(A, 600);
-  check((await A.innerText('#paneJakt')).includes('Samling vid bilarna 15.00') && (await C.innerText('#paneJakt')).includes('Samling vid bilarna 15.00') && msgs().some(m => m.all), 'meddelande till alla: Alice och Carl kan läsa det');
   check((await A.innerText('#toast')).includes('Meddelande från Bob Test: Samling vid bilarna'), `mottagaren får en avisering: ${await A.innerText('#toast')}`);
+  await team(A, 'jakt'); await W(A, 200);
+  check(await A.isVisible('#btnBell.on') && (await A.innerText('#sub-chat')).includes('1') && (await A.innerText(`#hc-${gid}-${hid}`)).includes('Chatt (1 olästa)'), 'Alice ser markeringen på klockan, på fliken Chatt och i jakten');
+  await team(A, 'chat'); await W(A, 200);
+  check((await A.innerText('#paneJakt')).includes('Samling vid bilarna 15.00') && (await C.innerText('#paneJakt')).includes('Samling vid bilarna 15.00') && msgs().some(m => m.all) && !(await A.isVisible('#btnBell.on')), 'meddelande till alla: Alice och Carl kan läsa det, och det är läst när chatten visas');
+  check((await A.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('jk.msgRead.alice') || '{}')).length)) >= 1, 'vilka meddelanden som är lästa sparas på enheten');
   await C.click(`[data-j="msg-reply"][data-h="${hid}"][data-u="bob"] >> nth=0`); await W(C, 200);
   check(!(await C.isChecked('#msgAll')) && await C.isChecked('[data-to="bob"]'), 'Svara väljer avsändaren som mottagare');
+  check((await C.innerText('#msgForm')).toLowerCase().includes('svarar på') && (await C.innerText('#msgForm .msg-q')).includes('Hej Carl, du står på pass 1'), 'svarsformuläret visar meddelandet man svarar på');
   await C.fill('#msgText', 'Uppfattat, jag går dit nu'); await C.click('#msgSend'); await W(C, 900); await W(B, 500);
+  { const mids = Object.entries(data.groups[gid].huntMsg[hid]), first = mids.find(([, m]) => m.from === 'bob' && m.to && m.to['anon-carl']), rep = mids.find(([, m]) => m.from === 'anon-carl');
+    check(rep && first && rep[1].re === first[0] && !JSON.stringify(rep[1]).includes('Hej Carl'), 'svaret sparas med en hänvisning till meddelandet, utan dess text');
+    const q = await B.innerText(`#msg-${rep[0]} .msg-q`);
+    check(q.includes('Du') && q.includes('Hej Carl, du står på pass 1'), `Bob ser vilket meddelande Carl svarade på (${q.replace(/\n/g, ' ')})`);
+    await B.click(`#msg-${rep[0]} .msg-q`); await W(B, 200);
+    check(await B.locator(`#msg-${first[0]}.flash`).count() === 1, 'ett tryck på citatet visar meddelandet det svarar på'); }
   check((await B.innerText('#paneJakt')).includes('Uppfattat, jag går dit nu') && !(await A.innerText('#paneJakt')).includes('Uppfattat'), 'gästens svar når Bob men inte Alice');
   await A.screenshot({path:shot('a_msg.png')}); await C.screenshot({path:shot('c_msg.png')});
   // Gamla enheters nycklar: Bobs egen gamla nyckel tas bort, och ingen krypterar till Alices gamla
@@ -578,6 +595,7 @@ async function inviteRevokeAll(){
   const cp = await A.evaluate(([g, h, m]) => firebase.database().ref(`groups/${g}/huntMsg/${h}/mcopy1`).set(m).then(() => 'ok', () => 'denied'), [gid, hid, copy]); await W(C, 700);
   const ctx2 = await C.innerText('#paneJakt');
   check(cp === 'ok' && ctx2.includes('Kunde inte bekräfta avsändaren'), 'ett kopierat meddelande avslöjas: avsändaren kan inte bekräftas');
+  await team(B, 'jakt'); await team(C, 'jakt');
   // ---- Positioner ----
   await team(A, 'jakt'); await A.locator('#shareToggle').check({force:true}); await W(A, 900);
   check(hp().alice && Math.abs(hp().alice.lat - 58.72) < 1e-6 && !data.groups[gid].positions, 'Alice delar sin position i den pågående jakten');
@@ -667,7 +685,7 @@ async function inviteRevokeAll(){
   check(!(await A.evaluate(() => __fk.NAT.on)) && (await A.evaluate(() => window.__od)) > 0, 'på webben är appläget av, och positionen tas bort när anslutningen bryts (onDisconnect)');
   const BN = await mkPage(browser, 'bob', '', {native:true});
   const nat = (pl, m) => BN.evaluate(([a, b]) => window.__nat.calls.filter(c => c.plugin === a && (!b || c.method === b)), [pl, m]);
-  check(await BN.evaluate(() => __fk.NAT.on) && (await nat('LocalNotifications', 'createChannel')).map(c => c.opts.id).join() === 'sos,jakt', 'appen känns igen, och kanaler för nödlarm och jaktstart skapas');
+  check(await BN.evaluate(() => __fk.NAT.on) && (await nat('LocalNotifications', 'createChannel')).map(c => c.opts.id).join() === 'sos,jakt,msg', 'appen känns igen, och kanaler för nödlarm, jaktstart och meddelanden skapas');
   await go(BN, 'konto'); await BN.click('[data-j="login-google"]'); await W(BN, 700);
   check((await BN.evaluate(() => __fk.cloud.user && __fk.cloud.user.uid)) === 'bob' && (await BN.evaluate(() => window.__popup)) === 0 && (await nat('FirebaseAuthentication', 'signInWithGoogle'))[0].opts.skipNativeAuth === true, 'i appen loggar man in med Google i telefonens eget system, utan popup');
   check(await BN.isVisible('#paneKonto [data-j="notif"]'), 'Mitt konto erbjuder Tillåt aviseringar i appen');
@@ -686,6 +704,18 @@ async function inviteRevokeAll(){
   await BN.evaluate(() => { Object.defineProperty(document, 'hidden', {configurable:true, get:() => true}); window.__tokLife = 60; __fk.natTok.exp = 0; __fk.cloud.lastSent = 0; window.__natEmit(58.7225, 14.6125, 5); }); await W(BN, 700);
   const ref = await BN.evaluate(() => window.__nat.http.filter(h => h.url.startsWith('https://securetoken.googleapis.com/')));
   check(ref.length === 1 && ref[0].data.refresh_token === 'rt-bob' && ref[0].data.grant_type === 'refresh_token' && ref[0].headers.Referer.includes('jaktkartan.html') && bp().lat === 58.7225, 'med släckt skärm förnyas inloggningen med telefonens HTTP (med Referer för API-nyckeln), och positionen kommer fram');
+  // Med släckt skärm skickas positionen glesare: var 20:e sekund, eller när man rört sig 20 m
+  { const puts = () => BN.evaluate(() => window.__nat.http.filter(h => h.method === 'PUT').length), p0 = await puts();
+    await BN.evaluate(() => { __fk.cloud.lastSent = Date.now() - 9000; window.__natEmit(58.72252, 14.61252, 5); }); await W(BN, 500);
+    const p1 = await puts();
+    await BN.evaluate(() => window.__natEmit(58.7228, 14.6128, 5)); await W(BN, 600);
+    const p2 = await puts();
+    check(p1 === p0 && p2 === p0 + 1 && bp().lat === 58.7228, `med släckt skärm skickas inte varje liten rörelse, men en förflyttning på 20 m skickas direkt (${p0}, ${p1}, ${p2})`); }
+  // Meddelande när appen ligger i bakgrunden: avisering i telefonen
+  await W(BN, 500); await team(C, 'chat'); await C.click(`[data-j="msg-new"][data-h="${hid}"]`); await W(C, 200);
+  await C.fill('#msgText', 'Vildsvin mot pass 3'); await C.click('#msgSend'); await W(C, 900); await W(BN, 900); await team(C, 'jakt');
+  { const ns = (await nat('LocalNotifications', 'schedule')).flatMap(c => c.opts.notifications);
+    check(ns.some(n => n.title === 'Meddelande från Carl Gäst' && n.body === 'Vildsvin mot pass 3' && n.channelId === 'msg'), `appen i bakgrunden visar meddelandet som en avisering i telefonen (${ns.map(n => n.title)})`); }
   // Nödlarm när appen ligger i bakgrunden: avisering i telefonen (kontrolleras under Nödläge nedan)
   // ---- Nödläge ----
   check(await A.isVisible('#btnSos') && await B.isVisible('#btnSos') && await C.isVisible('#btnSos'), 'alla i jaktlaget, även gästen, har knappen SOS');
@@ -811,7 +841,7 @@ async function inviteRevokeAll(){
   check(await B.locator(`[data-j="drive-start"][data-h="${hid}"]`).count() === 1 && await C.locator('[data-j="drive-start"]').count() === 0, 'jaktledaren kan starta såten, gästen kan inte');
   await B.click(`[data-j="drive-start"][data-h="${hid}"]`); await W(B, 1200); await W(C, 600);
   check(PLN().cur && PLN().cur.did === dM && PLN().cur.on === true && (await C.innerText('#driveBar')).includes('Mossen har startat') && (await C.innerText('#driveBar')).includes('Ditt pass: Pass 1 – bäcken'), `Mossen startar: Carl får besked överst med sitt pass (${await C.innerText('#driveBar')})`);
-  check((await C.innerText('#paneJakt')).includes('Mossen har startat. Gå till era pass.'), 'starten skickas i chatten');
+  await team(C, 'chat'); check((await C.innerText('#paneJakt')).includes('Mossen har startat. Gå till era pass.'), 'starten skickas i chatten'); await team(C, 'jakt');
   await C.screenshot({path:shot('c_drive_start.png')});
   await B.click(`[data-j="drive-stop"][data-h="${hid}"]`); await W(B, 100); await B.click(`[data-j="drive-stop"][data-h="${hid}"]`); await W(B, 1200); await W(C, 600); await W(A, 400);
   check(PLN().cur.on === false && PLN().drives[dM].done > 0 && (await C.innerText('#driveBar')).includes('Såten är bruten, patron ur.'), 'jaktledaren bryter såten efter en bekräftelse: alla får besked överst');
@@ -837,7 +867,7 @@ async function inviteRevokeAll(){
   await B.click(`[data-j="drive-call"][data-h="${hid}"][data-m="${mid}"]`); await W(B, 1200); await W(C, 600);
   { const bar = await C.innerText('#driveBar'), href = await C.getAttribute('#driveNav', 'href');
     check(PLN().call && PLN().call.name === 'boden' && bar.includes('Återsamling vid boden') && href.includes('google.com/maps/dir') && href.includes('destination=' + meet.lat.toFixed(6)), `återsamling vid boden: alla får en hänvisning att navigera dit (${bar})`); }
-  check((await C.innerText('#paneJakt')).includes('Återsamling vid boden.') && await C.locator('.meet-icon.on').count() === 1, 'återsamlingen skickas i chatten och syns på kartan');
+  await team(C, 'chat'); check((await C.innerText('#paneJakt')).includes('Återsamling vid boden.') && await C.locator('.meet-icon.on').count() === 1, 'återsamlingen skickas i chatten och syns på kartan'); await team(C, 'jakt');
   await C.screenshot({path:shot('c_drive_call.png')});
   await B.evaluate(([g, h]) => document.getElementById(`hc-${g}-${h}`).querySelector('.drive-list').scrollIntoView(), [gid, hid]); await B.screenshot({path:shot('b_drive_card.png')});
   await C.click('#driveBar [data-db="x"]'); await W(C, 200);
@@ -1107,6 +1137,7 @@ async function inviteRevokeAll(){
   const MS = (u, extra) => Object.assign({from:u, name:'N', t:t0, iv:'x', ct:'y', spk:'z', keys:{a:'b'}, all:true}, extra || {});
   check(D('e').write('/groups/g/huntMsg/h/m1', MS('e')).allowed && D('gu').write('/groups/g/huntMsg/h/m1', MS('gu')).allowed && !D('e').write('/groups/g/huntMsg/h/m1', MS('v')).allowed && !D('x').write('/groups/g/huntMsg/h/m1', MS('x')).allowed, 'regel: jaktens deltagare skriver meddelanden, bara i eget namn');
   check(!D('e').write('/groups/g/huntMsg/h2/m1', MS('e')).allowed && !D('e', t0 + 2000).write('/groups/g/huntMsg/h/m1', MS('e')).allowed && !D('v', t0 + 2000).read('/groups/g/huntMsg/h').allowed && D('v').read('/groups/g/huntMsg/h').allowed && D('gu').read('/groups/g/huntMsg/h').allowed && !D('gu').read('/groups/g/huntMsg/h2').allowed && !D('x').read('/groups/g/huntMsg/h').allowed, 'regel: meddelanden finns bara medan jakten pågår, och bara för jaktens deltagare');
+  check(D('e').write('/groups/g/huntMsg/h/m1', MS('e', {re:'m0'})).allowed && !D('e').write('/groups/g/huntMsg/h/m1', MS('e', {re:'<img>'})).allowed && !D('e').write('/groups/g/huntMsg/h/m1', MS('e', {re:5})).allowed, 'regel: ett svar får bara hänvisa med ett giltigt id');
   check(!D('e').write('/groups/g/huntMsg/h/m1', MS('e', {text:'klartext'})).allowed && !D('e').write('/groups/g/huntMsg/h/m1', MS('e', {all:null})).allowed && D('e').write('/groups/g/huntMsg/h/m1', MS('e', {all:null, to:{v:true}})).allowed, 'regel: inga extra fält (ingen klartext), och mottagare måste anges');
   check(!D('e').write('/groups/g/huntMsg/h/m0', MS('e')).allowed && D('e').write('/groups/g/huntMsg/h/m0', null).allowed && !D('v').write('/groups/g/huntMsg/h/m0', null).allowed && D('a2').write('/groups/g/huntMsg/h/m0', null).allowed && D('a2').write('/groups/g/huntMsg/h', null).allowed, 'regel: ett meddelande kan inte ändras, avsändaren och jaktledaren kan ta bort det');
   { const bad = 'x" onmouseover="alert(1)';

@@ -45,7 +45,12 @@ const canCreate = () => !!cloud.user && !cloud.user.isAnonymous && (cloud.owner 
 const gname = g => g && g.meta ? g.meta.name : 'Jaktlag';
 
 let renderTimer = null;
+/* Med släckt skärm (eller appen i bakgrunden) ritas inget om: det sparar batteri när positioner och meddelanden kommer in.
+   Allt ritas om när skärmen tänds igen. */
+let renderDirty = false;
+document.addEventListener('visibilitychange', () => { if(!document.hidden && renderDirty){ renderDirty = false; if(myPos) showMe(myPos.lat, myPos.lng, myPos.acc); renderPositions(); scheduleRender(); } });
 function scheduleRender(){
+  if(document.hidden){ renderDirty = true; return; }
   clearTimeout(renderTimer);
   renderTimer = setTimeout(() => {
     const ae = document.activeElement, keep = ae && ae.id && $('#panel').contains(ae) && 'value' in ae ? {id:ae.id, v:ae.value} : null;
@@ -313,6 +318,7 @@ function activePositions(){
   return out;
 }
 function renderPositions(){
+  if(document.hidden){ renderDirty = true; return; }
   posLayer.clearLayers(); posMarkers = {};
   const act = activePositions();
   for(const p of act){
@@ -552,11 +558,17 @@ function startSharing(){
 /* GPS: i vanligt läge följs positionen hela tiden. I sparläget görs en mätning var 30:e sekund (fortfarande med hög
    noggrannhet, så att utcheckningen från passet blir rätt). Positionen skickas var 8:e sekund, i sparläget var 60:e
    sekund eller direkt om man har rört sig mer än 15 m. */
-const GPS_SAVE_MS = 30000, SEND_MS = 8000, SEND_SAVE_MS = 60000, SEND_MOVE_M = 15;
+const GPS_SAVE_MS = 30000, SEND_MS = 8000, SEND_SAVE_MS = 60000, SEND_MOVE_M = 15, SEND_BG_MS = 20000, SEND_BG_MOVE_M = 20;
+/* I appen med släckt skärm skickas positionen var 20:e sekund, eller direkt när man rört sig 20 m (men högst var 8:e sekund).
+   Ingen tittar då på kartan, och varje sändning väcker telefonens radio. */
 function gpsPos(pos){
-  showMe(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0);
-  const save = powerOn(), moved = cloud.sentAt && myPos ? distM(cloud.sentAt, myPos) : Infinity;
-  if(Date.now() - cloud.lastSent < (save ? SEND_SAVE_MS : SEND_MS) && !(save && moved > SEND_MOVE_M && Date.now() - cloud.lastSent >= SEND_MS)) return;
+  const la = pos.coords.latitude, lo = pos.coords.longitude, ac = pos.coords.accuracy || 0;
+  // Med släckt skärm i appen: bara det som behövs (spår, incheckning på passet, nödlarmets position), inte kartan
+  if(!document.hidden || !NAT.on) showMe(la, lo, ac);
+  else { myPos = {lat:la, lng:lo, acc:ac}; renderDirty = true; trailAdd(la, lo, ac); if(typeof checkPass === 'function') checkPass(); if(typeof sosTrack === 'function') sosTrack(); }
+  const save = powerOn(), bg = NAT.on && document.hidden, moved = cloud.sentAt && myPos ? distM(cloud.sentAt, myPos) : Infinity;
+  const every = save ? SEND_SAVE_MS : bg ? SEND_BG_MS : SEND_MS, moveM = save ? SEND_MOVE_M : SEND_BG_MOVE_M;
+  if(Date.now() - cloud.lastSent < every && !((save || bg) && moved > moveM && Date.now() - cloud.lastSent >= SEND_MS)) return;
   cloud.lastSent = Date.now(); cloud.sentAt = myPos ? {lat:myPos.lat, lng:myPos.lng} : null; sendPos();
 }
 /* Bara nekad platsåtkomst stänger av delningen. Tillfälliga fel (ingen GPS-signal, för långsamt svar) är vanliga i skogen:
@@ -739,7 +751,7 @@ function huntCard(g, hid, hunt, lead){
     <div class="lbl">Jaktbart vilt</div>${huntChips(hunt)}
     ${live ? rsvpHtml(g, hid) : ''}
     ${live ? planCardHtml(g, hid, hunt, lead) : ''}
-    ${live && !upcoming ? msgHtml(g, hid) : ''}
+    ${live && !upcoming && msgCryptoOk() ? `<div class="btnrow" style="margin-top:8px"><button class="btn sm" type="button" data-j="team-sub" data-s="chat">Chatt${msgUnread(g) ? ` (${msgUnread(g)} olästa)` : ''}</button></div>` : ''}
     ${live && !upcoming ? obsList(g, hid) : ''}
     ${areas.length ? `<div class="lbl">Områden</div><div class="small">${areas.map(esc).join(', ')}</div>` : ''}
     ${lead && live ? `<div class="lbl">Tillfällig åtkomst för gäster</div><div class="codebox"><span>Jaktkod <b>${esc(hunt.code)}</b></span><button class="btn sm" type="button" data-j="hunt-link" data-g="${esc(g.id)}" data-h="${esc(hid)}">Kopiera länk</button></div>
@@ -807,7 +819,7 @@ function renderKonto(){
     html += `<div class="userrow"><span class="pos-dot">${esc(initials(myName()))}</span><span class="grow"><strong>${esc(myName())}</strong><br><span class="small muted">${u.isAnonymous ? 'Gäst' : esc(u.email || 'Inloggad')}</span></span></div>
       <div class="btnrow" style="margin-top:8px"><button class="btn sm" type="button" data-j="name">Byt namn</button><button class="btn sm ghost" type="button" data-j="logout">Logga ut</button></div>
       ${NAT.on ? (NAT.notif !== 'granted' && NAT.has('LocalNotifications') ? '<div class="btnrow"><button class="btn sm" type="button" data-j="notif">Tillåt aviseringar</button></div><p class="note" style="margin-top:2px">För nödlarm, påminnelse när en jakt du deltar i startar, och aviseringen som visar att positionen delas.</p>' : '')
-      : window.Notification && Notification.permission === 'default' ? '<div class="btnrow"><button class="btn sm" type="button" data-j="notif">Tillåt aviseringar om nödlarm</button></div><p class="note" style="margin-top:2px">Då kan ett nödlarm synas även när appen ligger i bakgrunden.</p>' : ''}`;
+      : window.Notification && Notification.permission === 'default' ? '<div class="btnrow"><button class="btn sm" type="button" data-j="notif">Tillåt aviseringar</button></div><p class="note" style="margin-top:2px">Då syns nödlarm och meddelanden i jakten även när appen ligger i bakgrunden.</p>' : ''}`;
   }
   if(cloud.status === 'in' && cloud.user){ const pf = cloud.profile || {};
     html += `<h3 class="sec">Telefonnummer</h3><label class="field" style="margin-top:0"><span>Ditt nummer</span><input class="input" id="phNum" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" value="${esc(pf.phone || '')}" placeholder="070-123 45 67"></label>
@@ -823,7 +835,22 @@ function renderKonto(){
    Utan valt jaktlag: kommande jakter och inbjudningar, en rad per jaktlag, och skapa eller gå med i ett lag.
    Med valt jaktlag (nav.team): lagets egen vy med flikarna Jakt, Planera, Områden och Medlemmar.
    Alla ser flikarna. Knappar för att ändra syns bara för den som har rättighet. */
-const TEAM_TABS = {jakt:'Jakt', plan:'Planera', omr:'Områden', med:'Medlemmar'};
+const TEAM_TABS = {jakt:'Jakt', plan:'Planera', chat:'Chatt', omr:'Områden', med:'Medlemmar'};
+/* Flikarna i jaktlaget. Pågår en jakt visas Chatt i stället för Planera (planeringen nås med knappen Planera i jakten),
+   utom när man kommit till Planera från kalendern. Gäster har bara Jakt och Chatt, och bara medan jakten pågår. */
+function teamTabs(g){
+  if(!g) return {};
+  const live = liveHunts(g).length > 0;
+  if(g.kind !== 'member') return live ? {jakt:'Jakt', chat:'Chatt'} : {};
+  if(!live) return {jakt:'Jakt', plan:'Planera', omr:'Områden', med:'Medlemmar'};
+  return Object.assign({jakt:'Jakt'}, nav.team === g.id && nav.sub === 'plan' ? {plan:'Planera'} : {}, {chat:'Chatt', omr:'Områden', med:'Medlemmar'});
+}
+/* Chatt-fliken: meddelandena i lagets pågående jakter. */
+function chatHtml(g){
+  const live = liveHunts(g);
+  if(!live.length) return '<div class="empty">Chatten finns medan en jakt pågår.</div>';
+  return live.map(hid => `${live.length > 1 ? `<h3 class="sec">${esc(((g.hunts || {})[hid] || {}).name || 'Jakt')}</h3>` : ''}${msgHtml(g, hid)}`).join('');
+}
 /* Jaktlagen i den ordning användaren har valt (state.settings.teamOrder, sparas bara på enheten). Nya lag hamnar sist. */
 function teamGroups(){
   const ord = state.settings.teamOrder || [], at = g => { const i = ord.indexOf(g.id); return i < 0 ? 1e6 : i; };
@@ -866,6 +893,8 @@ function renderJakt(){
       ${u.isAnonymous ? '<p class="note">Som gäst kan du gå med i jakter. Logga in med Google för att bli medlem i ett jaktlag.</p>' : canCreate() ? '' : '<p class="note">Bara ägaren av den här Jaktkartan kan skapa jaktlag. Du går med i ett lag eller en jakt med en kod.</p>'}`;
   }
   pane.innerHTML = html;
+  if(st === 'in' && nav.team && cloud.groups[nav.team] && chatOpen(cloud.groups[nav.team])) msgMarkRead(cloud.groups[nav.team]);
+  msgBell();
   renderDrawerTeams(); if(typeof renderNav === 'function') renderNav();
   calRefresh();
   // Stänger man av själv under en jakt man deltar i startar delningen inte automatiskt igen för den jakten.
@@ -880,11 +909,13 @@ function shareHtml(){
 function teamHtml(g){
   const u = cloud.user;
   if(g.kind === 'guest'){
+    if(nav.sub === 'chat' && teamTabs(g).chat) return chatHtml(g);
     const hid = g.guest && g.guest.hid, hunt = hid && g.hunts[hid];
     return shareHtml() + (hunt ? huntCard(g, hid, hunt, false) : '<div class="empty">Jakten laddas eller är avslutad.</div>')
       + `<div class="btnrow"><button class="btn sm" type="button" data-j="guest-leave" data-g="${esc(g.id)}">Lämna jakten</button></div>`;
   }
-  const lead = canLeadGroup(g), adm = isAdminGroup(g), sub = TEAM_TABS[nav.sub] ? nav.sub : 'jakt';
+  const lead = canLeadGroup(g), adm = isAdminGroup(g), sub = teamTabs(g)[nav.sub] ? nav.sub : 'jakt';
+  if(sub === 'chat') return chatHtml(g);
   const all = Object.entries(g.hunts || {}).filter(([, v]) => v).sort((a, b) => huntSort(a[1]) - huntSort(b[1]));
   let html = '';
   if(sub === 'jakt'){
@@ -1130,7 +1161,8 @@ function jaktClick(e){
   else if(act === 'check-in') checkSet(g, hid, b.dataset.p, true, true);
   else if(act === 'check-out') checkSet(g, hid, b.dataset.p, false, true);
   else if(act === 'msg-new') openMsgForm(g, hid);
-  else if(act === 'msg-reply') openMsgForm(g, hid, u);
+  else if(act === 'msg-reply') openMsgForm(g, hid, u, b.dataset.m);
+  else if(act === 'msg-goto') msgGoto(b.dataset.m);
   else if(act === 'rsvp') rsvpSet(g, hid, true);
   else if(act === 'rsvp-no') rsvpSet(g, hid, false);
   else if(act === 'cal-go') calGo(g.id, hid);

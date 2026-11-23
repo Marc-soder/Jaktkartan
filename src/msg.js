@@ -122,21 +122,91 @@ function msgHtml(g, hid){
   else h += `<div class="msg-list">${list.map(([mid, m]) => {
     const p = msgPlain[mid], mine = m.from === myUid();
     if(!p) msgLoad(g, mid, m);
-    return `<div class="msg${mine ? ' me' : ''}"><div class="msg-h"><b>${esc(mine ? 'Du' : m.name || 'Deltagare')}</b> till ${esc(msgToText(g, hid, m))} <span class="muted">· ${esc(fmtClock(m.t))}</span></div>
-      <div class="msg-t">${p ? (p.text != null ? esc(p.text) : `<span class="muted">${esc(p.err)}</span>`) : '<span class="muted">Låser upp …</span>'}</div>
-      ${!mine ? `<button class="linkbtn" type="button" data-j="msg-reply" data-g="${esc(g.id)}" data-h="${esc(hid)}" data-u="${esc(m.from)}">Svara</button>` : ''}</div>`; }).join('')}</div>`;
+    return `<div class="msg${mine ? ' me' : ''}${msgFlash.mid === mid && Date.now() < msgFlash.until ? ' flash' : ''}" id="msg-${esc(mid)}"><div class="msg-h"><b>${esc(mine ? 'Du' : m.name || 'Deltagare')}</b> till ${esc(msgToText(g, hid, m))} <span class="muted">· ${esc(fmtClock(m.t))}</span></div>
+      ${m.re ? msgQuote(g, hid, m.re) : ''}<div class="msg-t">${p ? (p.text != null ? esc(p.text) : `<span class="muted">${esc(p.err)}</span>`) : '<span class="muted">Låser upp …</span>'}</div>
+      ${!mine ? `<button class="linkbtn" type="button" data-j="msg-reply" data-g="${esc(g.id)}" data-h="${esc(hid)}" data-u="${esc(m.from)}" data-m="${esc(mid)}">Svara</button>` : ''}</div>`; }).join('')}</div>`;
   h += `<div class="btnrow" style="margin-top:6px"><button class="btn sm primary" type="button" data-j="msg-new" data-g="${esc(g.id)}" data-h="${esc(hid)}">Nytt meddelande</button></div>`;
   return h;
+}
+/* Olästa meddelanden: de som kommit till mig och inte visats i Chatt-fliken. Vilka som är lästa sparas på enheten. */
+let msgRead = null;
+function msgReadMap(){
+  if(!msgRead || msgRead.uid !== myUid()){ let v = {}; try { v = JSON.parse(lsGet('jk.msgRead.' + myUid()) || '{}') || {}; } catch(e){} msgRead = {uid:myUid(), m:v}; }
+  return msgRead.m;
+}
+function msgUnread(g){
+  if(!g || !msgCryptoOk() || !cloud.user) return 0;
+  const r = msgReadMap(), me = myUid(); let n = 0;
+  for(const hid of liveHunts(g)) for(const [mid, m] of msgMine(g, hid)) if(m.from !== me && !r[mid] && msgPlain[mid] && msgPlain[mid].text != null) n++;
+  return n;
+}
+const msgUnreadAll = () => Object.values(cloud.groups).reduce((n, g) => n + msgUnread(g), 0);
+const chatOpen = g => nav.tab === 'jakt' && nav.team === g.id && nav.sub === 'chat' && !!teamTabs(g).chat && !document.hidden;
+function msgMarkRead(g){
+  const r = msgReadMap(), me = myUid(); let ch = false;
+  for(const hid of liveHunts(g)) for(const [mid, m] of msgMine(g, hid)) if(m.from !== me && !r[mid] && msgPlain[mid] && msgPlain[mid].text != null){ r[mid] = Date.now(); ch = true; }
+  if(!ch) return false;
+  const lim = Date.now() - 3 * 864e5; for(const k of Object.keys(r)) if(r[k] < lim) delete r[k];
+  lsSet('jk.msgRead.' + me, JSON.stringify(r));
+  msgBell(); if(typeof renderNav === 'function') renderNav();
+  return true;
+}
+/* Klockan högst upp: syns under pågående jakter, med antal olästa. Ett tryck öppnar chatten. */
+function msgBell(){
+  const b = document.getElementById('btnBell'); if(!b || typeof cloud === 'undefined') return;
+  const n = cloud.user ? msgUnreadAll() : 0, live = !!cloud.user && msgCryptoOk() && Object.values(cloud.groups).some(g => liveHunts(g).length);
+  b.hidden = !live; b.classList.toggle('on', n > 0);
+  b.querySelector('.bell-n').textContent = n ? (n > 9 ? '9+' : String(n)) : '';
+  b.setAttribute('aria-label', n ? `Meddelanden: ${n} olästa` : 'Meddelanden');
+}
+function msgBellOpen(){
+  const gs = Object.values(cloud.groups).filter(g => liveHunts(g).length);
+  const g = gs.find(x => msgUnread(x)) || gs[0]; if(!g) return;
+  openTeam(g.id, 'chat'); if(!isDesktop()) setSheet('half');
+}
+/* Avisering i telefonen när appen ligger i bakgrunden: i appen via telefonens egna aviseringar, på webben via
+   service workern (om aviseringar är tillåtna). */
+// Kommer man tillbaka till appen med chatten öppen räknas meddelandena som lästa
+document.addEventListener('visibilitychange', () => { if(!document.hidden && typeof cloud !== 'undefined' && nav.team && cloud.groups[nav.team] && chatOpen(cloud.groups[nav.team])) msgMarkRead(cloud.groups[nav.team]); });
+function msgSysNotify(mid, title, body){
+  if(typeof NAT !== 'undefined' && NAT.on){ natNotify('msg/' + mid, title, body, 'msg'); return; }
+  try {
+    if(window.Notification && Notification.permission === 'granted' && navigator.serviceWorker) navigator.serviceWorker.getRegistration().then(r => {
+      const opt = {body, tag:'msg-' + mid, icon:'icons/icon-192.png'};
+      if(r) r.showNotification(title, opt); else new Notification(title, opt);
+    }).catch(() => {});
+  } catch(e){}
+}
+/* Citatet i ett svar: avsändare och början av meddelandet det svarar på. Texten kommer från min egen upplåsta kopia,
+   så den som inte fick det ursprungliga meddelandet ser bara att det är ett svar. Ett tryck visar meddelandet. */
+function msgQuote(g, hid, re){
+  const o = ((g.huntMsg || {})[hid] || {})[re], p = msgPlain[re];
+  if(o && p === undefined && msgMine(g, hid).some(([k]) => k === re)) msgLoad(g, re, o);
+  const who = o ? (o.from === myUid() ? 'Du' : o.name || 'Deltagare') : '';
+  const text = p && p.text != null ? p.text.slice(0, 120) + (p.text.length > 120 ? '…' : '') : '';
+  if(!o || !text) return `<div class="msg-q muted">Svar på ett meddelande${o ? '' : ' som inte finns kvar'}</div>`;
+  return `<button class="msg-q" type="button" data-j="msg-goto" data-g="${esc(g.id)}" data-m="${esc(re)}"><b>${esc(who)}</b>${esc(text)}</button>`;
+}
+// Markeringen ligger kvar även om chatten ritas om medan den visas
+const msgFlash = {mid:null, until:0};
+function msgGoto(mid){
+  const el = document.getElementById('msg-' + mid); if(!el) return;
+  msgFlash.mid = mid; msgFlash.until = Date.now() + 1600;
+  el.scrollIntoView({block:'center', behavior:'smooth'}); el.classList.add('flash');
+  setTimeout(() => { if(msgFlash.mid === mid){ msgFlash.mid = null; const e2 = document.getElementById('msg-' + mid); if(e2) e2.classList.remove('flash'); } }, 1650);
 }
 function msgLoad(g, mid, m){
   if(msgPlain[mid]) return;
   msgPlain[mid] = null;
   msgDecrypt(g, m).then(r => {
     msgPlain[mid] = r; scheduleRender();
-    // Nytt meddelande till mig medan appen är öppen: säg till
+    // Nytt meddelande till mig: säg till, i appen och i telefonen om appen ligger i bakgrunden
     if(r.text != null && m.from !== myUid() && m.t >= msgSeen.start - 5000 && !msgSeen.told[mid]){
       msgSeen.told[mid] = true;
-      toast(`Meddelande från ${m.name || 'deltagare'}: ${r.text.slice(0, 80)}${r.text.length > 80 ? '…' : ''}`, 6000);
+      const title = `Meddelande från ${m.name || 'deltagare'}`, short = r.text.slice(0, 140) + (r.text.length > 140 ? '…' : '');
+      if(document.hidden) msgSysNotify(mid, title, short);
+      if(chatOpen(g)){ msgMarkRead(g); return; }
+      toast(`${title}: ${r.text.slice(0, 80)}${r.text.length > 80 ? '…' : ''}`, 6000);
       try { if(navigator.vibrate) navigator.vibrate([150, 80, 150]); } catch(e){}
       if(!(nav.tab === 'jakt' && nav.team === g.id)){ $('#tab-jakt').classList.add('has-news'); if($('#drawer').hidden) $('#btnMenu').classList.add('has-news'); }
     }
@@ -145,9 +215,11 @@ function msgLoad(g, mid, m){
 /* Nya meddelanden: lås upp dem direkt så att man får besked även om Jakt-fliken inte är öppen. */
 function msgOnData(g, hid){ for(const [mid, m] of msgMine(g, hid)) if(!(mid in msgPlain)) msgLoad(g, mid, m); }
 
-function openMsgForm(g, hid, to){
-  const people = msgPeople(g, hid), all = !to;
-  openModal(`<h2>Nytt meddelande</h2><form id="msgForm">
+function openMsgForm(g, hid, to, re){
+  const people = msgPeople(g, hid), all = !to, orig = re ? ((g.huntMsg || {})[hid] || {})[re] : null;
+  if(!orig) re = null;
+  openModal(`<h2>${re ? 'Svara' : 'Nytt meddelande'}</h2><form id="msgForm">
+    ${re ? `<div class="lbl" style="margin-top:0">Svarar på</div>${msgQuote(g, hid, re).replace('data-j="msg-goto"', 'disabled')}` : ''}
     <label class="checkline"><input type="checkbox" id="msgAll"${all ? ' checked' : ''}><span><b>Alla i jakten</b> (${people.length})</span></label>
     <div class="field" id="msgPeople"><span>Eller välj mottagare</span>${people.length ? people.map(p => `<label class="checkline"><input type="checkbox" data-to="${esc(p.uid)}"${to === p.uid ? ' checked' : ''}${all ? ' disabled' : ''}><span>${esc(p.name)}</span></label>`).join('') : '<span class="small muted">Ingen annan i jakten har öppnat appen ännu.</span>'}</div>
     <label class="field"><span>Meddelande</span><textarea class="input" id="msgText" maxlength="${MSG_MAX}" rows="3" placeholder="Skriv här"></textarea></label>
@@ -162,7 +234,7 @@ function openMsgForm(g, hid, to){
       if(!chosen.length){ toast('Välj minst en mottagare.'); return; }
       const btn = m.querySelector('#msgSend'); btn.disabled = true;
       try {
-        const r = await msgSend(g, hid, text, chosen, toAll);
+        const r = await msgSend(g, hid, text, chosen, toAll, re);
         closeModal();
         if(r === 'queued') toast('Ingen täckning: meddelandet skickas när täckningen kommer tillbaka. Håll appen öppen.', 6000);
         else toast(toAll ? 'Meddelandet är skickat till alla i jakten.' : `Meddelandet är skickat till ${chosen.map(p => p.name).join(', ')}.`);
@@ -170,13 +242,14 @@ function openMsgForm(g, hid, to){
     });
   });
 }
-async function msgSend(g, hid, text, people, toAll){
+async function msgSend(g, hid, text, people, toAll, re){
   const me = await myMsgKey(), t = Date.now(), from = myUid();
   const recips = people.flatMap(p => p.devices).concat(myDevices(g));
   if(!recips.some(r => r.id === from + '~' + me.did)) recips.push({id:from + '~' + me.did, k:me.pubB64});
   const enc = await msgEncrypt(text, recips, from, t);
   const msg = Object.assign({from, name:myName(), t}, enc);
   if(toAll) msg.all = true; else { msg.to = {}; for(const p of people) msg.to[p.uid] = true; }
+  if(re) msg.re = re;
   const mid = 'm' + uid().replace(/[^a-z0-9]/gi, '');
   msgPlain[mid] = {text};
   const sent = fb.db.ref(`groups/${g.id}/huntMsg/${hid}/${mid}`).set(msg);

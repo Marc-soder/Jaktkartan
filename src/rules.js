@@ -334,6 +334,8 @@ const rules = { rules: {
           all: {'.validate': 'newData.isBoolean()'},
           to: {'$uid': {'.validate': 'newData.val() === true'}},
           keys: {'$k': {'.validate': 'newData.isString() && newData.val().length <= 200'}},
+          // Svar: vilket meddelande det svarar på (bara id:t, texten citeras från mottagarens egen kopia)
+          re: {'.validate': `newData.isString() && ${KEY('newData.val()')}`},
           '$other': {'.validate': false}
         }
       }

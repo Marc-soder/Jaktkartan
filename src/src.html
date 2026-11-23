@@ -76,6 +76,10 @@ a{color:var(--accent)}
 
 /* Kontroller på kartan */
 .ctrls{position:fixed;z-index:900;top:calc(12px + env(safe-area-inset-top,0px));right:calc(12px + env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:8px}
+.ctrl.bell{position:relative}.ctrl.bell.on{color:var(--danger)}
+.ctrl.bell .bell-n{position:absolute;top:-5px;right:-5px;min-width:19px;height:19px;padding:0 5px;border-radius:10px;background:var(--danger);color:#fff;font:700 11px/19px var(--font-body);display:none}
+.ctrl.bell.on .bell-n{display:block}
+.stab .badge{display:inline-block;min-width:18px;height:18px;margin-left:5px;padding:0 5px;border-radius:9px;background:var(--danger);color:#fff;font:700 11px/18px var(--font-body);letter-spacing:0;vertical-align:1px}
 .ctrl{width:44px;height:44px;border-radius:12px;background:var(--surface);color:var(--fg);border:1px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.18);display:grid;place-items:center;padding:0}
 .ctrl svg{width:22px;height:22px}
 .ctrl[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
@@ -539,6 +543,9 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
 .pp .pnote{margin:6px 0;white-space:pre-wrap}
 .pp .pc{font:400 12px/1.5 var(--font-mono);color:var(--muted);margin:6px 0 8px}
 .pp .pbtns{display:flex;gap:6px;flex-wrap:wrap}
+.msg-q{display:block;width:100%;text-align:left;border:0;border-left:3px solid var(--accent);border-radius:6px;background:rgba(127,127,127,.12);color:var(--fg);padding:4px 8px;margin:3px 0 4px;font:inherit;font-size:12.5px;line-height:1.35;cursor:pointer}
+.msg-q b{display:block;font-size:12px}.msg-q:disabled{cursor:default}div.msg-q{cursor:default}
+.msg.flash{outline:2px solid var(--accent);outline-offset:2px;transition:outline-color .3s}
 .mt-list{max-height:50vh;overflow:auto}
 .mt-pin{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 10px;margin:0 0 6px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);font:inherit;cursor:pointer}
 .mt-pin[hidden]{display:none}.mt-pin:disabled{opacity:.5;cursor:default}.mt-pin .swatch{flex:none}
@@ -560,6 +567,7 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
 </button>
 
 <div class="ctrls" role="toolbar" aria-label="Kartverktyg">
+  <button class="ctrl bell" id="btnBell" type="button" title="Meddelanden" aria-label="Meddelanden" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg><span class="bell-n"></span></button>
   <button class="ctrl" id="btnLayers" type="button" title="Bakgrund och svampkarta" aria-label="Bakgrund och svampkarta" aria-expanded="false">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2.5 8 12 13l9.5-5Z"/><path d="m2.5 12.5 9.5 5 9.5-5"/><path d="m2.5 17 9.5 5 9.5-5"/></svg>
   </button>
@@ -1221,8 +1229,9 @@ function renderNav(){
   const g = nav.team && typeof cloud !== 'undefined' ? cloud.groups[nav.team] : null, a = nav.area ? areaById(nav.area) : null;
   $('#pTitle').textContent = nav.tab === 'jakt' && g ? gname(g) : nav.tab === 'area' ? (a ? a.name : 'Område') : NAV_TITLE[nav.tab] || '';
   $('#pBack').hidden = !((nav.tab === 'jakt' && g) || nav.tab === 'area');
-  const st = $('#subTabs'), tabs = !!(nav.tab === 'jakt' && g && g.kind === 'member');
-  if(tabs) st.innerHTML = Object.entries(TEAM_TABS).map(([k, l]) => `<button class="stab" type="button" role="tab" data-sub="${k}" aria-selected="${nav.sub === k}" id="sub-${k}">${l}</button>`).join('');
+  const tt = g ? teamTabs(g) : {}, st = $('#subTabs'), tabs = !!(nav.tab === 'jakt' && g && Object.keys(tt).length);
+  const sel = tt[nav.sub] ? nav.sub : 'jakt', unread = g ? msgUnread(g) : 0;
+  if(tabs) st.innerHTML = Object.entries(tt).map(([k, l]) => `<button class="stab" type="button" role="tab" data-sub="${k}" aria-selected="${sel === k}" id="sub-${k}">${l}${k === 'chat' && unread ? `<span class="badge" aria-label="${unread} olästa">${unread > 9 ? '9+' : unread}</span>` : ''}</button>`).join('');
   if(st.hidden === tabs){ st.hidden = !tabs; if(!isDesktop()) setSheet(sheet, true); }   // höjden i nedfällt läge ändras
   if(typeof renderDrawerTeams === 'function') renderDrawerTeams();
 }
@@ -1812,6 +1821,7 @@ $('#layerPop').addEventListener('change', e => {
 });
 $('#modeChip').addEventListener('click', () => setSvampMode(false));
 $('#followChip').addEventListener('click', () => followStop());
+$('#btnBell').addEventListener('click', () => msgBellOpen());
 
 /* ---------- Export ---------- */
 function download(name, text, mime){

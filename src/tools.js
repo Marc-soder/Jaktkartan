@@ -76,7 +76,7 @@ function renderWindNote(){
 }
 function setWind(on){
   state.settings.wind = !!on; save();
-  if(on){ windFetch(); clearInterval(wind.timer); wind.timer = setInterval(() => windFetch(), 10 * 60000); }
+  if(on){ windFetch(); clearInterval(wind.timer); wind.timer = setInterval(() => { if(!document.hidden) windFetch(); }, 10 * 60000); }
   else { clearInterval(wind.timer); }
   windRender();
 }
@@ -90,6 +90,9 @@ function windAnim(on){
 function windFrame(t){
   wind.raf = 0;
   const d = wind.data, cv = wind.canvas; if(!d || !cv || cv.hidden) return;
+  // Utan sparläge: rita bara om cirka 30 gånger i sekunden (varannan skärmuppdatering)
+  if(!power.on && t - (wind.lastT || 0) < WIND_FRAME_MS - 4){ wind.raf = requestAnimationFrame(windFrame); return; }
+  wind.lastT = t;
   if(!document.hidden){
     const size = map.getSize(), dpr = window.devicePixelRatio || 1;
     if(cv.width !== Math.round(size.x * dpr) || cv.height !== Math.round(size.y * dpr)){ cv.width = Math.round(size.x * dpr); cv.height = Math.round(size.y * dpr); cv.style.width = size.x + 'px'; cv.style.height = size.y + 'px'; }
@@ -120,7 +123,7 @@ function windFrame(t){
     g.restore();
     wind.frames = (wind.frames || 0) + 1;
   }
-  // I sparläget ritas pilarna om cirka tio gånger i sekunden i stället för sextio
+  // I sparläget ritas pilarna om cirka tio gånger i sekunden. Med släckt skärm pausar webbläsaren ritandet helt.
   if(power.on) wind.tmo = setTimeout(() => { wind.tmo = 0; wind.raf = requestAnimationFrame(windFrame); }, POWER_FRAME_MS);
   else wind.raf = requestAnimationFrame(windFrame);
 }
@@ -258,6 +261,9 @@ const compass = {on:false, heading:null, raf:0, rot:0, timer:null, mask:0, bad:f
    i sekunden. Ett tryck på skärmen, att lämna passet eller att peka mot en förbjuden riktning ger full fart direkt. */
 const power = {on:false, touch:Date.now(), battery:null, reason:''};
 const POWER_IDLE_MS = 30000, POWER_FRAME_MS = 100;
+// Utan sparläge: vindpilarna ritas om 30 gånger i sekunden och kompassen högst 20 (rörelsen är långsam, så det syns inte,
+// men det halverar arbetet för processorn och grafiken jämfört med skärmens 60).
+const WIND_FRAME_MS = 33, COMPASS_FRAME_MS = 50;
 const powerAllowed = () => state.settings.powerSave !== false;
 const powerOn = () => power.on;
 function powerReason(){
@@ -288,8 +294,8 @@ function onOrient(e){
   if(hd == null) return;
   compass.heading = ((hd + screenAngle()) % 360 + 360) % 360;
   if(compass.raf) return;
-  // I sparläget ritas kompassen om högst tio gånger i sekunden
-  const wait = power.on ? Math.max(0, POWER_FRAME_MS - (Date.now() - compass.last)) : 0;
+  // Kompassen ritas om högst 20 gånger i sekunden, i sparläget högst tio
+  const wait = Math.max(0, (power.on ? POWER_FRAME_MS : COMPASS_FRAME_MS) - (Date.now() - compass.last));
   const draw = () => { compass.raf = 0; compass.last = Date.now(); const was = compass.bad; renderHeading(); if(compass.bad !== was) powerUpdate(); };
   compass.raf = wait ? setTimeout(() => requestAnimationFrame(draw), wait) : requestAnimationFrame(draw);
 }

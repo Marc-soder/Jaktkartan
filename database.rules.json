@@ -523,6 +523,9 @@
                   ".validate": "newData.isString() && newData.val().length <= 200"
                 }
               },
+              "re": {
+                ".validate": "newData.isString() && (newData.val().matches(/^[A-Za-z0-9_-]+$/) && newData.val().length <= 64)"
+              },
               "$other": {
                 ".validate": false
               }

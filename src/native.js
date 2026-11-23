@@ -27,6 +27,7 @@ function natInit(){
   if(NAT.has('LocalNotifications')){
     NAT.call('LocalNotifications', 'createChannel', {id:'sos', name:'Nödlarm', description:'Nödlarm från jaktlaget', importance:5, visibility:1, vibration:true}).catch(() => {});
     NAT.call('LocalNotifications', 'createChannel', {id:'jakt', name:'Jakten börjar', description:'När en jakt du deltar i startar', importance:4, visibility:1, vibration:true}).catch(() => {});
+    NAT.call('LocalNotifications', 'createChannel', {id:'msg', name:'Meddelanden', description:'Meddelanden i jakten', importance:4, visibility:0, vibration:true}).catch(() => {});
     NAT.call('LocalNotifications', 'checkPermissions').then(r => { NAT.notif = (r && r.display) || 'unknown'; renderJakt(); }).catch(() => {});
   }
   if(NAT.has('AppUpdate')){

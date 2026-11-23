@@ -68,6 +68,14 @@ async function trim(cache){
   for(let i = 0; i < keys.length - TILE_MAX; i++) await cache.delete(keys[i]);   // äldst först
 }
 
+/* Ett tryck på en avisering (nödlarm, meddelande) öppnar appen, eller visar den om den redan är öppen. */
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({type:'window', includeUncontrolled:true}).then(list => {
+    for(const c of list) if('focus' in c) return c.focus();
+    return self.clients.openWindow ? self.clients.openWindow('./') : null;
+  }));
+});
 self.addEventListener('fetch', e => {
   const req = e.request; if(req.method !== 'GET') return;
   const url = new URL(req.url);
