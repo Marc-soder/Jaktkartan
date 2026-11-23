@@ -135,6 +135,10 @@ const gids = () => Object.keys(data.groups || {});
 const go = async (P, tab) => { await P.click('#btnMenu'); await W(P, 80); await P.click('#tab-' + tab); await W(P, 200); };
 const team = async (P, sub, g) => { await P.evaluate(([x, t]) => __fk.openTeam(x, t), [g || gids()[0], sub || 'jakt']); await W(P, 250); };
 
+async function inviteRevokeAll(){
+  for(const c of Object.keys(data.invites || {})) if(data.invites[c].usedBy !== 'bob'){ delete data.invites[c]; for(const g of Object.values(data.groups || {})) if(g.inviteList) delete g.inviteList[c]; }
+  await pump();
+}
 (async () => {
   const server = http.createServer((q, r) => { r.writeHead(200, {'Content-Type':'text/html; charset=utf-8'}); r.end(HTML); });
   await new Promise(ok => server.listen(8765, ok));
@@ -185,15 +189,55 @@ const team = async (P, sub, g) => { await P.evaluate(([x, t]) => __fk.openTeam(x
   check(await A.isVisible('#paneArea') && (await A.innerText('#paneArea')).toLowerCase().includes('vägar, stigar och bäckar') && await A.isVisible('#afLine'), 'Ändra öppnar områdets vy, där man ritar gräns, väg, stig och bäck');
   await A.click('#pBack'); await W(A, 300);
   check((await A.innerText('#pTitle')) === 'Älglaget' && await A.isVisible('#sub-omr') && (await A.getAttribute('#sub-omr', 'aria-selected')) === 'true', 'tillbaka från området går till jaktlagets flik Områden');
-  await team(A, 'med'); await A.click('[data-j="invite"]'); await A.selectOption('#ivRole', 'editor'); await A.click('#ivOk'); await W(A, 400);
+  await team(A, 'med'); await A.click('[data-j="invite"]'); await A.selectOption('#ivRole', 'editor');
+  check(await A.isChecked('#ivOnce') && await A.isChecked('#ivApprove'), 'en ny inbjudan är från början en engångskod som admin godkänner');
+  await A.fill('#ivTo', 'Bob'); await A.click('#ivOk'); await W(A, 400);
   await A.keyboard.press('Escape');
   const inv = Object.keys(data.invites || {})[0];
-  check(inv && inv.length === 10 && data.invites[inv].role === 'editor', 'inbjudan skapad med roll Medlem');
-  // ---- Bob går med via länk ----
+  check(inv && inv.length === 10 && data.invites[inv].role === 'editor' && data.invites[inv].once === true && data.invites[inv].approve === true && data.invites[inv].team === 'Älglaget'
+    && data.groups[gid].inviteList[inv].to === 'Bob', 'inbjudan skapad med roll Medlem, engångskod, godkännande och mottagare');
+  // ---- Bob går med via länk: förfrågan som Alice godkänner ----
   const B = await mkPage(browser, 'bob', '#l-' + inv);
   check(await B.isVisible('#paneKonto [data-j="login-google"]') && (await B.innerText('#paneKonto')).includes(inv), 'Bob: länken öppnar Mitt konto med koden');
   await B.click('[data-j="login-google"]'); await W(B, 800);
-  check(data.groups[gid].members.bob && data.groups[gid].members.bob.role === 'editor', 'Bob blev medlem med rätt roll');
+  const rq = () => ((data.groups[gid].requests || {}).bob);
+  check(rq() && rq().role === 'editor' && rq().team === 'Älglaget' && !data.groups[gid].members.bob && data.userGroups.bob[gid] === 'pending' && data.invites[inv].usedBy === 'bob', 'Bob: koden ger en förfrågan, inte medlemskap, och engångskoden är använd');
+  await go(B, 'jakt');
+  check((await B.innerText('#paneJakt')).toLowerCase().includes('väntar på godkännande') && (await B.innerText('#paneJakt')).includes('Älglaget') && !(await st(B)).areas.some(a => a.gid), 'Bob ser att han väntar på godkännande, men inget av lagets innehåll');
+  await W(A, 300); await team(A, 'med');
+  const medA = (await A.innerText('#paneJakt')).toLowerCase();
+  check(medA.includes('vill gå med (1)') && medA.includes('bob test') && medA.includes('kod till bob') && medA.includes('använd av bob test') && medA.includes('engångskod'), 'Alice ser förfrågan och att Bobs engångskod är använd');
+  // Någon som fått koden vidareskickad kommer inte in
+  const E = await mkPage(browser, 'eve', '#l-' + inv);
+  await E.click('[data-j="login-google"]'); await W(E, 800);
+  check((await E.innerText('#toast')).includes('har redan använts') && !(data.groups[gid].requests || {}).eve && !(data.userGroups.eve || {})[gid], 'en vidareskickad engångskod fungerar inte för någon annan');
+  await A.click('[data-j="req-ok"][data-u="bob"]'); await W(A, 400); await W(B, 800);
+  check(data.groups[gid].members.bob && data.groups[gid].members.bob.role === 'editor' && !rq() && data.userGroups.bob[gid] === 'member', 'Alice godkänner: Bob blev medlem med rätt roll');
+  check((await B.innerText('#toast')).includes('godkänd') && !(await B.innerText('#paneJakt')).toLowerCase().includes('väntar på godkännande'), 'Bob får besked om att han är godkänd');
+  // Kod som flera kan använda, utan godkännande: återkallas när en medlem som använt den tas bort
+  await A.click('[data-j="invite"]'); await A.selectOption('#ivRole', 'viewer'); await A.uncheck('#ivOnce'); await A.uncheck('#ivApprove'); await A.click('#ivOk'); await W(A, 400); await A.keyboard.press('Escape');
+  const inv2 = Object.keys(data.invites).find(c => c !== inv);
+  await E.evaluate(c => __fk.joinByCode(c), inv2); await W(E, 600);
+  check(data.groups[gid].members.eve && data.groups[gid].members.eve.role === 'viewer' && !data.invites[inv2].usedBy, 'en kod för flera utan godkännande ger medlemskap direkt, som förut');
+  await team(A, 'med'); await A.click('[data-j="member-del"][data-u="eve"]'); await A.click('[data-j="member-del"][data-u="eve"]'); await W(A, 600);
+  check(!data.groups[gid].members.eve && !data.invites[inv2] && !data.groups[gid].inviteList[inv2], 'tar admin bort en medlem återkallas koden hen gick med med');
+  await W(E, 600); await E.evaluate(c => __fk.joinByCode(c), inv2); await W(E, 500);
+  check(!data.groups[gid].members.eve && (await E.innerText('#toast')).includes('hittades inte'), 'den borttagna kan inte gå med igen med samma kod');
+  // Återkalla en inbjudan, och neka en förfrågan
+  await A.click('[data-j="invite"]'); await A.click('#ivOk'); await W(A, 400); await A.keyboard.press('Escape');
+  const inv3 = Object.keys(data.invites).find(c => c !== inv);
+  await team(A, 'med'); await A.click(`[data-j="inv-del"][data-c="${inv3}"]`); await A.click(`[data-j="inv-del"][data-c="${inv3}"]`); await W(A, 500);
+  await E.evaluate(c => __fk.joinByCode(c), inv3); await W(E, 500);
+  check(!data.invites[inv3] && !data.groups[gid].inviteList[inv3] && (await E.innerText('#toast')).includes('hittades inte'), 'en återkallad inbjudan fungerar inte');
+  await A.click('[data-j="invite"]'); await A.click('#ivOk'); await W(A, 400); await A.keyboard.press('Escape');
+  const inv4 = Object.keys(data.invites).find(c => c !== inv);
+  await E.evaluate(c => __fk.joinByCode(c), inv4); await W(E, 600);
+  check((data.groups[gid].requests || {}).eve && data.userGroups.eve[gid] === 'pending', 'Eve skickar en förfrågan med en ny kod');
+  await team(A, 'med'); await A.click('[data-j="req-no"][data-u="eve"]'); await A.click('[data-j="req-no"][data-u="eve"]'); await W(A, 500); await W(E, 800);
+  check(!(data.groups[gid].requests || {}).eve && !data.groups[gid].members.eve && !(data.userGroups.eve || {})[gid] && (await E.innerText('#toast')).includes('godkändes inte'), 'Alice nekar: Eve kommer inte in och får besked');
+  const errE = E.errs.slice(); for(let i = subs.length - 1; i >= 0; i--) if(subs[i].page === E) subs.splice(i, 1); await E.context().close();
+  check(!errE.length, `Eve: inga JS-fel ${errE.slice(0, 2)}`);
+  await inviteRevokeAll();
   let sb = await st(B);
   check((sb.areas.find(a => a.id === aid) || {}).border === data.groups[gid].areas[aid].border && await B.evaluate(() => { let n = 0; __fk.map.eachLayer(l => { if(l instanceof L.Polygon && l.options.className !== 'wind-sector') n++; }); return n; }) === 2, 'Bob ser lagets gräns på kartan');
   check((((sb.areas.find(a => a.id === aid) || {}).lines || {})['l-2'] || {}).k === 'road' && await B.evaluate(() => { let n = 0; __fk.map.eachLayer(l => { if(l instanceof L.Polyline && !(l instanceof L.Polygon) && l.options.color === '#8a4b12') n++; }); return n; }) === 1, 'Bob ser lagets egna väg på kartan');
@@ -870,14 +914,39 @@ const team = async (P, sub, g) => { await P.evaluate(([x, t]) => __fk.openTeam(x
   const base = {owner:'o', creators:{c1:true}, groups:{g:{meta:{name:'L', owner:'o'}, members:{o:{role:'admin', name:'O'}, a2:{role:'admin', name:'A2'}, e:{role:'editor', name:'E'}, v:{role:'viewer', name:'V'}},
     areas:{ar:{name:'A'}}, pins:{ar:{p:{lat:1, lng:2, typeId:'t'}}}, hunts:{h:{name:'J', expires:t0 + 1000, code:'HUNTCODE', areas:{ar:true}}, h2:{name:'J2', starts:t0 + 500, expires:t0 + 1000, code:'HUNTCOD2'}}, guests:{gu:{hid:'h', code:'HUNTCODE', name:'G', expires:t0 + 1000}},
       huntPos:{h:{e:{lat:1, lng:1, t:1}}, h2:{}}, huntTrail:{h:{e:{k1:{lat:1, lng:1, t:1}}}}, huntObs:{h:{o1:{sp:'Rådjur', n:1, lat:1, lng:1, t:1, by:'e'}}}, obsArchive:{a1:{sp:'Älg', n:2, lat:1, lng:1, t:1, hid:'h'}}, huntMsg:{h:{m0:{from:'e', name:'E', t:1, iv:'x', ct:'y', spk:'z', keys:{a:'b'}, all:true}}}, huntPlan:{h:{stands:{p:{uid:'e', who:'E'}, p2:{uid:'gu', who:'G'}}}}}},
-    invites:{INVITECODE1:{gid:'g', role:'editor', expires:t0 + 1000}, OLDINVITE01:{gid:'g', role:'editor', expires:t0 - 1}}, huntCodes:{HUNTCODE:{gid:'g', hid:'h', expires:t0 + 1000}}};
+    invites:{INVITECODE1:{gid:'g', role:'editor', expires:t0 + 1000}, OLDINVITE01:{gid:'g', role:'editor', expires:t0 - 1}, ONCECODE01:{gid:'g', role:'editor', expires:t0 + 1000, once:true},
+      USEDCODE01:{gid:'g', role:'editor', expires:t0 + 1000, once:true, usedBy:'q'}, APPRCODE1:{gid:'g', role:'viewer', expires:t0 + 1000, approve:true}, APPRONCE01:{gid:'g', role:'viewer', expires:t0 + 1000, approve:true, once:true}}, huntCodes:{HUNTCODE:{gid:'g', hid:'h', expires:t0 + 1000}}};
+  base.groups.g.requests = {rq:{name:'R', role:'viewer', code:'APPRCODE1', t:1}}; base.groups.g.inviteList = {INVITECODE1:{role:'editor', expires:t0 + 1000, t:1}};
   const D = (uid, now) => { const d = targaryen.database(rules, base, now || t0).as(uid ? tok(uid) : null);
-    return {read: p => d.read(p, now || t0), write: (p, v) => d.write(p, v, undefined, now || t0)}; };
+    return {read: p => d.read(p, now || t0), write: (p, v) => d.write(p, v, undefined, now || t0), update: (p, v) => d.update(p, v, now || t0)}; };
   const m = (role, extra) => Object.assign({role, name:'N'}, extra || {});
   check(!D(null).read('/groups/g/pins').allowed && !D('x').read('/groups/g/pins').allowed && !D('x').read('/groups/g/meta').allowed, 'regel: utloggad och utomstående kan inte läsa laget');
   check(!D('x').read('/invites').allowed && !D('x').read('/groups').allowed && !D('x').read('/huntCodes').allowed, 'regel: ingen kan lista inbjudningar, jaktkoder eller alla lag');
   check(D('x').write('/groups/g/members/x', m('editor', {code:'INVITECODE1'})).allowed, 'regel: gå med via giltig inbjudan tillåts');
   check(!D('x').write('/groups/g/members/x', m('admin', {code:'INVITECODE1'})).allowed, 'regel: inbjudan ger inte högre roll än den anger');
+  check(D('x').update('/', {'groups/g/members/x':m('editor', {code:'ONCECODE01'}), 'invites/ONCECODE01/usedBy':'x'}).allowed, 'regel: engångskod: gå med och markera koden som använd');
+  check(!D('x').write('/groups/g/members/x', m('editor', {code:'ONCECODE01'})).allowed, 'regel: engångskod: nekas utan att koden markeras som använd');
+  check(!D('x').update('/', {'groups/g/members/x':m('editor', {code:'USEDCODE01'}), 'invites/USEDCODE01/usedBy':'x'}).allowed, 'regel: engångskod: en använd kod nekas');
+  check(!D('x').write('/invites/ONCECODE01/usedBy', 'x').allowed, 'regel: engångskod: kan inte förbrukas utan att man går med');
+  check(!D('x').update('/', {'groups/g/members/x':m('editor', {code:'ONCECODE01'}), 'invites/ONCECODE01/usedBy':'y'}).allowed, 'regel: engångskod: kan inte markeras som använd av någon annan');
+  check(!D('x').update('/', {'groups/g/members/x':m('editor', {code:'INVITECODE1'}), 'invites/ONCECODE01/usedBy':'x'}).allowed, 'regel: engångskod: kan inte förbrukas med en annan kod');
+  check(!D('x').write('/groups/g/members/x', m('viewer', {code:'APPRCODE1'})).allowed, 'regel: godkännande: kan inte gå med direkt');
+  check(D('x').write('/groups/g/requests/x', {name:'X', role:'viewer', code:'APPRCODE1', t:1}).allowed, 'regel: godkännande: förfrågan tillåts');
+  check(!D('x').write('/groups/g/requests/x', {name:'X', role:'leader', code:'APPRCODE1', t:1}).allowed, 'regel: godkännande: förfrågan kan inte begära högre roll');
+  check(!D('x').write('/groups/g/requests/x', {name:'X', role:'editor', code:'INVITECODE1', t:1}).allowed, 'regel: godkännande: förfrågan kräver en kod med godkännande');
+  check(!D('x').write('/groups/g/requests/y', {name:'X', role:'viewer', code:'APPRCODE1', t:1}).allowed, 'regel: godkännande: bara för sig själv');
+  check(!D('x').write('/groups/g/requests/x', {name:'X', role:'viewer', code:'APPRCODE1', t:1, extra:1}).allowed, 'regel: godkännande: inga extra fält');
+  check(!D('e').write('/groups/g/requests/e', {name:'E', role:'viewer', code:'APPRCODE1', t:1}).allowed, 'regel: godkännande: den som redan är medlem kan inte fråga');
+  check(D('x').update('/', {'groups/g/requests/x':{name:'X', role:'viewer', code:'APPRONCE01', t:1}, 'invites/APPRONCE01/usedBy':'x'}).allowed, 'regel: godkännande med engångskod: förfrågan och markering tillsammans');
+  check(!D('x').write('/groups/g/requests/x', {name:'X', role:'viewer', code:'APPRONCE01', t:1}).allowed, 'regel: godkännande med engångskod: nekas utan markering');
+  check(D('o').read('/groups/g/requests').allowed && !D('e').read('/groups/g/requests').allowed && D('rq').read('/groups/g/requests/rq').allowed && !D('x').read('/groups/g/requests/rq').allowed, 'regel: förfrågningar: admin ser alla, den som frågat ser sin egen');
+  check(D('o').update('/', {'groups/g/members/rq':m('viewer', {code:'APPRCODE1'}), 'groups/g/requests/rq':null}).allowed, 'regel: admin godkänner: medlem och förfrågan bort');
+  check(D('o').write('/groups/g/requests/rq', null).allowed && D('rq').write('/groups/g/requests/rq', null).allowed && !D('e').write('/groups/g/requests/rq', null).allowed, 'regel: admin nekar, den som frågat drar tillbaka, andra kan inte ta bort');
+  check(!D('rq').write('/groups/g/members/rq', m('viewer', {code:'APPRCODE1'})).allowed, 'regel: den som frågat kan inte godkänna sig själv');
+  check(D('o').read('/groups/g/inviteList').allowed && !D('e').read('/groups/g/inviteList').allowed && !D('e').write('/groups/g/inviteList/ABCDEFGH12', {role:'editor', expires:t0 + 1000, t:1}).allowed, 'regel: inbjudningslistan: bara admin');
+  check(D('o').update('/', {'invites/NEWCODE001':{gid:'g', role:'viewer', expires:t0 + 1000, by:'o', once:true, approve:true, team:'L'}, 'groups/g/inviteList/NEWCODE001':{role:'viewer', expires:t0 + 1000, t:1, once:true, approve:true, to:'Kalle'}}).allowed, 'regel: admin skapar inbjudan med engångskod, godkännande och mottagare');
+  check(!D('o').write('/invites/NEWCODE002', {gid:'g', role:'viewer', expires:t0 + 1000, hack:1}).allowed, 'regel: inbjudan: inga okända fält');
+  check(D('o').update('/', {'invites/INVITECODE1':null, 'groups/g/inviteList/INVITECODE1':null}).allowed && !D('e').write('/invites/INVITECODE1', null).allowed, 'regel: admin återkallar en inbjudan, andra kan inte');
   check(!D('x').write('/groups/g/members/x', m('editor', {code:'OLDINVITE01'})).allowed && !D('x').write('/groups/g/members/x', m('editor')).allowed, 'regel: utgången eller saknad inbjudan nekas');
   check(!D('e').write('/groups/g/members/e/role', 'admin').allowed && !D('e').write('/groups/g/members/v/role', 'editor').allowed, 'regel: medlem kan inte ändra roller');
   check(D('a2').write('/groups/g/members/v/role', 'leader').allowed && !D('a2').write('/groups/g/members/o/role', 'viewer').allowed && !D('a2').write('/groups/g/members/o', null).allowed, 'regel: admin ändrar roller men kan inte peta ägaren');

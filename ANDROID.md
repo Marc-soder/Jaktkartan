@@ -245,9 +245,16 @@ Skicka länken https://github.com/Marc-soder/Jaktkartan/releases/latest till lag
 1. Öppna länken i Chrome på telefonen och tryck på `Jaktkartan-….apk`.
 2. Tillåt installation från Chrome, och tryck **Installera** (och **Installera ändå** om Play Protect varnar).
 3. Öppna Jaktkartan → menyn → **Mitt konto** → **Logga in med Google** (eller gå med som gäst med jaktkoden).
-4. Tryck **Tillåt aviseringar**.
-5. Inställningar → Appar → Jaktkartan → Batteri → **Obegränsad**.
-6. När positionen delas första gången: välj **Exakt** och **När appen används**.
+4. Menyn → **Jakt** → **Gå med med kod** → skriv in koden. Länken i inbjudan öppnas i Chrome, inte i appen, så skriv in koden i appen.
+   Kräver koden godkännande står det **Väntar på godkännande** tills en admin har godkänt.
+5. Tryck **Tillåt aviseringar**.
+6. Inställningar → Appar → Jaktkartan → Batteri → **Obegränsad**.
+7. När positionen delas första gången: välj **Exakt** och **När appen används**.
+
+**Inbjudningar** skapas av en admin under jaktlaget → **Medlemmar** → **Bjud in medlem**. Från början är koden en
+**engångskod** (bara en person kan använda den) som admin **godkänner** innan personen ser något. Skicka en kod till varje person,
+och fyll gärna i **Till** så att du ser vem koden gick till. Under **Medlemmar** finns förfrågningar att godkänna eller neka,
+och aktiva inbjudningar som kan **återkallas**. Tar du bort en medlem återkallas också koden hen gick med med.
 
 Den som deltar i en planerad jakt får en påminnelse i telefonen när jakten startar. Ett tryck på den öppnar appen,
 och delningen startar.
