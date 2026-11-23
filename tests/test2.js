@@ -584,6 +584,26 @@ async function inviteRevokeAll(){
   check(await B.locator('.pos-icon').count() === 2 && await C.locator('.pos-icon').count() === 1 && await A.locator('.pos-icon').count() === 1, 'Bob ser Alice och Carl, Carl ser Alice, Alice ser Carl men inte sig själv');
   await C.locator('#shareToggle').check({force:true}); await W(C, 900);
   check(await A.locator('.pos-icon').count() === 1 && (await A.innerText('#posCount')).startsWith('1 person'), 'gästens position syns för laget');
+  // Visa och följ en deltagare på kartan
+  await team(B, 'jakt'); await W(B, 300);
+  { const chips = await B.locator('#posChips .pos-chip').allInnerTexts();
+    check(chips.length === 2 && chips[0].includes('Alice Test') && chips[1].includes('Carl Gäst'), `under Dela min position finns en knapp per person som delar (${chips.map(c => c.split('\n')[0])})`); }
+  const ctrB = () => B.evaluate(() => { const c = __fk.map.getCenter(); return [c.lat, c.lng, __fk.map.getZoom()]; });
+  const viewB = await ctrB();   // återställs efteråt: testerna nedan lägger observationer där kartan är centrerad
+  await B.evaluate(() => __fk.map.setView([58.5, 14.3], 12, {animate:false})); await W(B, 100);
+  await B.click('#posChips .pos-chip[data-u="anon-carl"]'); await W(B, 900);
+  { const c = await ctrB(), cp = hp()['anon-carl'];
+    check(Math.abs(c[0] - cp.lat) < 1e-4 && Math.abs(c[1] - cp.lng) < 1e-4 && c[2] >= 16 && await B.isVisible('.leaflet-popup [data-follow]'), `knappen centrerar kartan på Carl och öppnar hans ruta (${c})`); }
+  await B.click('.leaflet-popup [data-follow]'); await W(B, 400);
+  check(await B.isVisible('#followChip') && (await B.innerText('#followChip')).includes('Följer Carl Gäst') && await B.locator('#posChips .pos-chip.on[data-u="anon-carl"]').count() === 1, 'Följ visar att kartan följer Carl');
+  await B.evaluate(([g, h]) => { const G = __fk.cloud.groups[g]; G.huntPos[h]['anon-carl'] = Object.assign({}, G.huntPos[h]['anon-carl'], {lat:58.7305, lng:14.6205, t:Date.now()}); __fk.renderPositions(); }, [gid, hid]); await W(B, 700);
+  { const c = await ctrB(); check(Math.abs(c[0] - 58.7305) < 1e-4 && Math.abs(c[1] - 14.6205) < 1e-4, `kartan följer med när Carl flyttar sig (${c})`); }
+  await B.evaluate(() => __fk.map.fire('dragstart')); await W(B, 200);
+  check(!(await B.isVisible('#followChip')) && (await B.evaluate(() => __fk.follow.uid)) === null, 'drar man i kartan slutar den följa');
+  await B.click('#posChips .pos-chip[data-u="alice"]'); await W(B, 900); await B.click('.leaflet-popup [data-follow]'); await W(B, 300);
+  await B.click('#followChip'); await W(B, 200);
+  check(!(await B.isVisible('#followChip')) && (await B.evaluate(() => __fk.follow.uid)) === null, 'Sluta i etiketten slutar följa');
+  await B.evaluate(v => { __fk.map.closePopup(); __fk.map.setView([v[0], v[1]], v[2], {animate:false}); }, viewB); await W(B, 200);
   // ---- Spår ----
   const tr = () => (((data.groups[gid].huntTrail || {})[hid] || {}).alice || {});
   check(Object.keys(tr()).length >= 1, 'Alices spårpunkt sparas i jakten');

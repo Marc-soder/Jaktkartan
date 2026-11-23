@@ -313,15 +313,47 @@ function activePositions(){
   return out;
 }
 function renderPositions(){
-  posLayer.clearLayers();
-  for(const p of activePositions()){
+  posLayer.clearLayers(); posMarkers = {};
+  const act = activePositions();
+  for(const p of act){
     const m = L.marker([p.lat, p.lng], {icon:L.divIcon({className:'pos-icon', html:`<span class="pos-dot" style="background:${personColor(p.uid)}">${esc(initials(p.name))}</span><span class="pos-name">${esc(p.name || 'Jägare')}</span>`, iconSize:[32,32], iconAnchor:[16,16], popupAnchor:[0,-14]}), zIndexOffset:500});
-    m.bindPopup(() => h(`<div class="pp"><h4>${esc(p.name || 'Jägare')}</h4><div class="pnote">Position ${ago(p.t)}${p.acc ? ` · ±${Math.round(p.acc)} m` : ''}${myPos ? `<br>${fmtDist(distM(myPos, p))} bort` : ''}</div><div class="pbtns"><a class="navbtn" href="${navUrl(p.lat, p.lng)}" target="_blank" rel="noopener">${ICON_NAV}Navigera</a>${phoneOf(p.uid) ? `<a class="btn sm" data-tel href="${esc(telHref(phoneOf(p.uid)))}">Ring</a>` : ''}</div></div>`), {maxWidth:260});
-    m.addTo(posLayer);
+    m.bindPopup(() => { const el = h(`<div class="pp"><h4>${esc(p.name || 'Jägare')}</h4><div class="pnote">Position ${ago(p.t)}${p.acc ? ` · ±${Math.round(p.acc)} m` : ''}${myPos ? `<br>${fmtDist(distM(myPos, p))} bort` : ''}</div><div class="pbtns"><a class="navbtn" href="${navUrl(p.lat, p.lng)}" target="_blank" rel="noopener">${ICON_NAV}Navigera</a>${phoneOf(p.uid) ? `<a class="btn sm" data-tel href="${esc(telHref(phoneOf(p.uid)))}">Ring</a>` : ''}<button class="btn sm" type="button" data-follow>${follow.uid === p.uid ? 'Sluta följa' : 'Följ'}</button></div></div>`);
+      el.querySelector('[data-follow]').addEventListener('click', () => { if(follow.uid === p.uid) followStop(); else followStart(p.uid); });
+      return el; }, {maxWidth:260});
+    m.addTo(posLayer); posMarkers[p.uid] = m;
   }
+  // Följer man någon flyttas kartan med hen. Slutar personen dela slutar man följa.
+  if(follow.uid){ const p = act.find(x => x.uid === follow.uid); if(p) map.panTo([p.lat, p.lng], {animate:true}); else { followStop(); toast('Personen delar inte längre sin position.'); } }
+  const pc = $('#posChips'); if(pc) pc.innerHTML = posChipsHtml();
+  followChip();
   const el = $('#posCount'); if(el) el.textContent = posCountText();
   renderTrails();
 }
+/* ---------- Visa och följ en deltagare ----------
+   Knapparna under Dela min position centrerar kartan på en person och öppnar hens ruta. Följ i rutan håller kartan
+   centrerad på personen när positionen uppdateras, tills man drar i kartan eller trycker Sluta. */
+let posMarkers = {};
+const follow = {uid:null};
+function posChipsHtml(){
+  const act = activePositions().slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'sv'));
+  return act.map(p => `<button class="pos-chip${follow.uid === p.uid ? ' on' : ''}" type="button" data-j="pos-go" data-u="${esc(p.uid)}" title="Visa ${esc(p.name || 'Jägare')} på kartan"><span class="pc-dot" style="background:${personColor(p.uid)}">${esc(initials(p.name))}</span>${esc(p.name || 'Jägare')} <span class="muted">${esc(ago(p.t))}</span></button>`).join('');
+}
+function posFocus(uid, open){
+  const p = activePositions().find(x => x.uid === uid); if(!p){ toast('Personen delar inte sin position just nu.'); return false; }
+  if(!isDesktop()) setSheet('peek');
+  map.setView([p.lat, p.lng], Math.max(map.getZoom(), 16), {animate:true});
+  if(open) setTimeout(() => { const m = posMarkers[uid]; if(m) m.openPopup(); }, 350);
+  return true;
+}
+function followStart(uid){ if(!posFocus(uid)) return; follow.uid = uid; map.closePopup(); followChip(); const pc = $('#posChips'); if(pc) pc.innerHTML = posChipsHtml(); }
+function followStop(){ follow.uid = null; followChip(); const pc = $('#posChips'); if(pc) pc.innerHTML = posChipsHtml(); }
+function followChip(){
+  const el = $('#followChip'); if(!el) return;
+  const p = follow.uid ? activePositions().find(x => x.uid === follow.uid) : null;
+  el.hidden = !p;
+  if(p) el.innerHTML = `Följer ${esc(p.name || 'Jägare')} <span class="fc-x">Sluta</span>`;
+}
+map.on('dragstart', () => { if(follow.uid){ followStop(); toast('Kartan följer inte längre.'); } });
 const posCountText = () => { if(!anyLiveHunt()) return 'Positioner kan bara delas och ses medan en jakt pågår.'; const n = activePositions().length; return n ? `${n} ${n === 1 ? 'person delar' : 'personer delar'} sin position just nu.` : 'Ingen annan delar sin position just nu.'; };
 setInterval(renderPositions, 60000);
 
@@ -842,7 +874,7 @@ function renderJakt(){
 /* Dela min position: under jakten, i jaktlagets flik Jakt */
 function shareHtml(){
   return `<label class="bigtoggle" for="shareToggle"><span><strong>Dela min position</strong><br><span class="small muted">Syns bara för deltagarna i pågående jakter</span></span><input class="sw-toggle" type="checkbox" id="shareToggle" ${cloud.sharing ? 'checked' : ''} ${shareableLive() ? '' : 'disabled'}></label>
-    <p class="note" id="posCount">${posCountText()}</p>
+    <p class="note" id="posCount">${posCountText()}</p><div class="pos-chips" id="posChips">${posChipsHtml()}</div>
     ${cloud.sharing ? (NAT.on ? '<p class="note">Positionen skickas även med släckt skärm. Aviseringen <b>Jaktkartan delar din position</b> visar att den delas.</p>' : '<p class="note">Positionen skickas bara medan appen är öppen och skärmen är på.</p>') : ''}`;
 }
 function teamHtml(g){
@@ -1083,6 +1115,7 @@ function jaktClick(e){
   else if(act === 'notif' && NAT.on) natNotifPerm();
   else if(act === 'app-update') natUpdateGo();
   else if(act === 'phone-save') phoneSave();
+  else if(act === 'pos-go') posFocus(u, true);
   else if(act === 'app-check') natUpdateCheck(true).then(u => { if(NAT.app && !u) toast('Appen är uppdaterad.'); });
   else if(act === 'notif'){ try { Notification.requestPermission().then(p => { toast(p === 'granted' ? 'Aviseringar om nödlarm är tillåtna.' : 'Aviseringar är inte tillåtna. Det går att ändra i webbläsarens inställningar.', 5000); renderJakt(); }); } catch(e){} }
   else if(act === 'group-new') askText('Skapa jaktlag', 'Namn på jaktlaget', '', 'Skapa', v => createGroup(v), 60);
