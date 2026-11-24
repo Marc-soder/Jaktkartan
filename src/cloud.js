@@ -119,10 +119,10 @@ function subGroup(gid, kind){
       } });
     on('areas', v => { g.areas = v || {}; applyRemote(gid); });
     on('pins', v => { g.pins = v || {}; applyRemote(gid); });
-    on('hunts', v => { g.hunts = v || {}; g.huntsLoaded = true; scheduleRender(); syncHuntPos(); });
+    on('hunts', v => { g.hunts = v || {}; g.huntsLoaded = true; scheduleRender(); syncHuntPos(); huntInvitesCheck(); });
     on('guests', v => { g.guests = v || {}; scheduleRender(); });
     on('huntPlan', v => { const prev = g.planLoaded ? g.huntPlan : undefined; g.huntPlan = v || {}; g.planLoaded = true; planOnData(g, prev); scheduleRender(); });
-    on('huntRsvp', v => { g.huntRsvp = v || {}; syncHuntPos(); });
+    on('huntRsvp', v => { g.huntRsvp = v || {}; g.rsvpLoaded = true; syncHuntPos(); huntInvitesCheck(); });
   } else {
     on('guests/' + myUid(), v => {
       g.guest = v;
