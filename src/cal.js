@@ -101,7 +101,8 @@ function calRow(x, inModal){
     }
   }
   if(inModal) btns.push(`<button class="btn sm ghost" type="button" data-c="go" data-g="${esc(x.g.id)}" data-h="${esc(x.hid)}">Visa jakten</button>`);
-  if(inModal && icsWanted(x)) btns.push(`<button class="btn sm ghost" type="button" data-c="ics1" data-g="${esc(x.g.id)}" data-h="${esc(x.hid)}">Till telefonens kalender</button>`);
+  if(inModal && icsWanted(x)) btns.push(`<button class="btn sm ghost" type="button" data-c="ics1" data-g="${esc(x.g.id)}" data-h="${esc(x.hid)}">Till telefonens kalender</button>`,
+    `<a class="btn sm ghost" data-gcal href="${esc(calGcalUrl(x))}" target="_blank" rel="noopener">Google Kalender</a>`);
   const [, mo, d] = x.day.split('-').map(Number);
   return `<div class="cal-row st-${esc(x.st)} me-${esc(x.me)}">
     <button class="cal-date" type="button" ${a}="cal-go" data-g="${esc(x.g.id)}" data-h="${esc(x.hid)}" aria-label="Visa ${esc(x.h.name)}"><b>${d}</b><span>${MON[mo - 1]}</span></button>
@@ -165,7 +166,7 @@ function calRender(){
     <h3 class="sec">${esc(dayLabel(calUi.sel))}</h3>
     ${sel.length ? `<div class="cal-list">${sel.map(x => calRow(x, true)).join('')}</div>` : '<p class="note" style="margin-top:0">Ingen jakt den här dagen.</p>'}
     ${lead.length && calUi.sel >= today ? `<div class="btnrow">${lead.map(g => `<button class="btn sm primary" type="button" data-c="new" data-g="${esc(g.id)}">Planera jakt ${esc(dayLabel(calUi.sel))}${lead.length > 1 ? ' i ' + esc(gname(g)) : ''}</button>`).join('')}</div>` : ''}
-    ${cloud.status === 'in' ? `<h3 class="sec">Telefonens kalender</h3><p class="note" style="margin-top:0">Spara kommande jakter som du deltar i eller är inbjuden till som en kalenderfil (.ics) och öppna den i telefonens kalender. Ändras en jakt senare: exportera igen, så uppdateras den.</p>
+    ${cloud.status === 'in' ? `<h3 class="sec">Telefonens kalender</h3><p class="note" style="margin-top:0">Spara kommande jakter som du deltar i eller är inbjuden till som en kalenderfil (.ics) och öppna den i telefonens kalender. Ändras en jakt senare: exportera igen, så uppdateras den. Googles Kalender-app kan inte öppna filen; använd då <b>Google Kalender</b> vid varje jakt.</p>
       <div class="btnrow"><button class="btn sm" type="button" data-c="ics">Exportera kalenderfil</button></div>` : ''}`;
 }
 /* ---------- Kalenderfil (.ics, RFC 5545) ----------
@@ -198,6 +199,17 @@ function calIcs(xs, now){
   }
   L.push('END:VCALENDAR');
   return L.map(icsFold).join('\r\n') + '\r\n';
+}
+/* Google Kalender: öppnar en ny händelse med jakten ifylld (namn, tid, lag), som man sparar själv. Ingen fil behövs, så det
+   fungerar även där Googles Kalender-app inte kan öppna .ics-filer. Samma innehåll som i kalenderfilen. */
+function calGcalUrl(x){
+  const h = x.h, timed = !h.manual && h.starts && h.expires > h.starts;
+  let dates;
+  if(timed) dates = icsUtc(h.starts) + '/' + icsUtc(h.expires);
+  else { const [y, m, d] = x.day.split('-').map(Number); dates = icsDay(x.day) + '/' + icsDay(isoOf(new Date(y, m - 1, d + 1))); }
+  const how = timed ? `Startar ${fmtClock(h.starts)}, slutar ${fmtClock(h.expires)}.` : 'Jaktledaren startar jakten.';
+  const q = {action:'TEMPLATE', text:h.name || 'Jakt', dates, details:`${gname(x.g)}. ${ME_TAG[x.me]}. ${how}\nÖppna Jaktkartan för planering och karta: ${location.origin + location.pathname}`};
+  return 'https://calendar.google.com/calendar/render?' + Object.entries(q).map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&');
 }
 function calExport(xs, name){
   if(!xs.length){ toast('Inga kommande jakter att exportera.'); return; }

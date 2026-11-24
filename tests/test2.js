@@ -1017,6 +1017,14 @@ async function inviteRevokeAll(){
   { const [dl] = await Promise.all([A.waitForEvent('download'), A.click(`#calBox [data-c="ics1"][data-h="${h3}"]`)]);
     const txt = require('fs').readFileSync(await dl.path(), 'utf8');
     check(dl.suggestedFilename() === `jakt-${futISO}.ics` && txt.split('BEGIN:VEVENT').length === 2 && txt.includes(`UID:${gid}-${h3}@jaktkartan`), 'Till telefonens kalender ger en fil med bara den jakten'); }
+  // Google Kalender: en länk som öppnar en ny händelse med jakten ifylld
+  { const l = A.locator(`#calBox .cal-row:has([data-c="ics1"][data-h="${h3}"]) a[data-gcal]`), href = await l.getAttribute('href'), u = new URL(href), q = u.searchParams;
+    const [y, m, d] = futISO.split('-').map(Number), nx = new Date(y, m - 1, d + 1), nxs = `${nx.getFullYear()}${String(nx.getMonth() + 1).padStart(2, '0')}${String(nx.getDate()).padStart(2, '0')}`;
+    check(u.origin + u.pathname === 'https://calendar.google.com/calendar/render' && q.get('action') === 'TEMPLATE' && q.get('text') === H3().name && q.get('dates') === futISO.replace(/-/g, '') + '/' + nxs
+      && q.get('details').includes('Älglaget') && !href.includes(H3().code) && await l.getAttribute('target') === '_blank' && (await l.getAttribute('rel')).includes('noopener'),
+      `Google Kalender öppnar en ny heldagshändelse med jakten ifylld (${q.get('dates')})`);
+    const t = await A.evaluate(([g, h]) => { const x = __fk.calHunts().find(y => y.g.id === g && y.hid === h); return __fk.calGcalUrl(Object.assign({}, x, {h:Object.assign({}, x.h, {manual:false, starts:Date.UTC(2027, 0, 3, 7, 30), expires:Date.UTC(2027, 0, 3, 14, 0)})})); }, [gid, h3]);
+    check(new URL(t).searchParams.get('dates') === '20270103T073000Z/20270103T140000Z', 'en jakt med starttid får start- och sluttid i Google Kalender'); }
   await A.click(`#calBox [data-c="go"][data-h="${h3}"]`); await W(A, 500);
   check(!(await A.isVisible('#calBox')) && await A.isVisible(`#hc-${gid}-${h3}`) && (await A.getAttribute('#sub-plan', 'aria-selected')) === 'true', 'Visa jakten visar jaktkortet under jaktlagets flik Planera');
   // Inbjudna: bara utvalda medlemmar
