@@ -30,6 +30,56 @@ function calHunts(){
   return out.sort((a, b) => huntSort(a.h) - huntSort(b.h));
 }
 const calInvites = () => calHunts().filter(x => x.me === 'invite' && x.st !== 'ended');
+/* ---------- Avisering om nya inbjudningar ----------
+   En inbjudan är en jakt i ett lag man är medlem i, som man är inbjuden till, inte själv har skapat och inte har svarat på.
+   Varje ny inbjudan aviseras en gång per enhet: en rad i appen, och en avisering i telefonen (i appen alltid, på webben
+   när sidan inte syns). Vilka som är aviserade sparas på enheten. Klockan och Kalender i menyn visar hur många som väntar
+   på svar. Svarar man tas aviseringen i telefonen bort.
+   Körs när jakterna eller svaren ändras, även med släckt skärm. Utan push-server kommer aviseringen bara medan appen
+   eller sidan är igång (även i bakgrunden), annars nästa gång den öppnas. */
+const INV_KEY = () => 'jk.huntInv.' + myUid();
+function huntInvitesCheck(){
+  if(typeof cloud === 'undefined' || cloud.status !== 'in' || !cloud.user) return;
+  const now = Date.now(), me = myUid(), pend = {};
+  let seen = {}; try { seen = JSON.parse(lsGet(INV_KEY()) || '{}') || {}; } catch(e){}
+  const loaded = new Set();
+  for(const g of Object.values(cloud.groups)){
+    if(g.kind !== 'member' || !g.meta || !g.huntsLoaded || !g.rsvpLoaded) continue;
+    loaded.add(g.id);
+    for(const [hid, h] of Object.entries(g.hunts || {})){
+      if(!h || !(h.expires > now) || h.by === me || !invitedTo(g, hid) || rsvpOf(g, hid)) continue;
+      const st = huntState(h, now); if(st === 'ended' || st === 'gone') continue;
+      pend[g.id + '/' + hid] = {g, hid, h};
+    }
+  }
+  const add = Object.keys(pend).filter(k => !seen[k]);
+  // Besvarad, borttagen eller inte längre inbjuden: aviseringen i telefonen tas bort (bara för lag som är laddade)
+  const gone = Object.keys(seen).filter(k => !pend[k] && (seen[k] < now || loaded.has(k.split('/')[0])));
+  if(gone.length && typeof NAT !== 'undefined' && NAT.has('LocalNotifications'))
+    NAT.call('LocalNotifications', 'cancel', {notifications:gone.map(k => ({id:natId('inv/' + k)}))}).catch(() => {});
+  for(const k of gone) delete seen[k];
+  for(const k of add) seen[k] = pend[k].h.expires;
+  if(add.length || gone.length) lsSet(INV_KEY(), JSON.stringify(seen));
+  if(add.length){
+    const xs = add.map(k => pend[k]).sort((a, b) => huntSort(a.h) - huntSort(b.h)), one = xs[0];
+    const line = x => `${x.h.name || 'Jakt'} (${gname(x.g)}), ${dayLabel(huntDay(x.h))}`;
+    const title = xs.length === 1 ? 'Inbjudan: ' + (one.h.name || 'Jakt') : `${xs.length} nya inbjudningar till jakter`;
+    const body = xs.length === 1 ? `${gname(one.g)}, ${dayLabel(huntDay(one.h))}. Svara Jag deltar eller Avböj i kalendern.` : xs.map(line).join('\n');
+    if(!document.hidden) toast(xs.length === 1 ? `Du är inbjuden till ${line(one)}. Svara i kalendern.` : `Du är inbjuden till ${xs.length} jakter. Svara i kalendern.`, 7000);
+    huntInviteSys(xs.length === 1 ? 'inv/' + add[0] : 'inv/' + add.join(','), title, body);
+  }
+  if(typeof msgBell === 'function') msgBell();
+}
+function huntInviteSys(key, title, body){
+  if(typeof NAT !== 'undefined' && NAT.on){ natNotify(key, title, body, 'jakt'); return; }
+  if(!document.hidden) return;
+  try {
+    if(window.Notification && Notification.permission === 'granted' && navigator.serviceWorker) navigator.serviceWorker.getRegistration().then(r => {
+      const opt = {body, tag:key, icon:'icons/icon-192.png'};
+      if(r) r.showNotification(title, opt); else new Notification(title, opt);
+    }).catch(() => {});
+  } catch(e){}
+}
 const dayLabel = iso => { const [y, m, d] = iso.split('-').map(Number), dt = new Date(y, m - 1, d); return `${WDAY[dt.getDay()]} ${d} ${MON[m - 1]}`; };
 function calWhen(x){
   const h = x.h;

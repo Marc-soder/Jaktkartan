@@ -711,8 +711,9 @@ async function inviteRevokeAll(){
   check(!(await A.evaluate(() => __fk.NAT.on)) && (await A.evaluate(() => window.__od)) > 0, 'på webben är appläget av, och positionen tas bort när anslutningen bryts (onDisconnect)');
   const BN = await mkPage(browser, 'bob', '', {native:true});
   const nat = (pl, m) => BN.evaluate(([a, b]) => window.__nat.calls.filter(c => c.plugin === a && (!b || c.method === b)), [pl, m]);
-  check(await BN.evaluate(() => __fk.NAT.on) && (await nat('LocalNotifications', 'createChannel')).map(c => c.opts.id).join() === 'sos,jakt,msg', 'appen känns igen, och kanaler för nödlarm, jaktstart och meddelanden skapas');
+  check(await BN.evaluate(() => __fk.NAT.on) && (await nat('LocalNotifications', 'createChannel')).map(c => c.opts.id).join() === 'sos,jakt,msg,upd', 'appen känns igen, och kanaler för nödlarm, jaktstart, meddelanden och ny version skapas');
   await go(BN, 'konto'); await BN.click('[data-j="login-google"]'); await W(BN, 700);
+  const updNs = (await nat('LocalNotifications', 'schedule')).flatMap(c => c.opts.notifications).filter(n => n.title === 'Ny version av Jaktkartan: 1.6');   // aviserades när appen startade
   check((await BN.evaluate(() => __fk.cloud.user && __fk.cloud.user.uid)) === 'bob' && (await BN.evaluate(() => window.__popup)) === 0 && (await nat('FirebaseAuthentication', 'signInWithGoogle'))[0].opts.skipNativeAuth === true, 'i appen loggar man in med Google i telefonens eget system, utan popup');
   check(await BN.isVisible('#paneKonto [data-j="notif"]'), 'Mitt konto erbjuder Tillåt aviseringar i appen');
   await BN.click('#paneKonto [data-j="notif"]'); await W(BN, 300);
@@ -732,9 +733,12 @@ async function inviteRevokeAll(){
   check(ref.length === 1 && ref[0].data.refresh_token === 'rt-bob' && ref[0].data.grant_type === 'refresh_token' && ref[0].headers.Referer.includes('jaktkartan.html') && bp().lat === 58.7225, 'med släckt skärm förnyas inloggningen med telefonens HTTP (med Referer för API-nyckeln), och positionen kommer fram');
   // Appens egen GPS med släckt skärm: varje mätning skickas när man rör sig. Incheckad på passet mäts och skickas
   // positionen varje minut, eller direkt när man har rört sig mer än 40 m.
-  { const puts = () => BN.evaluate(() => window.__nat.http.filter(h => h.method === 'PUT').length), p0 = await puts();
+  { // Sändningarna går i en kö (en i taget): vänta tills den är tom innan något räknas
+    const idle = async () => { for(let i = 0; i < 40 && await BN.evaluate(() => __fk.natQ.busy); i++) await W(BN, 100); };
+    await idle();
+    const puts = () => BN.evaluate(() => window.__nat.http.filter(h => h.method === 'PUT').length), p0 = await puts();
     const ivs = async () => (await nat('JaktGps', 'setInterval')).map(c => c.opts.interval);
-    const emit = (lat, back) => BN.evaluate(([la, b]) => { if(b) __fk.cloud.lastSent = Date.now() - b; window.__natEmit(la, 14.61252, 5); }, [lat, back || 0]).then(() => W(BN, 500));
+    const emit = (lat, back) => BN.evaluate(([la, b]) => { if(b) __fk.cloud.lastSent = Date.now() - b; window.__natEmit(la, 14.61252, 5); }, [lat, back || 0]).then(() => W(BN, 300)).then(idle);
     await emit(58.72252, 9000);
     const p1 = await puts();
     check(p1 === p0 + 1 && bp().lat === 58.72252, `med appens egen GPS skickas varje mätning när man rör sig, även med släckt skärm (${p0}, ${p1})`);
@@ -780,6 +784,15 @@ async function inviteRevokeAll(){
   const canc = (await nat('LocalNotifications', 'cancel')).flatMap(c => c.opts.notifications).map(n => n.id);
   check(rem && canc.includes(rem.id), 'avböjer man tas påminnelsen bort');
   await BN.evaluate(g => { delete __fk.cloud.groups[g].hunts.hx; delete __fk.cloud.groups[g].huntRsvp.hx; }, gid);
+  // Ny inbjudan: avisering i telefonen (en gång), siffra på klockan och vid Kalender; svarar man tas aviseringen bort
+  await BN.evaluate(([g, at]) => { const G = __fk.cloud.groups[g]; G.hunts.hy = {name:'Drevjakt i Tiveden', by:'alice', starts:at, expires:at + 3600000, day:'2026-12-05', manual:true, invited:{bob:true}}; __fk.huntInvitesCheck(); __fk.huntInvitesCheck(); }, [gid, remAt]); await W(BN, 200);
+  { const ns = (await nat('LocalNotifications', 'schedule')).flatMap(c => c.opts.notifications).filter(n => n.title === 'Inbjudan: Drevjakt i Tiveden');
+    const bell = await BN.evaluate(() => ({n:document.querySelector('#btnBell .bell-n').textContent, vis:!document.getElementById('btnBell').hidden, lbl:document.getElementById('btnBell').getAttribute('aria-label'), cal:document.getElementById('tab-kalender').innerText}));
+    check(ns.length === 1 && ns[0].channelId === 'jakt' && ns[0].body.includes('Älglaget') && ns[0].body.includes('5 dec') && bell.vis && /inbjud/.test(bell.lbl) && /\d/.test(bell.cal), `en ny inbjudan aviseras en gång i telefonen, och klockan och Kalender i menyn visar den (${ns.length}, ${JSON.stringify(bell)})`); }
+  await BN.evaluate(g => { __fk.cloud.groups[g].huntRsvp.hy = {bob:{name:'Bob Test', t:Date.now()}}; __fk.huntInvitesCheck(); }, gid); await W(BN, 200);
+  { const canc = (await nat('LocalNotifications', 'cancel')).flatMap(c => c.opts.notifications).map(n => n.id), id = await BN.evaluate(g => __fk.natId('inv/' + g + '/hy'), gid);
+    check(canc.includes(id) && !(await BN.evaluate(() => __fk.calInvites().some(x => x.hid === 'hy'))), 'svarar man på inbjudan tas aviseringen i telefonen bort'); }
+  await BN.evaluate(g => { delete __fk.cloud.groups[g].hunts.hy; delete __fk.cloud.groups[g].huntRsvp.hy; __fk.huntInvitesCheck(); }, gid);
   // Export i appen: filen skrivs i appens cache och öppnas i Androids Dela-meny (webbvyn kan inte ladda ned filer)
   if(await BN.isVisible('#sosClose')) await BN.click('#sosClose');   // nödlarmet från testet ovan
   await go(BN, 'data'); await BN.click('[data-act="export-json"]'); await W(BN, 300);
@@ -792,6 +805,12 @@ async function inviteRevokeAll(){
   // Ny version av appen från GitHub Releases: raden visas, första gången måste appen få installera, sedan laddas den ned
   check(await BN.isVisible('#appUpdBar') && (await BN.innerText('#appUpdBar')).includes('Ny version av appen: 1.6') && ghCalls.length >= 1 && ghCalls.every(c => c.native && c.url.endsWith('/repos/Marc-soder/Jaktkartan/releases/latest')), `appen ser att version 1.6 finns på GitHub (${JSON.stringify(ghCalls)})`);
   check(!(await A.isVisible('#appUpdBar')) && !(await A.evaluate(() => __fk.NAT.app)), 'webbsidan söker inte efter appversioner');
+  { const ns = updNs.concat((await nat('LocalNotifications', 'schedule')).flatMap(c => c.opts.notifications).filter(n => n.title === 'Ny version av Jaktkartan: 1.6'));
+    const b = await BN.evaluate(() => ({lbl:document.getElementById('btnBell').getAttribute('aria-label'), vis:!document.getElementById('btnBell').hidden, konto:document.getElementById('tab-konto').innerText}));
+    check(ns.length === 1 && ns[0].channelId === 'upd' && b.vis && b.lbl.includes('ny version av appen') && /Mitt konto\s*1/.test(b.konto), `en ny version aviseras som andra nyheter: i telefonen (en gång), på klockan och vid Mitt konto (${ns.length}, ${JSON.stringify(b)})`); }
+  await BN.evaluate(() => __fk.natUpdAsk()); await W(BN, 200);
+  check((await BN.innerText('.modal')).includes('Version 1.6 finns. Du har 1.4') && await BN.isVisible('#natUpdYes'), 'klockan frågar om appen ska uppdateras nu');
+  await BN.click('#natUpdLater'); await W(BN, 150);
   await go(BN, 'konto');
   check((await BN.innerText('#paneKonto')).includes('Appen för Android, version 1.4. Version 1.6 finns.'), 'Mitt konto visar appens version och att en ny finns');
   await BN.click('#appUpdBar [data-natupd]'); await W(BN, 200);
@@ -806,6 +825,8 @@ async function inviteRevokeAll(){
   await BN.evaluate(() => { window.__nat.ver = 6; localStorage.removeItem('jk.natUpd'); Object.defineProperty(document, 'hidden', {configurable:true, get:() => false}); document.dispatchEvent(new Event('visibilitychange')); }); await W(BN, 400);
   await BN.click('#paneKonto [data-j="app-check"]'); await W(BN, 400);
   check(!(await BN.isVisible('#appUpdBar')) && (await BN.innerText('#paneKonto')).includes('version 1.6.') && (await BN.innerText('#toast')).includes('Appen är uppdaterad'), 'efter uppdateringen försvinner raden, och Sök efter uppdatering säger att appen är uppdaterad');
+  { const canc = (await nat('LocalNotifications', 'cancel')).flatMap(c => c.opts.notifications).map(n => n.id), id = await BN.evaluate(() => __fk.natId('upd/6'));
+    check(canc.includes(id) && !(await BN.evaluate(() => document.getElementById('btnBell').getAttribute('aria-label'))).includes('ny version') && (await BN.evaluate(() => document.getElementById('tab-konto').innerText)).trim() === 'Mitt konto', 'efter uppdateringen tas aviseringen och siffrorna bort'); }
   // Delningen startade medan appen låg i bakgrunden: Android vägrar, och positionen startas när appen syns igen
   { const n0 = (await nat('JaktGps', 'start')).length;
     await BN.evaluate(() => { Object.defineProperty(document, 'hidden', {configurable:true, get:() => true}); window.__natErr('BACKGROUND'); }); await W(BN, 200);
@@ -959,6 +980,9 @@ async function inviteRevokeAll(){
   await B.fill('#hfDay', futISO); await B.dispatchEvent('#hfDay', 'change'); await B.fill('#hfEnd', '23:58');
   check((await B.inputValue('#hfName')) === `Jakt ${futD.getDate()} ${MONS[futD.getMonth()]} ${futD.getFullYear()}`, `namnet följer det valda datumet: ${await B.inputValue('#hfName')}`);
   await B.click('#hfOk'); await W(B, 700);
+  { const t = await A.innerText('#toast'), cal = await A.evaluate(() => document.getElementById('tab-kalender').innerText);
+    check(t.includes('Du är inbjuden till') && t.includes('Älglaget') && /\d/.test(cal) && await A.isVisible('#btnBell.on'), `Alice får en rad om inbjudan, och klockan och Kalender i menyn visar den (${t} | ${cal})`); }
+  check(!(await B.innerText('#toast')).includes('Du är inbjuden'), 'den som planerar jakten får ingen inbjudan till den');
   const h3 = Object.keys(data.groups[gid].hunts).find(k => data.groups[gid].hunts[k].day === futISO), H3 = () => data.groups[gid].hunts[h3];
   check(h3 && H3().manual && H3().expires === new Date(futD.getFullYear(), futD.getMonth(), futD.getDate(), 23, 58, 59).getTime() && H3().starts === H3().expires - 1000 && data.huntCodes[H3().code].hid === h3, 'jakten planeras för ett datum långt fram, med jaktkod');
   check(await A.evaluate(([g, h]) => firebase.database().ref('groups/' + g + '/huntPos/' + h + '/alice').set({lat:1, lng:1, t:Date.now(), name:'A'}).then(() => 'ok', () => 'denied'), [gid, h3]) === 'denied', 'den planerade jakten tar inte emot positioner');

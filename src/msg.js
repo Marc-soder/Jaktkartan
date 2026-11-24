@@ -179,18 +179,29 @@ function msgMarkRead(g){
   msgBell(); if(typeof renderNav === 'function') renderNav();
   return true;
 }
-/* Klockan högst upp: syns under pågående jakter, med antal olästa. Ett tryck öppnar chatten. */
+/* Klockan högst upp: syns under pågående jakter, när det finns inbjudningar att svara på och när en ny version av
+   appen finns. Siffran är olästa meddelanden, obesvarade inbjudningar och en ny version. Ett tryck öppnar i den
+   ordningen: chatten, kalendern, frågan om att uppdatera. Kalender och Mitt konto i menyn har egna siffror. */
+const menuBadge = (id, label, n, what) => { const el = document.getElementById(id); if(el) el.innerHTML = label + (n ? `<span class="badge" aria-label="${esc(what)}">${n > 9 ? '9+' : n}</span>` : ''); };
 function msgBell(){
   const b = document.getElementById('btnBell'); if(!b || typeof cloud === 'undefined') return;
+  const inv = cloud.user && cloud.status === 'in' && typeof calInvites === 'function' ? calInvites().length : 0;
+  const upd = typeof NAT !== 'undefined' && NAT.upd ? 1 : 0;
   const n = cloud.user ? msgUnreadAll() : 0, live = !!cloud.user && msgCryptoOk() && Object.values(cloud.groups).some(g => liveHunts(g).length);
-  b.hidden = !live; b.classList.toggle('on', n > 0);
-  b.querySelector('.bell-n').textContent = n ? (n > 9 ? '9+' : String(n)) : '';
-  b.setAttribute('aria-label', n ? `Meddelanden: ${n} olästa` : 'Meddelanden');
+  const all = n + inv + upd;
+  b.hidden = !live && !inv && !upd; b.classList.toggle('on', all > 0);
+  b.querySelector('.bell-n').textContent = all ? (all > 9 ? '9+' : String(all)) : '';
+  b.setAttribute('aria-label', [n ? `${n} olästa meddelanden` : '', inv ? `${inv} ${inv === 1 ? 'inbjudan' : 'inbjudningar'} att svara på` : '', upd ? 'ny version av appen' : ''].filter(Boolean).join(', ') || 'Meddelanden');
+  menuBadge('tab-kalender', 'Kalender', inv, `${inv} obesvarade inbjudningar`);
+  menuBadge('tab-konto', 'Mitt konto', upd, 'Ny version av appen');
 }
 function msgBellOpen(){
   const gs = Object.values(cloud.groups).filter(g => liveHunts(g).length);
-  const g = gs.find(x => msgUnread(x)) || gs[0]; if(!g) return;
-  openTeam(g.id, 'chat'); if(!isDesktop()) setSheet('full');
+  const inv = typeof calInvites === 'function' ? calInvites() : [];
+  const g = gs.find(x => msgUnread(x)) || (inv.length || (typeof NAT !== 'undefined' && NAT.upd) ? null : gs[0]);
+  if(g){ openTeam(g.id, 'chat'); if(!isDesktop()) setSheet('full'); return; }
+  if(inv.length){ openCal(inv[0].day); return; }
+  if(typeof NAT !== 'undefined' && NAT.upd) natUpdAsk();
 }
 /* Avisering i telefonen när appen ligger i bakgrunden: i appen via telefonens egna aviseringar, på webben via
    service workern (om aviseringar är tillåtna). */

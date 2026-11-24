@@ -747,6 +747,7 @@ a{color:var(--accent)}
 .ctrl.bell{position:relative}.ctrl.bell.on{color:var(--danger)}
 .ctrl.bell .bell-n{position:absolute;top:-5px;right:-5px;min-width:19px;height:19px;padding:0 5px;border-radius:10px;background:var(--danger);color:#fff;font:700 11px/19px var(--font-body);display:none}
 .ctrl.bell.on .bell-n{display:block}
+.dr-item .badge{display:inline-block;min-width:18px;height:18px;margin-left:8px;padding:0 5px;border-radius:9px;background:var(--danger);color:#fff;font:700 11px/18px var(--font-body);vertical-align:2px;text-align:center}
 .stab .badge{display:inline-block;min-width:18px;height:18px;margin-left:5px;padding:0 5px;border-radius:9px;background:var(--danger);color:#fff;font:700 11px/18px var(--font-body);letter-spacing:0;vertical-align:1px}
 .ctrl{width:44px;height:44px;border-radius:12px;background:var(--surface);color:var(--fg);border:1px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.18);display:grid;place-items:center;padding:0}
 .ctrl svg{width:22px;height:22px}
@@ -2864,11 +2865,13 @@ function natInit(){
     NAT.call('LocalNotifications', 'createChannel', {id:'sos', name:'Nödlarm', description:'Nödlarm från jaktlaget', importance:5, visibility:1, vibration:true}).catch(() => {});
     NAT.call('LocalNotifications', 'createChannel', {id:'jakt', name:'Jakten börjar', description:'När en jakt du deltar i startar', importance:4, visibility:1, vibration:true}).catch(() => {});
     NAT.call('LocalNotifications', 'createChannel', {id:'msg', name:'Meddelanden', description:'Meddelanden i jakten', importance:4, visibility:0, vibration:true}).catch(() => {});
+    NAT.call('LocalNotifications', 'createChannel', {id:'upd', name:'Ny version av appen', description:'När en ny version av Jaktkartan finns', importance:3, visibility:1, vibration:false}).catch(() => {});
     NAT.call('LocalNotifications', 'checkPermissions').then(r => { NAT.notif = (r && r.display) || 'unknown'; renderJakt(); }).catch(() => {});
   }
   if(NAT.has('AppUpdate')){
     natUpdateCheck();
     document.addEventListener('visibilitychange', () => { if(!document.hidden) natUpdateCheck(); });
+    setInterval(() => natUpdateCheck(), NAT_UPD_MS);   // även när appen ligger i bakgrunden under en jakt
     const bar = document.getElementById('appUpdBar');
     if(bar) bar.addEventListener('click', e => { if(e.target.closest('[data-natupd]')) natUpdateGo(); });
   }
@@ -3021,10 +3024,12 @@ async function natShareFile(name, text){
 
 /* ---------- Ny version av appen ----------
    Appen frågar GitHub efter den senaste releasen (app-1.<nr>, nr = versionCode, se .github/workflows/android.yml),
-   högst var sjätte timme. Finns en nyare visas raden "Ny version av appen". Uppdatera laddar ned APK-filen och öppnar
-   Androids installerare, som frågar en gång till. Första gången måste Jaktkartan få installera appar ("Tillåt från
-   den här källan"). Android installerar bara en uppdatering som är signerad med samma nyckel. */
-const NAT_UPD_KEY = 'jk.natUpd', NAT_UPD_MS = 6 * 3600000;
+   högst en gång i timmen. Finns en nyare aviseras den som andra nyheter (natUpdNotify): raden "Ny version av appen"
+   överst, en siffra på klockan och vid Mitt konto i menyn, en rad i appen och en avisering i telefonen (en gång per
+   version). Uppdatera laddar ned APK-filen och öppnar Androids installerare, som frågar en gång till. Första gången
+   måste Jaktkartan få installera appar ("Tillåt från den här källan"). Android installerar bara en uppdatering som är
+   signerad med samma nyckel. */
+const NAT_UPD_KEY = 'jk.natUpd', NAT_UPD_MS = 3600000, NAT_UPD_SEEN = 'jk.natUpdSeen';
 const NAT_RELEASE = 'https://api.github.com/repos/Marc-soder/Jaktkartan/releases/latest';
 async function natUpdateCheck(force){
   if(!NAT.has('AppUpdate')) return null;
@@ -3040,8 +3045,29 @@ async function natUpdateCheck(force){
     }
     NAT.upd = c.code > (+NAT.app.versionCode || 0) && c.url ? c : null;
   } catch(e){ if(force) toast('Kunde inte söka efter uppdateringar. ' + String(e && e.message || '').slice(0, 80), 6000); }
-  natUpdBar(); renderKonto();
+  natUpdBar(); natUpdNotify(); renderKonto(); if(typeof msgBell === 'function') msgBell();
   return NAT.upd;
+}
+/* En gång per version: en rad i appen och en avisering i telefonen. Är appen uppdaterad tas aviseringen bort. */
+function natUpdNotify(){
+  const seen = +(lsGet(NAT_UPD_SEEN) || 0), u = NAT.upd;
+  if(!u){
+    if(seen && NAT.app && seen <= (+NAT.app.versionCode || 0)){ NAT.call('LocalNotifications', 'cancel', {notifications:[{id:natId('upd/' + seen)}]}).catch(() => {}); lsSet(NAT_UPD_SEEN, '0'); }
+    return;
+  }
+  if(seen === u.code) return;
+  lsSet(NAT_UPD_SEEN, String(u.code));
+  natNotify('upd/' + u.code, 'Ny version av Jaktkartan: ' + u.name, 'Öppna appen och tryck Uppdatera.', 'upd');
+  if(!document.hidden) toast(`Ny version av appen: ${u.name}. Tryck Uppdatera överst.`, 8000);
+}
+/* Klockan när bara en ny version väntar: fråga om appen ska uppdateras nu. */
+function natUpdAsk(){
+  const u = NAT.upd; if(!u) return;
+  openModal(`<h2>Ny version av appen</h2><p>Version ${esc(u.name)} finns${NAT.app && NAT.app.versionName ? `. Du har ${esc(NAT.app.versionName)}` : ''}.</p>
+    <div class="actions"><button class="btn primary grow" type="button" id="natUpdYes">Uppdatera</button><button class="btn ghost" type="button" id="natUpdLater">Senare</button></div>`, m => {
+    m.querySelector('#natUpdLater').addEventListener('click', closeModal);
+    m.querySelector('#natUpdYes').addEventListener('click', () => { closeModal(); natUpdateGo(); });
+  });
 }
 function natUpdBar(text){
   const bar = document.getElementById('appUpdBar'); if(!bar) return;
@@ -3243,10 +3269,10 @@ function subGroup(gid, kind){
       } });
     on('areas', v => { g.areas = v || {}; applyRemote(gid); });
     on('pins', v => { g.pins = v || {}; applyRemote(gid); });
-    on('hunts', v => { g.hunts = v || {}; g.huntsLoaded = true; scheduleRender(); syncHuntPos(); });
+    on('hunts', v => { g.hunts = v || {}; g.huntsLoaded = true; scheduleRender(); syncHuntPos(); huntInvitesCheck(); });
     on('guests', v => { g.guests = v || {}; scheduleRender(); });
     on('huntPlan', v => { const prev = g.planLoaded ? g.huntPlan : undefined; g.huntPlan = v || {}; g.planLoaded = true; planOnData(g, prev); scheduleRender(); });
-    on('huntRsvp', v => { g.huntRsvp = v || {}; syncHuntPos(); });
+    on('huntRsvp', v => { g.huntRsvp = v || {}; g.rsvpLoaded = true; syncHuntPos(); huntInvitesCheck(); });
   } else {
     on('guests/' + myUid(), v => {
       g.guest = v;
@@ -6488,18 +6514,29 @@ function msgMarkRead(g){
   msgBell(); if(typeof renderNav === 'function') renderNav();
   return true;
 }
-/* Klockan högst upp: syns under pågående jakter, med antal olästa. Ett tryck öppnar chatten. */
+/* Klockan högst upp: syns under pågående jakter, när det finns inbjudningar att svara på och när en ny version av
+   appen finns. Siffran är olästa meddelanden, obesvarade inbjudningar och en ny version. Ett tryck öppnar i den
+   ordningen: chatten, kalendern, frågan om att uppdatera. Kalender och Mitt konto i menyn har egna siffror. */
+const menuBadge = (id, label, n, what) => { const el = document.getElementById(id); if(el) el.innerHTML = label + (n ? `<span class="badge" aria-label="${esc(what)}">${n > 9 ? '9+' : n}</span>` : ''); };
 function msgBell(){
   const b = document.getElementById('btnBell'); if(!b || typeof cloud === 'undefined') return;
+  const inv = cloud.user && cloud.status === 'in' && typeof calInvites === 'function' ? calInvites().length : 0;
+  const upd = typeof NAT !== 'undefined' && NAT.upd ? 1 : 0;
   const n = cloud.user ? msgUnreadAll() : 0, live = !!cloud.user && msgCryptoOk() && Object.values(cloud.groups).some(g => liveHunts(g).length);
-  b.hidden = !live; b.classList.toggle('on', n > 0);
-  b.querySelector('.bell-n').textContent = n ? (n > 9 ? '9+' : String(n)) : '';
-  b.setAttribute('aria-label', n ? `Meddelanden: ${n} olästa` : 'Meddelanden');
+  const all = n + inv + upd;
+  b.hidden = !live && !inv && !upd; b.classList.toggle('on', all > 0);
+  b.querySelector('.bell-n').textContent = all ? (all > 9 ? '9+' : String(all)) : '';
+  b.setAttribute('aria-label', [n ? `${n} olästa meddelanden` : '', inv ? `${inv} ${inv === 1 ? 'inbjudan' : 'inbjudningar'} att svara på` : '', upd ? 'ny version av appen' : ''].filter(Boolean).join(', ') || 'Meddelanden');
+  menuBadge('tab-kalender', 'Kalender', inv, `${inv} obesvarade inbjudningar`);
+  menuBadge('tab-konto', 'Mitt konto', upd, 'Ny version av appen');
 }
 function msgBellOpen(){
   const gs = Object.values(cloud.groups).filter(g => liveHunts(g).length);
-  const g = gs.find(x => msgUnread(x)) || gs[0]; if(!g) return;
-  openTeam(g.id, 'chat'); if(!isDesktop()) setSheet('full');
+  const inv = typeof calInvites === 'function' ? calInvites() : [];
+  const g = gs.find(x => msgUnread(x)) || (inv.length || (typeof NAT !== 'undefined' && NAT.upd) ? null : gs[0]);
+  if(g){ openTeam(g.id, 'chat'); if(!isDesktop()) setSheet('full'); return; }
+  if(inv.length){ openCal(inv[0].day); return; }
+  if(typeof NAT !== 'undefined' && NAT.upd) natUpdAsk();
 }
 /* Avisering i telefonen när appen ligger i bakgrunden: i appen via telefonens egna aviseringar, på webben via
    service workern (om aviseringar är tillåtna). */
@@ -6758,6 +6795,56 @@ function calHunts(){
   return out.sort((a, b) => huntSort(a.h) - huntSort(b.h));
 }
 const calInvites = () => calHunts().filter(x => x.me === 'invite' && x.st !== 'ended');
+/* ---------- Avisering om nya inbjudningar ----------
+   En inbjudan är en jakt i ett lag man är medlem i, som man är inbjuden till, inte själv har skapat och inte har svarat på.
+   Varje ny inbjudan aviseras en gång per enhet: en rad i appen, och en avisering i telefonen (i appen alltid, på webben
+   när sidan inte syns). Vilka som är aviserade sparas på enheten. Klockan och Kalender i menyn visar hur många som väntar
+   på svar. Svarar man tas aviseringen i telefonen bort.
+   Körs när jakterna eller svaren ändras, även med släckt skärm. Utan push-server kommer aviseringen bara medan appen
+   eller sidan är igång (även i bakgrunden), annars nästa gång den öppnas. */
+const INV_KEY = () => 'jk.huntInv.' + myUid();
+function huntInvitesCheck(){
+  if(typeof cloud === 'undefined' || cloud.status !== 'in' || !cloud.user) return;
+  const now = Date.now(), me = myUid(), pend = {};
+  let seen = {}; try { seen = JSON.parse(lsGet(INV_KEY()) || '{}') || {}; } catch(e){}
+  const loaded = new Set();
+  for(const g of Object.values(cloud.groups)){
+    if(g.kind !== 'member' || !g.meta || !g.huntsLoaded || !g.rsvpLoaded) continue;
+    loaded.add(g.id);
+    for(const [hid, h] of Object.entries(g.hunts || {})){
+      if(!h || !(h.expires > now) || h.by === me || !invitedTo(g, hid) || rsvpOf(g, hid)) continue;
+      const st = huntState(h, now); if(st === 'ended' || st === 'gone') continue;
+      pend[g.id + '/' + hid] = {g, hid, h};
+    }
+  }
+  const add = Object.keys(pend).filter(k => !seen[k]);
+  // Besvarad, borttagen eller inte längre inbjuden: aviseringen i telefonen tas bort (bara för lag som är laddade)
+  const gone = Object.keys(seen).filter(k => !pend[k] && (seen[k] < now || loaded.has(k.split('/')[0])));
+  if(gone.length && typeof NAT !== 'undefined' && NAT.has('LocalNotifications'))
+    NAT.call('LocalNotifications', 'cancel', {notifications:gone.map(k => ({id:natId('inv/' + k)}))}).catch(() => {});
+  for(const k of gone) delete seen[k];
+  for(const k of add) seen[k] = pend[k].h.expires;
+  if(add.length || gone.length) lsSet(INV_KEY(), JSON.stringify(seen));
+  if(add.length){
+    const xs = add.map(k => pend[k]).sort((a, b) => huntSort(a.h) - huntSort(b.h)), one = xs[0];
+    const line = x => `${x.h.name || 'Jakt'} (${gname(x.g)}), ${dayLabel(huntDay(x.h))}`;
+    const title = xs.length === 1 ? 'Inbjudan: ' + (one.h.name || 'Jakt') : `${xs.length} nya inbjudningar till jakter`;
+    const body = xs.length === 1 ? `${gname(one.g)}, ${dayLabel(huntDay(one.h))}. Svara Jag deltar eller Avböj i kalendern.` : xs.map(line).join('\n');
+    if(!document.hidden) toast(xs.length === 1 ? `Du är inbjuden till ${line(one)}. Svara i kalendern.` : `Du är inbjuden till ${xs.length} jakter. Svara i kalendern.`, 7000);
+    huntInviteSys(xs.length === 1 ? 'inv/' + add[0] : 'inv/' + add.join(','), title, body);
+  }
+  if(typeof msgBell === 'function') msgBell();
+}
+function huntInviteSys(key, title, body){
+  if(typeof NAT !== 'undefined' && NAT.on){ natNotify(key, title, body, 'jakt'); return; }
+  if(!document.hidden) return;
+  try {
+    if(window.Notification && Notification.permission === 'granted' && navigator.serviceWorker) navigator.serviceWorker.getRegistration().then(r => {
+      const opt = {body, tag:key, icon:'icons/icon-192.png'};
+      if(r) r.showNotification(title, opt); else new Notification(title, opt);
+    }).catch(() => {});
+  } catch(e){}
+}
 const dayLabel = iso => { const [y, m, d] = iso.split('-').map(Number), dt = new Date(y, m - 1, d); return `${WDAY[dt.getDay()]} ${d} ${MON[m - 1]}`; };
 function calWhen(x){
   const h = x.h;
@@ -7218,7 +7305,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {NAT, natTok, natId, natGpsStart, checkedIn, joinByCode, renderPositions, follow, posFocus, pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {natQ, natUpdAsk, NAT, natTok, natId, natGpsStart, checkedIn, huntInvitesCheck, calInvites, joinByCode, renderPositions, follow, posFocus, pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

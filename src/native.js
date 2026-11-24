@@ -30,11 +30,13 @@ function natInit(){
     NAT.call('LocalNotifications', 'createChannel', {id:'sos', name:'Nödlarm', description:'Nödlarm från jaktlaget', importance:5, visibility:1, vibration:true}).catch(() => {});
     NAT.call('LocalNotifications', 'createChannel', {id:'jakt', name:'Jakten börjar', description:'När en jakt du deltar i startar', importance:4, visibility:1, vibration:true}).catch(() => {});
     NAT.call('LocalNotifications', 'createChannel', {id:'msg', name:'Meddelanden', description:'Meddelanden i jakten', importance:4, visibility:0, vibration:true}).catch(() => {});
+    NAT.call('LocalNotifications', 'createChannel', {id:'upd', name:'Ny version av appen', description:'När en ny version av Jaktkartan finns', importance:3, visibility:1, vibration:false}).catch(() => {});
     NAT.call('LocalNotifications', 'checkPermissions').then(r => { NAT.notif = (r && r.display) || 'unknown'; renderJakt(); }).catch(() => {});
   }
   if(NAT.has('AppUpdate')){
     natUpdateCheck();
     document.addEventListener('visibilitychange', () => { if(!document.hidden) natUpdateCheck(); });
+    setInterval(() => natUpdateCheck(), NAT_UPD_MS);   // även när appen ligger i bakgrunden under en jakt
     const bar = document.getElementById('appUpdBar');
     if(bar) bar.addEventListener('click', e => { if(e.target.closest('[data-natupd]')) natUpdateGo(); });
   }
@@ -187,10 +189,12 @@ async function natShareFile(name, text){
 
 /* ---------- Ny version av appen ----------
    Appen frågar GitHub efter den senaste releasen (app-1.<nr>, nr = versionCode, se .github/workflows/android.yml),
-   högst var sjätte timme. Finns en nyare visas raden "Ny version av appen". Uppdatera laddar ned APK-filen och öppnar
-   Androids installerare, som frågar en gång till. Första gången måste Jaktkartan få installera appar ("Tillåt från
-   den här källan"). Android installerar bara en uppdatering som är signerad med samma nyckel. */
-const NAT_UPD_KEY = 'jk.natUpd', NAT_UPD_MS = 6 * 3600000;
+   högst en gång i timmen. Finns en nyare aviseras den som andra nyheter (natUpdNotify): raden "Ny version av appen"
+   överst, en siffra på klockan och vid Mitt konto i menyn, en rad i appen och en avisering i telefonen (en gång per
+   version). Uppdatera laddar ned APK-filen och öppnar Androids installerare, som frågar en gång till. Första gången
+   måste Jaktkartan få installera appar ("Tillåt från den här källan"). Android installerar bara en uppdatering som är
+   signerad med samma nyckel. */
+const NAT_UPD_KEY = 'jk.natUpd', NAT_UPD_MS = 3600000, NAT_UPD_SEEN = 'jk.natUpdSeen';
 const NAT_RELEASE = 'https://api.github.com/repos/Marc-soder/Jaktkartan/releases/latest';
 async function natUpdateCheck(force){
   if(!NAT.has('AppUpdate')) return null;
@@ -206,8 +210,29 @@ async function natUpdateCheck(force){
     }
     NAT.upd = c.code > (+NAT.app.versionCode || 0) && c.url ? c : null;
   } catch(e){ if(force) toast('Kunde inte söka efter uppdateringar. ' + String(e && e.message || '').slice(0, 80), 6000); }
-  natUpdBar(); renderKonto();
+  natUpdBar(); natUpdNotify(); renderKonto(); if(typeof msgBell === 'function') msgBell();
   return NAT.upd;
+}
+/* En gång per version: en rad i appen och en avisering i telefonen. Är appen uppdaterad tas aviseringen bort. */
+function natUpdNotify(){
+  const seen = +(lsGet(NAT_UPD_SEEN) || 0), u = NAT.upd;
+  if(!u){
+    if(seen && NAT.app && seen <= (+NAT.app.versionCode || 0)){ NAT.call('LocalNotifications', 'cancel', {notifications:[{id:natId('upd/' + seen)}]}).catch(() => {}); lsSet(NAT_UPD_SEEN, '0'); }
+    return;
+  }
+  if(seen === u.code) return;
+  lsSet(NAT_UPD_SEEN, String(u.code));
+  natNotify('upd/' + u.code, 'Ny version av Jaktkartan: ' + u.name, 'Öppna appen och tryck Uppdatera.', 'upd');
+  if(!document.hidden) toast(`Ny version av appen: ${u.name}. Tryck Uppdatera överst.`, 8000);
+}
+/* Klockan när bara en ny version väntar: fråga om appen ska uppdateras nu. */
+function natUpdAsk(){
+  const u = NAT.upd; if(!u) return;
+  openModal(`<h2>Ny version av appen</h2><p>Version ${esc(u.name)} finns${NAT.app && NAT.app.versionName ? `. Du har ${esc(NAT.app.versionName)}` : ''}.</p>
+    <div class="actions"><button class="btn primary grow" type="button" id="natUpdYes">Uppdatera</button><button class="btn ghost" type="button" id="natUpdLater">Senare</button></div>`, m => {
+    m.querySelector('#natUpdLater').addEventListener('click', closeModal);
+    m.querySelector('#natUpdYes').addEventListener('click', () => { closeModal(); natUpdateGo(); });
+  });
 }
 function natUpdBar(text){
   const bar = document.getElementById('appUpdBar'); if(!bar) return;
