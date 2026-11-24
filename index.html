@@ -6866,6 +6866,7 @@ function calRow(x, inModal){
     }
   }
   if(inModal) btns.push(`<button class="btn sm ghost" type="button" data-c="go" data-g="${esc(x.g.id)}" data-h="${esc(x.hid)}">Visa jakten</button>`);
+  if(inModal && icsWanted(x)) btns.push(`<button class="btn sm ghost" type="button" data-c="ics1" data-g="${esc(x.g.id)}" data-h="${esc(x.hid)}">Till telefonens kalender</button>`);
   const [, mo, d] = x.day.split('-').map(Number);
   return `<div class="cal-row st-${esc(x.st)} me-${esc(x.me)}">
     <button class="cal-date" type="button" ${a}="cal-go" data-g="${esc(x.g.id)}" data-h="${esc(x.hid)}" aria-label="Visa ${esc(x.h.name)}"><b>${d}</b><span>${MON[mo - 1]}</span></button>
@@ -6928,7 +6929,46 @@ function calRender(){
     <div class="cal-legend small muted"><span><i class="cdot invite"></i>Inbjudan</span><span><i class="cdot going"></i>Du deltar</span><span><i class="cdot live"></i>Pågår</span><span><i class="cdot no"></i>Avböjt</span></div>
     <h3 class="sec">${esc(dayLabel(calUi.sel))}</h3>
     ${sel.length ? `<div class="cal-list">${sel.map(x => calRow(x, true)).join('')}</div>` : '<p class="note" style="margin-top:0">Ingen jakt den här dagen.</p>'}
-    ${lead.length && calUi.sel >= today ? `<div class="btnrow">${lead.map(g => `<button class="btn sm primary" type="button" data-c="new" data-g="${esc(g.id)}">Planera jakt ${esc(dayLabel(calUi.sel))}${lead.length > 1 ? ' i ' + esc(gname(g)) : ''}</button>`).join('')}</div>` : ''}`;
+    ${lead.length && calUi.sel >= today ? `<div class="btnrow">${lead.map(g => `<button class="btn sm primary" type="button" data-c="new" data-g="${esc(g.id)}">Planera jakt ${esc(dayLabel(calUi.sel))}${lead.length > 1 ? ' i ' + esc(gname(g)) : ''}</button>`).join('')}</div>` : ''}
+    ${cloud.status === 'in' ? `<h3 class="sec">Telefonens kalender</h3><p class="note" style="margin-top:0">Spara kommande jakter som du deltar i eller är inbjuden till som en kalenderfil (.ics) och öppna den i telefonens kalender. Ändras en jakt senare: exportera igen, så uppdateras den.</p>
+      <div class="btnrow"><button class="btn sm" type="button" data-c="ics">Exportera kalenderfil</button></div>` : ''}`;
+}
+/* ---------- Kalenderfil (.ics, RFC 5545) ----------
+   Kommande jakter som man deltar i, är inbjuden till eller är gäst i (inte avböjda, inte avslutade). En jakt med starttid
+   blir en händelse från start till sluttid; en jakt som jaktledaren startar för hand blir en heldag. UID är jaktens id,
+   och SEQUENCE ökar med tiden, så att en ny export uppdaterar händelsen i stället för att lägga in den två gånger.
+   Ingen plats eller koordinater skickas med, bara namn, lag, tid och om man deltar. */
+const icsWanted = x => x.st !== 'ended' && (x.me === 'going' || x.me === 'invite' || x.me === 'guest');
+const icsEsc = s => String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+const icsUtc = t => new Date(t).toISOString().replace(/\.\d{3}/, '').replace(/[-:]/g, '');
+const icsDay = iso => iso.replace(/-/g, '');
+/* Rader längre än 75 byte (UTF-8) delas, och fortsättningen börjar med ett blanksteg. */
+function icsFold(line){
+  const enc = new TextEncoder(); if(enc.encode(line).length <= 75) return line;
+  const parts = []; let cur = '', n = 0;
+  for(const ch of line){ const b = enc.encode(ch).length, max = parts.length ? 74 : 75; if(n + b > max){ parts.push(cur); cur = ''; n = 0; } cur += ch; n += b; }
+  parts.push(cur); return parts.join('\r\n ');
+}
+function calIcs(xs, now){
+  now = now || Date.now();
+  const url = location.origin + location.pathname, L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Jaktkartan//Jakter//SV', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:Jaktkartan'];
+  for(const x of xs){
+    const h = x.h, timed = !h.manual && h.starts && h.expires > h.starts;
+    L.push('BEGIN:VEVENT', `UID:${x.g.id}-${x.hid}@jaktkartan`, 'DTSTAMP:' + icsUtc(now), 'SEQUENCE:' + Math.floor(now / 60000));
+    if(timed) L.push('DTSTART:' + icsUtc(h.starts), 'DTEND:' + icsUtc(h.expires));
+    else { const [y, m, d] = x.day.split('-').map(Number); L.push('DTSTART;VALUE=DATE:' + icsDay(x.day), 'DTEND;VALUE=DATE:' + icsDay(isoOf(new Date(y, m - 1, d + 1)))); }
+    const how = timed ? `Startar ${fmtClock(h.starts)}, slutar ${fmtClock(h.expires)}.` : 'Jaktledaren startar jakten.';
+    L.push('SUMMARY:' + icsEsc(h.name || 'Jakt'), 'DESCRIPTION:' + icsEsc(`${gname(x.g)}. ${ME_TAG[x.me]}. ${how}\nÖppna Jaktkartan för planering och karta.`),
+      'STATUS:' + (x.me === 'invite' ? 'TENTATIVE' : 'CONFIRMED'), 'TRANSP:OPAQUE', 'URL:' + url, 'END:VEVENT');
+  }
+  L.push('END:VCALENDAR');
+  return L.map(icsFold).join('\r\n') + '\r\n';
+}
+function calExport(xs, name){
+  if(!xs.length){ toast('Inga kommande jakter att exportera.'); return; }
+  download(name, calIcs(xs), 'text/calendar');
+  toast(NAT.on ? 'Välj telefonens kalender i Dela-menyn för att lägga in ' + (xs.length === 1 ? 'jakten.' : `de ${xs.length} jakterna.`)
+    : `Kalenderfilen med ${xs.length === 1 ? 'jakten' : xs.length + ' jakter'} sparas. Öppna den för att lägga in den i kalendern.`, 7000);
 }
 /* Ritar om kalendern när något ändras i molnet. */
 function calRefresh(){ if(document.getElementById('calBox') && calUi.sel) renderKalender(); }
@@ -6938,7 +6978,9 @@ function calClick(e){
   if(c === 'day'){ calUi.sel = b.dataset.d; calRender(); return; }
   if(c === 'prev' || c === 'next'){ const [y, m] = calUi.month.split('-').map(Number), d = new Date(y, m - 1 + (c === 'next' ? 1 : -1), 1); calUi.month = isoOf(d).slice(0, 7); calUi.sel = calUi.month === todayISO().slice(0, 7) ? todayISO() : calUi.month + '-01'; calRender(); return; }
   if(c === 'today'){ calUi.sel = todayISO(); calUi.month = calUi.sel.slice(0, 7); calRender(); return; }
+  if(c === 'ics'){ calExport(calHunts().filter(icsWanted), `jaktkartan-jakter-${todayISO()}.ics`); return; }
   if(!g) return;
+  if(c === 'ics1'){ const x = calHunts().find(y => y.g.id === g.id && y.hid === hid); if(x) calExport([x], `jakt-${x.day}.ics`); return; }
   if(c === 'go' || c === 'cal-go') calGo(g.id, hid);
   else if(c === 'rsvp') rsvpSet(g, hid, true);
   else if(c === 'rsvp-no') rsvpSet(g, hid, false);
@@ -7305,7 +7347,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {natQ, natUpdAsk, NAT, natTok, natId, natGpsStart, checkedIn, huntInvitesCheck, calInvites, joinByCode, renderPositions, follow, posFocus, pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {calIcs, icsFold, natQ, natUpdAsk, NAT, natTok, natId, natGpsStart, checkedIn, huntInvitesCheck, calInvites, joinByCode, renderPositions, follow, posFocus, pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

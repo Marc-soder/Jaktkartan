@@ -799,6 +799,11 @@ async function inviteRevokeAll(){
   { const wf = (await nat('Filesystem', 'writeFile'))[0], sh = (await nat('Share', 'share'))[0]; let j = null; try { j = JSON.parse(wf.opts.data); } catch(e){}
     check(wf && /^export\/jaktkartan-\d{4}-\d\d-\d\d\.json$/.test(wf.opts.path) && wf.opts.directory === 'CACHE' && wf.opts.encoding === 'utf8' && j && j.app === 'Jaktkartan' && Array.isArray(j.pins)
       && sh && sh.opts.files.length === 1 && sh.opts.files[0] === 'file:///data/user/0/app/cache/' + wf.opts.path, 'Exportera allt i appen sparar säkerhetskopian och öppnar Dela-menyn'); }
+  // Kalenderfil i appen: via Dela-menyn, där man väljer telefonens kalender
+  await BN.evaluate(() => __fk.openCal()); await W(BN, 200); await BN.click('#calBox [data-c="ics"]'); await W(BN, 300);
+  { const wf = (await nat('Filesystem', 'writeFile')).pop(), sh = (await nat('Share', 'share')).pop();
+    check(wf && /^export\/jaktkartan-jakter-[\d-]+\.ics$/.test(wf.opts.path) && wf.opts.data.startsWith('BEGIN:VCALENDAR') && wf.opts.data.includes('BEGIN:VEVENT') && sh && sh.opts.files[0] === 'file:///data/user/0/app/cache/' + wf.opts.path && (await BN.innerText('#toast')).includes('Dela-menyn'), 'i appen öppnas kalenderfilen i Dela-menyn, där man väljer telefonens kalender'); }
+  await go(BN, 'data');
   await BN.evaluate(() => { window.Capacitor.PluginHeaders = window.Capacitor.PluginHeaders.filter(p => p.name !== 'Filesystem' && p.name !== 'Share'); window.__nat.calls = []; });
   await BN.click('[data-act="export-json"]'); await W(BN, 300);
   check((await BN.innerText('#toast')).includes('nyare version av appen') && !(await nat('Filesystem')).length, 'en äldre app utan export ber om en nyare version i stället för att inte göra något');
@@ -1001,6 +1006,17 @@ async function inviteRevokeAll(){
   check((await B.innerText(`#hc-${gid}-${h3}`)).includes('Avböjt: Alice Test'), 'jaktledaren ser vem som har avböjt');
   await A.click(`#calBox [data-c="rsvp"][data-h="${h3}"]`); await W(A, 600);
   check(rs3() && !rs3().no && (await A.innerText('#calBox')).toUpperCase().includes('DU DELTAR') && !(await A.evaluate(() => __fk.cloud.sharing)), 'Alice ångrar sig och deltar, men inget delas innan jakten startar');
+  // Kalenderfil till telefonens kalender: alla kommande jakter, och en enskild jakt
+  { const [dl] = await Promise.all([A.waitForEvent('download'), A.click('#calBox [data-c="ics"]')]);
+    const txt = require('fs').readFileSync(await dl.path(), 'utf8'), lines = txt.split('\r\n');
+    const ev = txt.split('BEGIN:VEVENT').slice(1).find(e => e.includes(`UID:${gid}-${h3}@jaktkartan`)) || '';
+    check(/^jaktkartan-jakter-\d{4}-\d\d-\d\d\.ics$/.test(dl.suggestedFilename()) && txt.startsWith('BEGIN:VCALENDAR\r\nVERSION:2.0\r\n') && txt.endsWith('END:VCALENDAR\r\n')
+      && ev.includes(`DTSTART;VALUE=DATE:${futISO.replace(/-/g, '')}`) && ev.includes('SUMMARY:' + H3().name) && ev.includes('STATUS:CONFIRMED') && ev.includes('Du deltar')
+      && lines.every(l => Buffer.byteLength(l) <= 75) && !/[^\r]\n/.test(txt) && !txt.includes(H3().code) && !/LOCATION|GEO/.test(txt) && (await A.innerText('#toast')).includes('Kalenderfilen'),
+      `Exportera kalenderfil ger en .ics med jakten som heldag (startas för hand), utan jaktkod och plats (${dl.suggestedFilename()})`); }
+  { const [dl] = await Promise.all([A.waitForEvent('download'), A.click(`#calBox [data-c="ics1"][data-h="${h3}"]`)]);
+    const txt = require('fs').readFileSync(await dl.path(), 'utf8');
+    check(dl.suggestedFilename() === `jakt-${futISO}.ics` && txt.split('BEGIN:VEVENT').length === 2 && txt.includes(`UID:${gid}-${h3}@jaktkartan`), 'Till telefonens kalender ger en fil med bara den jakten'); }
   await A.click(`#calBox [data-c="go"][data-h="${h3}"]`); await W(A, 500);
   check(!(await A.isVisible('#calBox')) && await A.isVisible(`#hc-${gid}-${h3}`) && (await A.getAttribute('#sub-plan', 'aria-selected')) === 'true', 'Visa jakten visar jaktkortet under jaktlagets flik Planera');
   // Inbjudna: bara utvalda medlemmar
