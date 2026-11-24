@@ -455,6 +455,10 @@ for(const [id, k] of [['#heatSp', 'sp'], ['#heatPeriod', 'period'], ['#heatArea'
 var renumberUndo = null;   /* var: listan kan ritas innan den här filen har körts klart */
 const RENUM_DIRS = {sn:'Söder till norr', ns:'Norr till söder', wo:'Väster till öster', ow:'Öster till väster'};
 function isPassType(t){ return !!t && (t.id === 't-pass' || /^pass$/i.test((t.name || '').trim())); }
+/* Platser där en skytt kan stå i planeringen: pass och jakttorn, och egna nåltyper med en pass- eller tornsymbol eller ett
+   namn som börjar med Pass, Jakttorn eller Torn. (Numrera om passen gäller bara typen Pass, så att tornen behåller sina namn.) */
+const STAND_ICONS = new Set(['crosshair', 'passfan', 'stool', 'hunter', 'cartridge', 'tower']);
+function isStandType(t){ return !!t && (isPassType(t) || t.id === 't-torn' || STAND_ICONS.has(t.icon) || /^(pass|jakttorn|torn)\b/i.test((t.name || '').trim())); }
 function passPins(){ return state.pins.filter(p => isPassType(typeById(p.typeId)) && canEditPin(p)); }
 function passRest(name){
   const s = (name || '').trim();

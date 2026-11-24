@@ -5,7 +5,7 @@
    - Kartrutor som man har tittat på sparas, högst TILE_MAX stycken, och visas när det inte finns nät.
      Inget laddas ned i förväg: OpenStreetMaps regler förbjuder det.
    Positioner, meddelanden och annat i jakten går via Firebase och påverkas inte. */
-const VERSION = 'd48219781c';
+const VERSION = 'd2f9216b46';
 const APP = 'jk-app-' + VERSION, LIBS = 'jk-libs-v1', TILES = 'jk-tiles-v1', TILE_MAX = 2500;
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 const TILE_HOSTS = /(^|\.)tile\.openstreetmap\.org$|(^|\.)tile\.opentopomap\.org$|^server\.arcgisonline\.com$/;
