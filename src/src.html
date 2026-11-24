@@ -229,6 +229,16 @@ a{color:var(--accent)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .rose-nbl .warn{color:#fbbf24}}
 :root[data-theme="dark"] .rose-nbl .warn{color:#fbbf24}
 .plan-lbl{width:0;height:0}
+/* Placera skyttar på kartan: en ring runt varje pass, med passets namn och vem som står där */
+.pm-icon{cursor:pointer}
+.pm-ring{position:absolute;inset:0;border-radius:50%;border:3px solid #ea580c;background:rgba(234,88,12,.14);box-shadow:0 0 0 2px rgba(255,255,255,.85)}
+.pm-icon.set .pm-ring{border-color:#15803d;background:rgba(21,128,61,.16)}.pm-icon.warn .pm-ring{border-color:#b45309;border-style:dashed}
+.pm-lbl{position:absolute;top:47px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;white-space:nowrap;background:var(--surface);color:var(--fg);border-radius:8px;padding:3px 8px;font:500 12px/1.25 var(--font-body);box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.pm-lbl b{font-size:12px}.pm-icon:not(.set) .pm-lbl span{color:#c2410c;font-weight:600}
+.pmbar .pm-head{display:flex;flex-direction:column;gap:2px}.pmbar .actions{margin:0}
+.pick-list{display:grid;gap:6px}
+.pick-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;width:100%;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--fg);padding:9px 12px;font:inherit;cursor:pointer}
+.pick-row.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}.pick-row .pwarn-i{color:#b45309}
 .plan-lbl span{position:absolute;left:0;top:0;transform:translate(-50%,-50%);white-space:nowrap;font:600 11px/1.2 var(--font-body);padding:2px 6px;border-radius:6px;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.3)}
 .plan-lbl.who span{top:-50px;background:#16231c;color:#fff}
 .plan-lbl.who.me span,.plan-lbl.route.me span{background:var(--accent);color:var(--accent-fg)}
@@ -674,6 +684,7 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
 <input type="file" id="fileBorder" accept=".json,.geojson,.kml,.gpx" hidden>
 <input type="file" id="fileOverlay" accept="image/*" hidden>
 <div class="placebar" id="ovbar" hidden></div>
+<div class="placebar pmbar" id="planMapBar" hidden role="region" aria-label="Placera skyttar"></div>
 
 <div class="placebar" id="placebar" hidden>
   <p id="placeText">Flytta kartan så att korset hamnar där nålen ska sitta.</p>
@@ -2082,7 +2093,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {pocket, pocketOn, pocketOff, posLost, gpsPos, webHide, posMarkers:() => posMarkers, calIcs, icsFold, calGcalUrl, natQ, natUpdAsk, NAT, natTok, natId, natGpsStart, checkedIn, huntInvitesCheck, calInvites, joinByCode, renderPositions, follow, posFocus, pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {planMap, planMapStart, planMapStop, pocket, pocketOn, pocketOff, posLost, gpsPos, webHide, posMarkers:() => posMarkers, calIcs, icsFold, calGcalUrl, natQ, natUpdAsk, NAT, natTok, natId, natGpsStart, checkedIn, huntInvitesCheck, calInvites, joinByCode, renderPositions, follow, posFocus, pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

@@ -13,6 +13,7 @@ const PLAN_R = 150;   // meter, längden på de röda sektorerna för förbjudna
 const ROUTE_KIND = {hund:{name:'Hundförare', color:'#db2777'}, drev:{name:'Drevkarl', color:'#6d28d9'}};
 const DRIVE_STYLE = {color:'#166534', weight:2.5, dashArray:'8 6', fillColor:'#22c55e', fillOpacity:.08};
 const planUi = {gid:null, hid:null, open:{}};
+const planMap = {on:false, gid:null, hid:null, did:null, layer:null};   // Placera skyttar på kartan (se planMapStart)
 const planOf = (g, hid) => ((g && g.huntPlan) || {})[hid] || {};
 const planOn = () => state.settings.planOn !== false;
 
@@ -264,7 +265,7 @@ function renderPlan(){
         L.polygon(sectorPts(p, from, from + n * 22.5, PLAN_R), {color:'#dc2626', weight:1, opacity:.8, fillColor:'#dc2626', fillOpacity:.28, interactive:false, className:'plan-nofire'}).addTo(planLayer);
       }
       const cin = s.uid && checkOf(g, hid, s.uid), isIn = !!(cin && cin.in && cin.pid === pid);
-      if(s.who) planLabel([p.lat, p.lng], 'who' + (s.uid && s.uid === myUid() ? ' me' : '') + (isIn ? ' in' : ''), s.who).addTo(planLayer);
+      if(s.who && !(planMap.on && planMap.gid === g.id && planMap.hid === hid)) planLabel([p.lat, p.lng], 'who' + (s.uid && s.uid === myUid() ? ' me' : '') + (isIn ? ' in' : ''), s.who).addTo(planLayer);
     }
     // Samlingsplatser. Den man har kallats till är markerad.
     const call = live ? activeCall(plan) : null;
@@ -275,6 +276,7 @@ function renderPlan(){
         .on('click', () => openMeet(m.name, m.lat, m.lng, on)).addTo(planLayer);
     }
   }
+  planMapRender();
 }
 function openMeet(name, lat, lng, called){
   openModal(`<h2>${called ? 'Återsamling vid ' : 'Samlingsplats: '}${esc(name)}</h2>
@@ -410,6 +412,7 @@ function planBodyRender(force){
   // Pass: egenskaper, förbjudna riktningar, och vem som står var när jakten inte är uppdelad i såtar
   h += `<h3 class="sec">Pass</h3><p class="note" style="margin-top:0">${ds.length ? 'Vem som står var väljs för varje såt längre ned.' : 'Vem som står var gäller hela jakten. Rita såtar längre ned för att dela upp jakten.'} Lättillgängligt och hagel eller kula sparas på passet och gäller i alla jakter.</p>`;
   if(!passes.length) h += `<p class="note" style="margin-top:0">Det finns inga pass i jaktens områden. Lägg ut nålar av typen Pass i ett område som delas med laget.</p>`;
+  else h += `<div class="btnrow"><button class="btn sm primary" type="button" data-pl="pmap">Placera skyttar på kartan</button></div>`;
   for(const p of passes){
     const s = (plan.stands || {})[p.id] || {}, no = maskDirs(s.no), ed = canEditPin(p) ? '' : ' disabled';
     h += `<div class="plan-pass"><div class="pp-h"><b>${esc(p.name || 'Pass')}</b>
@@ -446,7 +449,7 @@ function planBodyRender(force){
       <div class="lbl">Pass i såten</div>
       ${passes.map(p => { const s = pass[p.id] || {}, tags = passTags(p);
         return `<div class="plan-row"><span class="pr-name">${esc(p.name || 'Pass')}${tags ? `<br><span class="small muted">${esc(tags)}</span>` : ''}</span><select class="input" data-pl="dwho" data-d="${esc(did)}" data-p="${esc(p.id)}" aria-label="Vem står på ${esc(p.name || 'passet')} i ${esc(driveName(d))}">${opts(s.who, s.uid)}</select></div>${warnHtml(g, p, s)}`; }).join('')}
-      <div class="btnrow"><button class="btn sm" type="button" data-pl="lot" data-d="${esc(did)}">Lotta pass</button>${i > 0 ? `<button class="btn sm" type="button" data-pl="copy" data-d="${esc(did)}" data-from="${esc(ds[i - 1][0])}">Samma pass som såt ${i}</button>` : ''}</div>
+      <div class="btnrow"><button class="btn sm primary" type="button" data-pl="pmap" data-d="${esc(did)}">Placera på kartan</button><button class="btn sm" type="button" data-pl="lot" data-d="${esc(did)}">Lotta pass</button>${i > 0 ? `<button class="btn sm" type="button" data-pl="copy" data-d="${esc(did)}" data-from="${esc(ds[i - 1][0])}">Samma pass som såt ${i}</button>` : ''}</div>
       <div class="lbl">Hundförare och drevkarlar</div>
       ${routes.map(([rid, r]) => routeRow(rid, r, opts)).join('') || '<p class="small muted" style="margin:0">Ingen väg är ritad i den här såten.</p>'}
       <div class="btnrow"><button class="btn sm" type="button" data-pl="route-draw" data-k="hund" data-d="${esc(did)}">Rita väg för hundförare</button><button class="btn sm" type="button" data-pl="route-draw" data-k="drev" data-d="${esc(did)}">Rita väg för drevkarl</button></div></details>`;
@@ -540,6 +543,7 @@ function planClick(e){
   else if(k === 'drive-start') driveStart(c.g, c.hid, b.dataset.d);
   else if(k === 'drive-stop') confirmClick(b, 'Bekräfta: bryt såten', () => driveStop(c.g, c.hid));
   else if(k === 'lot') openLottery(c.g, c.hid, b.dataset.d);
+  else if(k === 'pmap') planMapStart(c.g, c.hid, b.dataset.d);
   else if(k === 'copy'){
     const from = ((c.plan.drives || {})[b.dataset.from] || {}).pass || null, has = Object.keys(((c.plan.drives || {})[b.dataset.d] || {}).pass || {}).length;
     const go = () => planRef(c.g, c.hid, `drives/${b.dataset.d}/pass`).set(from).then(() => toast('Passen är kopierade.')).catch(fail());
@@ -635,6 +639,99 @@ function meetPlace(g, hid, mid){
       });
     });
   }});
+}
+
+/* ---------- Placera skyttar på kartan ----------
+   Från planeringen: dialogen stängs och kartan visar jaktens pass, vart och ett med vem som står där eller Ledigt.
+   Ett tryck på ett pass öppnar listan över deltagarna (de som deltar först). Den man väljer flyttas dit; stod hen på ett
+   annat pass blir det passet ledigt. Har jakten såtar väljs såten i raden nederst. Passar passet inte personen
+   (lättillgängligt, hagel eller kula) frågar appen först, som i listan i planeringen. Klar går tillbaka till planeringen. */
+function planMapCtx(){
+  const g = cloud.groups[planMap.gid], hunt = g && (g.hunts || {})[planMap.hid]; if(!hunt) return null;
+  const plan = planOf(g, planMap.hid), ds = driveList(plan);
+  let did = ds.length ? (ds.some(([k]) => k === planMap.did) ? planMap.did : ((planFocus(plan) || {}).did || ds[0][0])) : null;
+  planMap.did = did;
+  const scope = did ? `drives/${did}/pass` : 'stands', sets = did ? ((plan.drives || {})[did] || {}).pass || {} : plan.stands || {};
+  return {g, hid:planMap.hid, hunt, plan, ds, did, scope, sets, passes:planPasses(g, hunt)};
+}
+function planMapStart(g, hid, did){
+  Object.assign(planMap, {on:true, gid:g.id, hid, did:did || null});
+  closeModal(); map.closePopup();
+  if(!isDesktop()) setSheet('peek');
+  const c = planMapCtx(), pts = c ? c.passes.map(p => [p.lat, p.lng]) : [];
+  if(pts.length === 1) map.setView(pts[0], 16, {animate:false});
+  else if(pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.25), {maxZoom:17, animate:false});
+  renderPlan();
+}
+function planMapStop(back){
+  const g = cloud.groups[planMap.gid], hid = planMap.hid;
+  planMap.on = false; if(planMap.layer) planMap.layer.clearLayers();
+  const bar = document.getElementById('planMapBar'); if(bar) bar.hidden = true;
+  renderPlan();
+  if(back && g && (g.hunts || {})[hid]) openPlan(g, hid);
+}
+function planMapRender(){
+  const bar = document.getElementById('planMapBar');
+  if(!planMap.on){ if(planMap.layer) planMap.layer.clearLayers(); if(bar) bar.hidden = true; return; }
+  const c = planMapCtx();
+  if(!c){ planMapStop(false); toast('Jakten finns inte längre.'); return; }
+  if(!planMap.layer) planMap.layer = L.layerGroup().addTo(map);
+  planMap.layer.clearLayers();
+  let set = 0;
+  for(const p of c.passes){
+    const s = c.sets[p.id] || {}, who = s.who || '', warn = s.uid && passIssues(c.g, p, s.uid, s.who).length && !s.ok;
+    if(who) set++;
+    L.marker([p.lat, p.lng], {icon:L.divIcon({className:'pm-icon' + (who ? ' set' : '') + (warn ? ' warn' : ''), html:`<span class="pm-ring"></span><span class="pm-lbl"><b>${esc(p.name || 'Pass')}</b><span>${esc(who || 'Ledigt')}${warn ? ' ⚠' : ''}</span></span>`, iconSize:[44, 44], iconAnchor:[22, 22]}), zIndexOffset:3000, keyboard:true, title:`${p.name || 'Pass'}: ${who || 'ledigt'}`})
+      .on('click', () => planMapPick(p.id)).addTo(planMap.layer);
+  }
+  if(!bar) return;
+  bar.hidden = false;
+  bar.innerHTML = `<div class="pm-head"><b>Placera skyttar</b><span class="small muted">${set} av ${c.passes.length} pass har en skytt. Tryck på ett pass.</span></div>
+    ${c.ds.length ? `<select class="input" id="pmScope" aria-label="Såt">${c.ds.map(([k, d], i) => `<option value="${esc(k)}"${k === c.did ? ' selected' : ''}>${i + 1}. ${esc(driveName(d))}</option>`).join('')}</select>` : ''}
+    <div class="actions"><button class="btn primary grow" type="button" id="pmDone">Klar</button></div>`;
+  bar.querySelector('#pmDone').addEventListener('click', () => planMapStop(true));
+  const sc = bar.querySelector('#pmScope'); if(sc) sc.addEventListener('change', () => { planMap.did = sc.value; planMapRender(); });
+}
+function planMapPick(pid){
+  const c = planMapCtx(), p = pinById(pid); if(!c || !p) return;
+  const s = c.sets[pid] || {}, people = planPeople(c.g, c.hid), where = {};
+  for(const [opid, os] of Object.entries(c.sets)) if(os && os.uid && opid !== pid){ const op = pinById(opid); where[os.uid] = op ? op.name || 'ett annat pass' : 'ett annat pass'; }
+  const drive = c.did ? driveName((c.plan.drives || {})[c.did]) : '', tags = passTags(p);
+  const row = u => { const x = gearOf(c.g, u.uid), is = passIssues(c.g, p, u.uid, u.name), cur = s.uid === u.uid;
+    const info = [cur ? 'står här' : where[u.uid] ? 'står på ' + where[u.uid] : '', x ? [GUN[x.gun] || '', x.easy ? 'behöver lättillgängligt' : ''].filter(Boolean).join(', ') : ''].filter(Boolean).join(' · ');
+    return `<button class="pick-row${cur ? ' on' : ''}" type="button" data-pm="u:${esc(u.uid)}"><span>${esc(u.label)}${is.length ? ' <span class="pwarn-i" title="' + esc(is.join(' ')) + '">⚠</span>' : ''}</span>${info ? `<span class="small muted">${esc(info)}</span>` : ''}</button>`; };
+  openModal(`<h2>${esc(p.name || 'Pass')}</h2><p class="note" style="margin-top:0">Vem ska stå här${drive ? ' i ' + esc(drive) : ''}?${tags ? ' Passet: ' + esc(tags) + '.' : ''}</p>
+    <div class="pick-list">${people.map(row).join('')}<button class="pick-row${!s.who ? ' on' : ''}" type="button" data-pm="">Ingen (ledigt)</button></div>
+    <form id="pmForm" class="drive-name-row" style="margin-top:8px"><input class="input" id="pmName" maxlength="60" placeholder="Annat namn, till exempel någon utan appen" aria-label="Annat namn"${s.who && !s.uid ? ` value="${esc(s.who)}"` : ''}><button class="btn sm" type="submit">Spara</button></form>
+    <div class="actions"><button class="btn ghost grow" type="button" id="pmNo">Avbryt</button></div>`, m => {
+    m.querySelector('#pmNo').addEventListener('click', closeModal);
+    m.querySelectorAll('[data-pm]').forEach(b => b.addEventListener('click', () => planMapSet(c, p, b.dataset.pm)));
+    m.querySelector('#pmForm').addEventListener('submit', e => { e.preventDefault(); const v = m.querySelector('#pmName').value.trim().slice(0, 60); if(!v){ toast('Skriv ett namn.'); return; } planMapSet(c, p, 'n:' + v); });
+  });
+}
+/* Skriver placeringen. val: '' = ledigt, 'u:<uid>' = deltagare, 'n:<namn>' = eget namn. Samma person står bara på ett pass. */
+function planMapSet(c, p, val, ok){
+  const up = {}, base = `${c.scope}/${p.id}/`;
+  const put = (who, uid, okv) => { up[base + 'who'] = who; up[base + 'uid'] = uid; up[base + 'ok'] = okv; };
+  let msg = `${p.name || 'Passet'} är ledigt.`;
+  if(val.startsWith('u:')){
+    const u = val.slice(2), person = planPeople(c.g, c.hid).find(x => x.uid === u); if(!person) return;
+    const is = passIssues(c.g, p, u, person.name);
+    if(is.length && !ok){
+      openModal(`<h2>Passar passet?</h2>${is.map(t => `<p class="pwarn">⚠ ${esc(t)}</p>`).join('')}<p class="note">Vill du placera ${esc(person.name)} på ${esc(p.name || 'passet')} ändå?</p>
+        <div class="actions"><button class="btn primary grow" type="button" id="pwOk">Placera ändå</button><button class="btn ghost" type="button" id="pwNo">Avbryt</button></div>`, m => {
+        m.querySelector('#pwOk').addEventListener('click', () => planMapSet(c, p, val, true));
+        m.querySelector('#pwNo').addEventListener('click', () => planMapPick(p.id));
+      });
+      return;
+    }
+    put(person.name, u, ok ? true : null);
+    for(const [opid, os] of Object.entries(c.sets)) if(os && os.uid === u && opid !== p.id){ const b2 = `${c.scope}/${opid}/`; up[b2 + 'who'] = null; up[b2 + 'uid'] = null; up[b2 + 'ok'] = null; }
+    msg = `${person.name} står på ${p.name || 'passet'}.`;
+  } else if(val.startsWith('n:')){ put(val.slice(2), null, null); msg = `${val.slice(2)} står på ${p.name || 'passet'}.`; }
+  else put(null, null, null);
+  closeModal();
+  planRef(c.g, c.hid).update(up).then(() => toast(msg)).catch(fail());
 }
 
 /* ---------- Under jakten: starta och bryta såtar, återsamling ----------
