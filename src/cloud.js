@@ -48,9 +48,13 @@ let renderTimer = null;
 /* Med släckt skärm (eller appen i bakgrunden) ritas inget om: det sparar batteri när positioner och meddelanden kommer in.
    Allt ritas om när skärmen tänds igen. */
 let renderDirty = false;
-document.addEventListener('visibilitychange', () => { if(!document.hidden && renderDirty){ renderDirty = false; if(myPos) showMe(myPos.lat, myPos.lng, myPos.acc); renderPositions(); scheduleRender(); } });
+/* Fickläget (pocket) är en svart skärm över allt: då ritas inget heller, men GPS och sändning fortsätter. */
+const pocket = {on:false, t:null};
+const noDraw = () => document.hidden || pocket.on;
+function redrawIfDirty(){ if(noDraw() || !renderDirty) return; renderDirty = false; if(myPos) showMe(myPos.lat, myPos.lng, myPos.acc); renderPositions(); scheduleRender(); }
+document.addEventListener('visibilitychange', redrawIfDirty);
 function scheduleRender(){
-  if(document.hidden){ renderDirty = true; return; }
+  if(noDraw()){ renderDirty = true; return; }
   clearTimeout(renderTimer);
   renderTimer = setTimeout(() => {
     const ae = document.activeElement, keep = ae && ae.id && $('#panel').contains(ae) && 'value' in ae ? {id:ae.id, v:ae.value} : null;
@@ -309,6 +313,11 @@ function syncHuntPos(){
   clearTimeout(huntPosTimer);
   if(next < Infinity) huntPosTimer = setTimeout(syncHuntPos, Math.min(next - Date.now() + 1000, 2147483000));
 }
+/* Har någon inte hörts av på 5 minuter (telefonen låst, appen stängd eller ingen täckning) markeras hen på kartan och i
+   listan. Efter 30 minuter visas positionen inte alls. */
+const POS_LOST_MS = 5 * 60000;
+const posLost = p => Date.now() - p.t > POS_LOST_MS;
+const lostMin = p => Math.round((Date.now() - p.t) / 60000);
 function activePositions(){
   const seen = {}, out = [];
   for(const g of Object.values(cloud.groups)) for(const pos of Object.values(g.huntPos || {})) for(const [uid, p] of Object.entries(pos || {})){
@@ -318,12 +327,13 @@ function activePositions(){
   return out;
 }
 function renderPositions(){
-  if(document.hidden){ renderDirty = true; return; }
+  if(noDraw()){ renderDirty = true; return; }
   posLayer.clearLayers(); posMarkers = {};
   const act = activePositions();
   for(const p of act){
-    const m = L.marker([p.lat, p.lng], {icon:L.divIcon({className:'pos-icon', html:`<span class="pos-dot" style="background:${personColor(p.uid)}">${esc(initials(p.name))}</span><span class="pos-name">${esc(p.name || 'Jägare')}</span>`, iconSize:[32,32], iconAnchor:[16,16], popupAnchor:[0,-14]}), zIndexOffset:500});
-    m.bindPopup(() => { const el = h(`<div class="pp"><h4>${esc(p.name || 'Jägare')}</h4><div class="pnote">Position ${ago(p.t)}${p.acc ? ` · ±${Math.round(p.acc)} m` : ''}${myPos ? `<br>${fmtDist(distM(myPos, p))} bort` : ''}</div><div class="pbtns"><a class="navbtn" href="${navUrl(p.lat, p.lng)}" target="_blank" rel="noopener">${ICON_NAV}Navigera</a>${phoneOf(p.uid) ? `<a class="btn sm" data-tel href="${esc(telHref(phoneOf(p.uid)))}">Ring</a>` : ''}<button class="btn sm" type="button" data-follow>${follow.uid === p.uid ? 'Sluta följa' : 'Följ'}</button></div></div>`);
+    const lost = posLost(p);
+    const m = L.marker([p.lat, p.lng], {icon:L.divIcon({className:'pos-icon' + (lost ? ' lost' : ''), html:`<span class="pos-dot" style="background:${personColor(p.uid)}">${esc(initials(p.name))}</span><span class="pos-name">${esc(p.name || 'Jägare')}${lost ? ` · ${lostMin(p)} min` : ''}</span>`, iconSize:[32,32], iconAnchor:[16,16], popupAnchor:[0,-14]}), zIndexOffset:lost ? 400 : 500});
+    m.bindPopup(() => { const el = h(`<div class="pp"><h4>${esc(p.name || 'Jägare')}</h4>${lost ? `<div class="pnote pos-lost-note">Inte hörd av på ${lostMin(p)} min (senast ${esc(fmtClock(p.t))}). Telefonen kan vara låst, appen stängd eller sakna täckning.</div>` : ''}<div class="pnote">Position ${ago(p.t)}${p.acc ? ` · ±${Math.round(p.acc)} m` : ''}${myPos ? `<br>${fmtDist(distM(myPos, p))} bort` : ''}</div><div class="pbtns"><a class="navbtn" href="${navUrl(p.lat, p.lng)}" target="_blank" rel="noopener">${ICON_NAV}Navigera</a>${phoneOf(p.uid) ? `<a class="btn sm" data-tel href="${esc(telHref(phoneOf(p.uid)))}">Ring</a>` : ''}<button class="btn sm" type="button" data-follow>${follow.uid === p.uid ? 'Sluta följa' : 'Följ'}</button></div></div>`);
       el.querySelector('[data-follow]').addEventListener('click', () => { if(follow.uid === p.uid) followStop(); else followStart(p.uid); });
       return el; }, {maxWidth:260});
     m.addTo(posLayer); posMarkers[p.uid] = m;
@@ -342,7 +352,8 @@ let posMarkers = {};
 const follow = {uid:null};
 function posChipsHtml(){
   const act = activePositions().slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'sv'));
-  return act.map(p => `<button class="pos-chip${follow.uid === p.uid ? ' on' : ''}" type="button" data-j="pos-go" data-u="${esc(p.uid)}" title="Visa ${esc(p.name || 'Jägare')} på kartan"><span class="pc-dot" style="background:${personColor(p.uid)}">${esc(initials(p.name))}</span>${esc(p.name || 'Jägare')} <span class="muted">${esc(ago(p.t))}</span></button>`).join('');
+  return act.map(p => { const lost = posLost(p);
+    return `<button class="pos-chip${follow.uid === p.uid ? ' on' : ''}${lost ? ' lost' : ''}" type="button" data-j="pos-go" data-u="${esc(p.uid)}" title="Visa ${esc(p.name || 'Jägare')} på kartan"><span class="pc-dot" style="background:${personColor(p.uid)}">${esc(initials(p.name))}</span>${esc(p.name || 'Jägare')} <span class="muted">${lost ? `inte hörd på ${lostMin(p)} min` : esc(ago(p.t))}</span></button>`; }).join('');
 }
 function posFocus(uid, open){
   const p = activePositions().find(x => x.uid === uid); if(!p){ toast('Personen delar inte sin position just nu.'); return false; }
@@ -360,7 +371,8 @@ function followChip(){
   if(p) el.innerHTML = `Följer ${esc(p.name || 'Jägare')} <span class="fc-x">Sluta</span>`;
 }
 map.on('dragstart', () => { if(follow.uid){ followStop(); toast('Kartan följer inte längre.'); } });
-const posCountText = () => { if(!anyLiveHunt()) return 'Positioner kan bara delas och ses medan en jakt pågår.'; const n = activePositions().length; return n ? `${n} ${n === 1 ? 'person delar' : 'personer delar'} sin position just nu.` : 'Ingen annan delar sin position just nu.'; };
+const posCountText = () => { if(!anyLiveHunt()) return 'Positioner kan bara delas och ses medan en jakt pågår.'; const act = activePositions(), n = act.length, lost = act.filter(posLost).length;
+  return n ? `${n} ${n === 1 ? 'person delar' : 'personer delar'} sin position just nu.${lost ? ` ${lost === 1 ? 'En' : lost} har inte hörts av på minst 5 minuter.` : ''}` : 'Ingen annan delar sin position just nu.'; };
 setInterval(renderPositions, 60000);
 
 /* Viltobservationer under jakten. Sparas bara i den pågående jakten (groups/<lag>/huntObs/<jakt>),
@@ -524,16 +536,16 @@ function clearOwnTrail(){ trail.own = []; try { localStorage.removeItem(TRAIL_KE
 /* Vart positionen skickas: startade man själv, till alla pågående jakter. Startade den automatiskt, bara till jakterna man deltar i. */
 const shareHunts = g => liveHunts(g).filter(hid => invitedTo(g, hid) && (!cloud.autoShared || (accepted(g, hid) && !cloud.autoOff[g.id + '/' + hid])));
 const shareableLive = () => Object.values(cloud.groups).some(g => liveHunts(g).some(hid => invitedTo(g, hid)));
-/* I appen skickas positionen med telefonens egen HTTP (natPutPos), och Firebase tar inte bort den när anslutningen bryts
-   (onDisconnect), annars försvinner man från kartan när skärmen släcks. Den tas bort när man stoppar delningen eller jakten slutar. */
+/* I appen skickas positionen med telefonens egen HTTP (natPutPos). Varken i appen eller på webben tar Firebase bort den när
+   anslutningen bryts (onDisconnect): då skulle den som låser telefonen eller tappar täckningen försvinna från kartan, i stället
+   för att synas som "inte hörd av" (posLost). Den tas bort när man stoppar delningen eller jakten slutar, och visas inte
+   efter 30 minuter. */
 function sendPos(){
   if(!fb || !cloud.user || !myPos) return;
   for(const g of Object.values(cloud.groups)) for(const hid of shareHunts(g)){
     const path = `groups/${g.id}/huntPos/${hid}/${myUid()}`, val = {lat:+myPos.lat.toFixed(6), lng:+myPos.lng.toFixed(6), acc:Math.round(myPos.acc || 0), t:Date.now(), name:myName()};
     if(NAT.on){ natPutPos(path, val); continue; }
-    const r = fb.db.ref(path);
-    if(!g.disc[hid]){ g.disc[hid] = true; try { r.onDisconnect().remove(); } catch(e){} }
-    r.set(val).catch(() => {});
+    fb.db.ref(path).set(val).catch(() => {});
   }
   // Spårpunkt när man flyttat sig minst 10 m, eller varje minut
   const lt = cloud.lastTrail, now = Date.now();
@@ -552,7 +564,7 @@ function startSharing(){
   cloud.sharing = true; cloud.lastSent = 0; cloud.lastTrail = null; cloud.sentAt = null;
   gpsStart(powerOn());
   // I appen fortsätter delningen med släckt skärm. På webben hålls skärmen tänd.
-  if(!NAT.on) try { if(navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { cloud.wake = l; }).catch(() => {}); } catch(e){}
+  wakeLockGet();
   renderJakt();
 }
 /* GPS: i vanligt läge följs positionen hela tiden. I sparläget görs en mätning var 30:e sekund (fortfarande med hög
@@ -565,7 +577,7 @@ const GPS_SAVE_MS = 30000, SEND_MS = 8000, SEND_SAVE_MS = 60000, SEND_MOVE_M = 4
 function gpsPos(pos){
   const la = pos.coords.latitude, lo = pos.coords.longitude, ac = pos.coords.accuracy || 0;
   // Med släckt skärm i appen: bara det som behövs (spår, incheckning på passet, nödlarmets position), inte kartan
-  if(!document.hidden || !NAT.on) showMe(la, lo, ac);
+  if(!pocket.on && (!document.hidden || !NAT.on)) showMe(la, lo, ac);
   else { myPos = {lat:la, lng:lo, acc:ac}; renderDirty = true; trailAdd(la, lo, ac); if(typeof checkPass === 'function') checkPass(); if(typeof sosTrack === 'function') sosTrack(); }
   natGpsMode();
   const save = powerOn() || (typeof checkedIn === 'function' && checkedIn()), bg = NAT.on && document.hidden && !NAT.gps;
@@ -601,8 +613,65 @@ function stopSharing(silent){
   gpsStop();
   if(cloud.wake){ try { cloud.wake.release(); } catch(e){} cloud.wake = null; }
   const was = cloud.sharing; cloud.sharing = false; cloud.autoShared = false;
+  if(pocket.on){ pocketStatus(); setTimeout(pocketOff, 1500); }
   if(was && !silent && fb && cloud.user) for(const g of Object.values(cloud.groups)) for(const hid of liveHunts(g)){ fb.db.ref(`groups/${g.id}/huntPos/${hid}/${myUid()}`).remove().catch(() => {}); fb.db.ref(`groups/${g.id}/huntTrail/${hid}/${myUid()}`).remove().catch(() => {}); }
 }
+
+/* ---------- Webben: skärmen tänd, fickläge och återstart ----------
+   I en webbläsare (särskilt på iPhone) stannar GPS och sändning när skärmen låses eller man byter app. Därför hålls
+   skärmen tänd medan man delar, och fickläget gör den svart och okänslig för tryck. Webbläsaren släpper skärmlåset när
+   sidan döljs, så det begärs igen när den syns. Då skickas positionen också direkt, och man får veta hur länge den inte
+   delades. Appen behöver inget av detta: den skickar positionen även med släckt skärm. */
+function wakeLockGet(){
+  if(NAT.on || !cloud.sharing) return;
+  try { if(navigator.wakeLock && (!cloud.wake || cloud.wake.released)) navigator.wakeLock.request('screen').then(l => { cloud.wake = l; }).catch(() => {}); } catch(e){}
+}
+const webHide = {t:0};
+document.addEventListener('visibilitychange', () => {
+  if(NAT.on || !cloud.sharing) return;
+  if(document.hidden){ webHide.t = Date.now(); return; }
+  const gone = webHide.t ? Date.now() - webHide.t : 0; webHide.t = 0;
+  wakeLockGet();
+  cloud.lastSent = 0;   // nästa mätning skickas direkt
+  try { navigator.geolocation.getCurrentPosition(gpsPos, () => {}, {enableHighAccuracy:true, maximumAge:15000, timeout:20000}); } catch(e){}
+  if(gone >= 60000) toast(`Positionen delades inte på ${Math.round(gone / 60000)} min medan sidan inte syntes. Nu delas den igen. Använd Fickläge i stället för att låsa telefonen.`, 9000);
+});
+function pocketOn(){
+  if(pocket.on) return;
+  if(!cloud.sharing){ toast('Slå på Dela min position först.'); return; }
+  pocket.on = true; $('#pocket').hidden = false;
+  try { if(document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch(e){}
+  map.closePopup(); wakeLockGet();
+  if(typeof windAnim === 'function') windAnim(false);
+  pocketStatus(); clearInterval(pocket.t); pocket.t = setInterval(pocketStatus, 15000);
+  pocketKnob(0);
+}
+function pocketOff(){
+  if(!pocket.on) return;
+  pocket.on = false; $('#pocket').hidden = true; clearInterval(pocket.t); pocket.t = null;
+  if(typeof windRender === 'function') windRender();
+  renderDirty = true; redrawIfDirty();
+}
+function pocketStatus(){
+  if(!pocket.on) return;
+  const st = $('#pkStatus'); if(!st) return;
+  st.textContent = !cloud.sharing ? 'Positionen delas inte längre.' : cloud.lastSent ? `Positionen delas. Senast skickad ${fmtClock(cloud.lastSent)}.` : 'Positionen delas. Väntar på GPS …';
+  // Texten flyttas lite då och då, så att den inte bränns in i skärmen
+  st.parentNode.style.transform = `translateY(${(Math.floor(Date.now() / 15000) % 7) * 12}px)`;
+}
+/* Lås upp: dra knappen hela vägen åt höger. Det händer inte av misstag i fickan. Tangentbord: Enter eller Escape. */
+const pocketKnob = x => { const k = $('#pkKnob'); if(k) k.style.transform = `translateX(${x}px)`; };
+(() => {
+  const k = $('#pkKnob'), track = $('#pkSlide'), el = $('#pocket'); if(!k || !track || !el) return;
+  let x0 = null, max = 0, dx = 0;
+  k.addEventListener('pointerdown', e => { x0 = e.clientX; dx = 0; max = track.clientWidth - k.offsetWidth - 8; try { k.setPointerCapture(e.pointerId); } catch(er){} e.preventDefault(); });
+  k.addEventListener('pointermove', e => { if(x0 == null) return; dx = Math.max(0, Math.min(max, e.clientX - x0)); pocketKnob(dx); });
+  const end = () => { if(x0 == null) return; x0 = null; if(max > 0 && dx >= max * 0.9) pocketOff(); else pocketKnob(0); };
+  k.addEventListener('pointerup', end); k.addEventListener('pointercancel', end);
+  k.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === 'Escape'){ e.preventDefault(); pocketOff(); } });
+  // Allt annat på skärmen är avstängt i fickläget
+  ['click', 'dblclick', 'contextmenu', 'touchstart', 'wheel'].forEach(t => el.addEventListener(t, e => { if(e.target !== k) e.preventDefault(); }, {passive:false}));
+})();
 
 /* Åtgärder */
 const fail = msg => () => toast(msg || 'Det gick inte. Kontrollera nätverket och dina rättigheter.', 5000);
@@ -911,7 +980,9 @@ function renderJakt(){
 function shareHtml(){
   return `<label class="bigtoggle" for="shareToggle"><span><strong>Dela min position</strong><br><span class="small muted">Syns bara för deltagarna i pågående jakter</span></span><input class="sw-toggle" type="checkbox" id="shareToggle" ${cloud.sharing ? 'checked' : ''} ${shareableLive() ? '' : 'disabled'}></label>
     <p class="note" id="posCount">${posCountText()}</p><div class="pos-chips" id="posChips">${posChipsHtml()}</div>
-    ${cloud.sharing ? (NAT.on ? '<p class="note">Positionen skickas även med släckt skärm. Aviseringen <b>Jaktkartan delar din position</b> visar att den delas.</p>' : '<p class="note">Positionen skickas bara medan appen är öppen och skärmen är på.</p>') : ''}`;
+    ${cloud.sharing ? (NAT.on ? '<p class="note">Positionen skickas även med släckt skärm. Aviseringen <b>Jaktkartan delar din position</b> visar att den delas.</p>'
+      : `<div class="share-warn"><b>Lås inte telefonen och byt inte app.</b> Då slutar positionen att delas, och laget ser att du inte hörts av. Lägg telefonen i fickan i <b>Fickläge</b>: skärmen blir svart och tål tryck, men positionen delas.</div>
+      <div class="btnrow"><button class="btn sm primary" type="button" data-j="pocket">Fickläge</button></div>`) : ''}`;
 }
 function teamHtml(g){
   const u = cloud.user;
@@ -1139,6 +1210,7 @@ function jaktClick(e){
   const b = e.target.closest('[data-j]'); if(!b || b.tagName === 'SELECT') return;
   const act = b.dataset.j, g = cloud.groups[b.dataset.g], u = b.dataset.u, hid = b.dataset.h;
   if(act === 'go-konto') setTab('konto');
+  else if(act === 'pocket') pocketOn();
   else if(act === 'team') openTeam(b.dataset.g);
   else if(act === 'team-up' || act === 'team-down') teamMove(b.dataset.g, act === 'team-up' ? -1 : 1);
   else if(act === 'team-sub'){ nav.sub = b.dataset.s; renderJakt(); $('#pBody').scrollTop = 0; }

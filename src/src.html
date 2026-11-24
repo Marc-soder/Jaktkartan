@@ -98,6 +98,20 @@ a{color:var(--accent)}
 .follow-chip[hidden]{display:none}.follow-chip .fc-x{text-decoration:underline;font-weight:700}
 @media (min-width:860px){.follow-chip{left:calc(50% + var(--panel-w) / 2);top:56px}}
 .pos-chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}.pos-chips:empty{display:none}
+/* Inte hörd av på 5 minuter */
+.pos-icon.lost .pos-dot{filter:grayscale(1);opacity:.6;border-style:dashed}.pos-icon.lost .pos-name{color:var(--danger)}
+.pos-chip.lost{border-style:dashed}.pos-chip.lost .muted{color:var(--danger)}.pos-chip.lost .pc-dot{filter:grayscale(1)}
+.pp .pos-lost-note{color:var(--danger);font-weight:600}
+.share-warn{border-left:4px solid var(--danger);background:rgba(220,38,38,.08);border-radius:8px;padding:8px 10px;font-size:13px;line-height:1.45;margin:6px 0 8px}
+/* Fickläge: svart skärm över allt (drar lite ström på OLED), tål tryck, låses upp genom att dra knappen åt höger */
+.pocket{position:fixed;inset:0;z-index:6000;background:#000;color:#4b4b4b;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:calc(48px + var(--sat)) 24px calc(48px + var(--sab));touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.pocket[hidden]{display:none}
+.pk-info{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;font:500 14px/1.45 var(--font-body);transition:transform 1s}
+.pk-info b{color:#6b6b6b;font-size:16px;letter-spacing:.04em}
+.pk-slide{position:relative;width:min(300px,82vw);height:58px;border-radius:29px;border:1px solid #262626;background:#080808}
+.pk-txt{position:absolute;inset:0;display:grid;place-items:center;color:#3d3d3d;font-size:13px;pointer-events:none;padding-left:40px}
+.pk-knob{position:absolute;left:4px;top:4px;width:50px;height:50px;border-radius:50%;background:#2a2a2a;color:#8a8a8a;display:grid;place-items:center;font:700 26px/1 var(--font-body);cursor:grab;touch-action:none}
+.pk-knob:focus-visible{outline:2px solid #555;outline-offset:2px}
 .pos-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 10px 3px 3px;background:var(--surface);color:var(--fg);font:inherit;font-size:13px;cursor:pointer}
 .pos-chip.on{border-color:#1d4ed8;box-shadow:0 0 0 2px rgba(29,78,216,.25)}.pos-chip .muted{font-size:12px}
 .pc-dot{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;color:#fff;font:700 10px/1 var(--font-body)}
@@ -711,6 +725,10 @@ input[type=color].color-opt::-webkit-color-swatch{border:0;border-radius:50%}
 
 <input type="file" id="fileImport" accept=".json,.geojson,.kml,.gpx,.csv,.txt,application/json,application/vnd.google-earth.kml+xml,application/gpx+xml,text/csv" hidden>
 <div class="toast" id="toast" hidden role="status" aria-live="polite"></div>
+<div class="pocket" id="pocket" hidden role="dialog" aria-modal="true" aria-label="Fickläge">
+  <div class="pk-info"><b>Fickläge</b><span id="pkStatus"></span></div>
+  <div class="pk-slide" id="pkSlide"><span class="pk-txt">Dra åt höger för att låsa upp</span><span class="pk-knob" id="pkKnob" role="button" tabindex="0" aria-label="Lås upp: dra åt höger, eller tryck Enter">›</span></div>
+</div>
 
 <script>/*LEAFLET_JS*/</script>
 <script>
@@ -2064,7 +2082,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {calIcs, icsFold, calGcalUrl, natQ, natUpdAsk, NAT, natTok, natId, natGpsStart, checkedIn, huntInvitesCheck, calInvites, joinByCode, renderPositions, follow, posFocus, pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {pocket, pocketOn, pocketOff, posLost, gpsPos, webHide, calIcs, icsFold, calGcalUrl, natQ, natUpdAsk, NAT, natTok, natId, natGpsStart, checkedIn, huntInvitesCheck, calInvites, joinByCode, renderPositions, follow, posFocus, pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>

@@ -628,6 +628,27 @@ async function inviteRevokeAll(){
   check(await B.locator('.pos-icon').count() === 2 && await C.locator('.pos-icon').count() === 1 && await A.locator('.pos-icon').count() === 1, 'Bob ser Alice och Carl, Carl ser Alice, Alice ser Carl men inte sig själv');
   await C.locator('#shareToggle').check({force:true}); await W(C, 900);
   check(await A.locator('.pos-icon').count() === 1 && (await A.innerText('#posCount')).startsWith('1 person'), 'gästens position syns för laget');
+  // Webben (till exempel iPhone): varning, fickläge och återstart
+  check(await A.isVisible('#paneJakt .share-warn') && (await A.innerText('#paneJakt .share-warn')).includes('Lås inte telefonen') && await A.isVisible('#paneJakt [data-j="pocket"]'), 'på webben varnar sidan för att låsa telefonen och erbjuder Fickläge');
+  await A.click('#paneJakt [data-j="pocket"]'); await W(A, 200);
+  check(await A.isVisible('#pocket') && (await A.innerText('#pkStatus')).includes('Positionen delas') && (await A.evaluate(() => getComputedStyle(document.getElementById('pocket')).backgroundColor)) === 'rgb(0, 0, 0)', 'Fickläge visar en svart skärm som säger att positionen delas');
+  await A.mouse.click(640, 300); await A.mouse.dblclick(640, 450); await W(A, 100);
+  check(await A.evaluate(() => __fk.pocket.on), 'tryck på skärmen låser inte upp fickläget');
+  { const t0 = hp().alice.t;
+    await A.evaluate(() => { __fk.cloud.lastSent = 0; __fk.gpsPos({coords:{latitude:58.72, longitude:14.61, accuracy:12}}); }); await W(A, 700);
+    check(hp().alice.t > t0 && Math.abs(hp().alice.lat - 58.72) < 1e-6, 'i fickläget skickas positionen som vanligt'); }
+  { const k = await A.locator('#pkKnob').boundingBox(), tr = await A.locator('#pkSlide').boundingBox(), y = k.y + k.height / 2;
+    await A.mouse.move(k.x + k.width / 2, y); await A.mouse.down(); await A.mouse.move(k.x + tr.width / 2, y, {steps:5}); await A.mouse.up(); await W(A, 150);
+    const half = await A.evaluate(() => __fk.pocket.on);
+    await A.mouse.move(k.x + k.width / 2, y); await A.mouse.down(); await A.mouse.move(tr.x + tr.width + 30, y, {steps:8}); await A.mouse.up(); await W(A, 300);
+    check(half && !(await A.evaluate(() => __fk.pocket.on)) && !(await A.isVisible('#pocket')) && await A.locator('.pos-icon').count() === 1, 'fickläget låses upp först när knappen dras hela vägen åt höger, och kartan ritas igen'); }
+  { const t0 = hp().alice.t;
+    await A.evaluate(() => { Object.defineProperty(document, 'hidden', {configurable:true, get:() => true}); document.dispatchEvent(new Event('visibilitychange')); __fk.webHide.t = Date.now() - 3 * 60000; });
+    await A.evaluate(() => { Object.defineProperty(document, 'hidden', {configurable:true, get:() => false}); document.dispatchEvent(new Event('visibilitychange')); });
+    const back = await A.innerText('#toast');
+    await A.context().setGeolocation({latitude:58.72001, longitude:14.61, accuracy:12}); await W(A, 1200);   // den låtsade GPS:en svarar bara när platsen ändras
+    check(back.includes('Positionen delades inte på 3 min') && hp().alice.t > t0 && Math.abs(hp().alice.lat - 58.72001) < 1e-7, `när sidan syns igen skickas positionen direkt, och man får veta hur länge den inte delades (${back})`);
+    await A.evaluate(() => { __fk.cloud.lastSent = 0; }); await A.context().setGeolocation({latitude:58.72, longitude:14.61, accuracy:12}); await W(A, 1000); }
   // Visa och följ en deltagare på kartan
   await team(B, 'jakt'); await W(B, 300);
   { const chips = await B.locator('#posChips .pos-chip').allInnerTexts();
@@ -648,6 +669,14 @@ async function inviteRevokeAll(){
   await B.click('#followChip'); await W(B, 200);
   check(!(await B.isVisible('#followChip')) && (await B.evaluate(() => __fk.follow.uid)) === null, 'Sluta i etiketten slutar följa');
   await B.evaluate(v => { __fk.map.closePopup(); __fk.map.setView([v[0], v[1]], v[2], {animate:false}); }, viewB); await W(B, 200);
+  // Inte hörd av på 5 minuter: markeras på kartan, i listan och i rutan
+  { const carlT = await B.evaluate(([g, h]) => { const G = __fk.cloud.groups[g], t = G.huntPos[h]['anon-carl'].t; G.huntPos[h]['anon-carl'] = Object.assign({}, G.huntPos[h]['anon-carl'], {t:Date.now() - 7 * 60000}); __fk.renderPositions(); return t; }, [gid, hid]); await W(B, 200);
+    const lost = await B.locator('.pos-icon.lost').count(), name = await B.innerText('.pos-icon.lost .pos-name'), chip = await B.innerText('#posChips .pos-chip.lost'), cnt = await B.innerText('#posCount');
+    await B.evaluate(() => __fk.posFocus('anon-carl', true)); await W(B, 700);
+    const pop = await B.innerText('.leaflet-popup');
+    check(lost === 1 && name.includes('7 min') && chip.includes('inte hörd på 7 min') && cnt.includes('En har inte hörts av') && pop.includes('Inte hörd av på 7 min') && await B.locator('.pos-icon:not(.lost)').count() === 1,
+      `den som inte hörts av på 5 minuter markeras på kartan, i listan och i rutan (${name} | ${chip} | ${cnt})`);
+    await B.evaluate(([g, h, t, v]) => { __fk.map.closePopup(); __fk.map.setView([v[0], v[1]], v[2], {animate:false}); const G = __fk.cloud.groups[g]; G.huntPos[h]['anon-carl'] = Object.assign({}, G.huntPos[h]['anon-carl'], {t}); __fk.renderPositions(); }, [gid, hid, carlT, viewB]); await W(B, 200); }
   // ---- Spår ----
   const tr = () => (((data.groups[gid].huntTrail || {})[hid] || {}).alice || {});
   check(Object.keys(tr()).length >= 1, 'Alices spårpunkt sparas i jakten');
@@ -708,7 +737,7 @@ async function inviteRevokeAll(){
   await B.evaluate(([g, h, o]) => firebase.database().ref(`groups/${g}/huntObs/${h}/${o}`).remove(), [gid, hid, killE[0]]); await W(A, 500);
   check(!data.groups[gid].huntObs[hid][killE[0]] && await A.locator('.obs-icon .obs-dot.kill').count() === 0, 'den som registrerat fällt vilt kan ta bort det');
   // ---- Appen på Android (låtsad Capacitor): position med släckt skärm, inloggning och aviseringar ----
-  check(!(await A.evaluate(() => __fk.NAT.on)) && (await A.evaluate(() => window.__od)) > 0, 'på webben är appläget av, och positionen tas bort när anslutningen bryts (onDisconnect)');
+  check(!(await A.evaluate(() => __fk.NAT.on)) && (await A.evaluate(() => window.__od)) === 0, 'på webben är appläget av, och positionen ligger kvar när anslutningen bryts, så att laget ser att man inte hörts av');
   const BN = await mkPage(browser, 'bob', '', {native:true});
   const nat = (pl, m) => BN.evaluate(([a, b]) => window.__nat.calls.filter(c => c.plugin === a && (!b || c.method === b)), [pl, m]);
   check(await BN.evaluate(() => __fk.NAT.on) && (await nat('LocalNotifications', 'createChannel')).map(c => c.opts.id).join() === 'sos,jakt,msg,upd', 'appen känns igen, och kanaler för nödlarm, jaktstart, meddelanden och ny version skapas');
@@ -725,7 +754,7 @@ async function inviteRevokeAll(){
   const bp = () => hp().bob || {}, btr = () => Object.values(((data.groups[gid].huntTrail || {})[hid] || {}).bob || {});
   const puts = await BN.evaluate(() => window.__nat.http.filter(h => h.method === 'PUT').map(h => h.url)), dbUrl = await BN.evaluate(() => __fk.cloud.cfg.databaseURL.replace(/\/+$/, ''));
   check(bp().lat === 58.7215 && bp().acc === 6 && bp().name === 'Bob Test' && btr().length === 1 && puts.length && puts[0].startsWith(`${dbUrl}/groups/${gid}/huntPos/${hid}/bob.json?auth=`), 'positionen och spåret skickas till Firebase REST med telefonens egen HTTP');
-  check((await BN.evaluate(() => window.__od)) === 0, 'i appen tas positionen inte bort när anslutningen bryts (ingen onDisconnect)');
+  check((await BN.evaluate(() => window.__od)) === 0 && !(await BN.isVisible('.share-warn')) && !(await BN.locator('[data-j="pocket"]').count()), 'i appen tas positionen inte bort när anslutningen bryts, och appen behöver varken varning eller fickläge');
   check(await A.locator('.pos-icon').count() === 2, 'Alice ser Bobs position från appen');
   // Skärmen släckt och ID-token nästan slut: den förnyas med telefonens egen HTTP
   await BN.evaluate(() => { Object.defineProperty(document, 'hidden', {configurable:true, get:() => true}); window.__tokLife = 60; __fk.natTok.exp = 0; __fk.cloud.lastSent = 0; window.__natEmit(58.7225, 14.6125, 5); }); await W(BN, 700);
