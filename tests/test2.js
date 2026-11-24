@@ -343,6 +343,29 @@ async function inviteRevokeAll(){
   await B.selectOption(`select[data-pl="who"][data-p="${pB}"]`, '__name'); await W(B, 100);
   await B.fill('#planBody input[data-pl="who-name"]', 'Kalle utan app'); await B.press('#planBody input[data-pl="who-name"]', 'Tab'); await W(B, 400);
   check(plan().stands[pB] && plan().stands[pB].who === 'Kalle utan app' && !plan().stands[pB].uid, 'ett pass kan få ett eget namn för någon utan appen');
+  // Placera skyttar på kartan: tryck på ett pass och välj vem som står där
+  { const pn = k => data.groups[gid].pins[aid][k].name, icon = k => `.pm-icon[title^="${pn(k)}:"]`, st = k => (plan().stands || {})[k] || {};
+    const pick = async (k, sel) => { await B.click(icon(k)); await W(B, 200); await B.click(`.modal ${sel}`); await W(B, 500); };
+    await B.click('#planBody [data-pl="pmap"]'); await W(B, 500);
+    const bar = await B.innerText('#planMapBar');
+    check(!(await B.isVisible('#planBody')) && await B.isVisible('#planMapBar') && bar.includes('2 av 2 pass') && await B.locator('.pm-icon').count() === 2 && (await B.innerText(icon(pA))).includes('Carl Gäst') && (await B.innerText(icon(pB))).includes('Kalle utan app'),
+      `Placera skyttar på kartan visar kartan med jaktens pass och vem som står där (${bar.split('\n')[1]})`);
+    await B.screenshot({path:shot('b_placera_karta.png')});
+    await B.click(icon(pB)); await W(B, 200);
+    await B.screenshot({path:shot('b_placera_valj.png')});
+    const list = await B.innerText('.modal');
+    check(list.includes(pn(pB)) && list.includes('Alice Test') && list.includes('Carl Gäst (gäst)') && list.includes('står på ' + pn(pA)) && list.includes('Ingen (ledigt)'), 'ett tryck på ett pass visar deltagarna och var de redan står');
+    await B.click('.modal [data-pm="u:alice"]'); await W(B, 500);
+    check(st(pB).who === 'Alice Test' && st(pB).uid === 'alice' && (await B.innerText(icon(pB))).includes('Alice Test') && (await B.innerText('#toast')).includes('Alice Test står på'), 'Alice placeras på passet från kartan');
+    await pick(pA, '[data-pm="u:alice"]');
+    check(st(pA).uid === 'alice' && !st(pB).who && !st(pB).uid && (await B.innerText(icon(pB))).includes('Ledigt') && (await B.innerText('#planMapBar')).includes('1 av 2 pass'), 'placeras samma person på ett annat pass flyttas hen, och det gamla passet blir ledigt');
+    await pick(pA, '[data-pm=""]');
+    check(!st(pA).who && !st(pA).uid && (await B.innerText(icon(pA))).includes('Ledigt'), 'Ingen gör passet ledigt');
+    await pick(pA, '[data-pm="u:anon-carl"]');
+    await B.click(icon(pB)); await W(B, 200); await B.fill('#pmName', 'Kalle utan app'); await B.click('#pmForm button'); await W(B, 500);
+    check(st(pA).uid === 'anon-carl' && st(pB).who === 'Kalle utan app' && !st(pB).uid, 'Carl och ett eget namn placeras från kartan');
+    await B.click('#pmDone'); await W(B, 300);
+    check(!(await B.isVisible('#planMapBar')) && await B.locator('.pm-icon').count() === 0 && await B.isVisible('#planBody'), 'Klar går tillbaka till planeringen'); }
   await B.click(`[data-pl="dirs"][data-p="${pA}"]`); await W(B, 200);
   check(await B.locator('.rose .rose-w').count() === 16, 'kompassrosen har 16 riktningar');
   // Passgrannen visas i sin riktning, med avstånd, och om riktningen mot den är spärrad
@@ -628,6 +651,27 @@ async function inviteRevokeAll(){
   check(await B.locator('.pos-icon').count() === 2 && await C.locator('.pos-icon').count() === 1 && await A.locator('.pos-icon').count() === 1, 'Bob ser Alice och Carl, Carl ser Alice, Alice ser Carl men inte sig själv');
   await C.locator('#shareToggle').check({force:true}); await W(C, 900);
   check(await A.locator('.pos-icon').count() === 1 && (await A.innerText('#posCount')).startsWith('1 person'), 'gästens position syns för laget');
+  // Webben (till exempel iPhone): varning, fickläge och återstart
+  check(await A.isVisible('#paneJakt .share-warn') && (await A.innerText('#paneJakt .share-warn')).includes('Lås inte telefonen') && await A.isVisible('#paneJakt [data-j="pocket"]'), 'på webben varnar sidan för att låsa telefonen och erbjuder Fickläge');
+  await A.click('#paneJakt [data-j="pocket"]'); await W(A, 200);
+  check(await A.isVisible('#pocket') && (await A.innerText('#pkStatus')).includes('Positionen delas') && (await A.evaluate(() => getComputedStyle(document.getElementById('pocket')).backgroundColor)) === 'rgb(0, 0, 0)', 'Fickläge visar en svart skärm som säger att positionen delas');
+  await A.mouse.click(640, 300); await A.mouse.dblclick(640, 450); await W(A, 100);
+  check(await A.evaluate(() => __fk.pocket.on), 'tryck på skärmen låser inte upp fickläget');
+  { const t0 = hp().alice.t;
+    await A.evaluate(() => { __fk.cloud.lastSent = 0; __fk.gpsPos({coords:{latitude:58.72, longitude:14.61, accuracy:12}}); }); await W(A, 700);
+    check(hp().alice.t > t0 && Math.abs(hp().alice.lat - 58.72) < 1e-6, 'i fickläget skickas positionen som vanligt'); }
+  { const k = await A.locator('#pkKnob').boundingBox(), tr = await A.locator('#pkSlide').boundingBox(), y = k.y + k.height / 2;
+    await A.mouse.move(k.x + k.width / 2, y); await A.mouse.down(); await A.mouse.move(k.x + tr.width / 2, y, {steps:5}); await A.mouse.up(); await W(A, 150);
+    const half = await A.evaluate(() => __fk.pocket.on);
+    await A.mouse.move(k.x + k.width / 2, y); await A.mouse.down(); await A.mouse.move(tr.x + tr.width + 30, y, {steps:8}); await A.mouse.up(); await W(A, 300);
+    check(half && !(await A.evaluate(() => __fk.pocket.on)) && !(await A.isVisible('#pocket')) && await A.locator('.pos-icon').count() === 1, 'fickläget låses upp först när knappen dras hela vägen åt höger, och kartan ritas igen'); }
+  { const t0 = hp().alice.t;
+    await A.evaluate(() => { Object.defineProperty(document, 'hidden', {configurable:true, get:() => true}); document.dispatchEvent(new Event('visibilitychange')); __fk.webHide.t = Date.now() - 3 * 60000; });
+    await A.evaluate(() => { Object.defineProperty(document, 'hidden', {configurable:true, get:() => false}); document.dispatchEvent(new Event('visibilitychange')); });
+    const back = await A.innerText('#toast');
+    await A.context().setGeolocation({latitude:58.72001, longitude:14.61, accuracy:12}); await W(A, 1200);   // den låtsade GPS:en svarar bara när platsen ändras
+    check(back.includes('Positionen delades inte på 3 min') && hp().alice.t > t0 && Math.abs(hp().alice.lat - 58.72001) < 1e-7, `när sidan syns igen skickas positionen direkt, och man får veta hur länge den inte delades (${back})`);
+    await A.evaluate(() => { __fk.cloud.lastSent = 0; }); await A.context().setGeolocation({latitude:58.72, longitude:14.61, accuracy:12}); await W(A, 1000); }
   // Visa och följ en deltagare på kartan
   await team(B, 'jakt'); await W(B, 300);
   { const chips = await B.locator('#posChips .pos-chip').allInnerTexts();
@@ -647,6 +691,19 @@ async function inviteRevokeAll(){
   await B.click('#posChips .pos-chip[data-u="alice"]'); await W(B, 900); await B.click('.leaflet-popup [data-follow]'); await W(B, 300);
   await B.click('#followChip'); await W(B, 200);
   check(!(await B.isVisible('#followChip')) && (await B.evaluate(() => __fk.follow.uid)) === null, 'Sluta i etiketten slutar följa');
+  await B.evaluate(v => { __fk.map.closePopup(); __fk.map.setView([v[0], v[1]], v[2], {animate:false}); }, viewB); await W(B, 200);
+  // Inte hörd av på 5 minuter: markeras på kartan, i listan och i rutan. Allt i ett synkront steg, så att en ny position
+  // från servern (som ritar om kartan) inte hinner emellan.
+  { const r = await B.evaluate(([g, h]) => {
+      const G = __fk.cloud.groups[g], old = G.huntPos[h]['anon-carl'];
+      G.huntPos[h]['anon-carl'] = Object.assign({}, old, {t:Date.now() - 7 * 60000}); __fk.renderPositions();
+      const q = s => { const e = document.querySelector(s); return e ? e.innerText : ''; };
+      const out = {lost:document.querySelectorAll('.pos-icon.lost').length, ok:document.querySelectorAll('.pos-icon:not(.lost)').length, name:q('.pos-icon.lost .pos-name'), chip:q('#posChips .pos-chip.lost'), cnt:q('#posCount')};
+      const m = __fk.posMarkers()['anon-carl']; m.openPopup(); out.pop = q('.leaflet-popup'); m.closePopup();
+      G.huntPos[h]['anon-carl'] = old; __fk.renderPositions();
+      return out; }, [gid, hid]);
+    check(r.lost === 1 && r.ok === 1 && r.name.includes('7 min') && r.chip.includes('inte hörd på 7 min') && r.cnt.includes('En har inte hörts av') && r.pop.includes('Inte hörd av på 7 min'),
+      `den som inte hörts av på 5 minuter markeras på kartan, i listan och i rutan (${r.name} | ${r.chip.replace('\n', ' ')} | ${r.cnt})`); }
   await B.evaluate(v => { __fk.map.closePopup(); __fk.map.setView([v[0], v[1]], v[2], {animate:false}); }, viewB); await W(B, 200);
   // ---- Spår ----
   const tr = () => (((data.groups[gid].huntTrail || {})[hid] || {}).alice || {});
@@ -708,7 +765,7 @@ async function inviteRevokeAll(){
   await B.evaluate(([g, h, o]) => firebase.database().ref(`groups/${g}/huntObs/${h}/${o}`).remove(), [gid, hid, killE[0]]); await W(A, 500);
   check(!data.groups[gid].huntObs[hid][killE[0]] && await A.locator('.obs-icon .obs-dot.kill').count() === 0, 'den som registrerat fällt vilt kan ta bort det');
   // ---- Appen på Android (låtsad Capacitor): position med släckt skärm, inloggning och aviseringar ----
-  check(!(await A.evaluate(() => __fk.NAT.on)) && (await A.evaluate(() => window.__od)) > 0, 'på webben är appläget av, och positionen tas bort när anslutningen bryts (onDisconnect)');
+  check(!(await A.evaluate(() => __fk.NAT.on)) && (await A.evaluate(() => window.__od)) === 0, 'på webben är appläget av, och positionen ligger kvar när anslutningen bryts, så att laget ser att man inte hörts av');
   const BN = await mkPage(browser, 'bob', '', {native:true});
   const nat = (pl, m) => BN.evaluate(([a, b]) => window.__nat.calls.filter(c => c.plugin === a && (!b || c.method === b)), [pl, m]);
   check(await BN.evaluate(() => __fk.NAT.on) && (await nat('LocalNotifications', 'createChannel')).map(c => c.opts.id).join() === 'sos,jakt,msg,upd', 'appen känns igen, och kanaler för nödlarm, jaktstart, meddelanden och ny version skapas');
@@ -725,7 +782,7 @@ async function inviteRevokeAll(){
   const bp = () => hp().bob || {}, btr = () => Object.values(((data.groups[gid].huntTrail || {})[hid] || {}).bob || {});
   const puts = await BN.evaluate(() => window.__nat.http.filter(h => h.method === 'PUT').map(h => h.url)), dbUrl = await BN.evaluate(() => __fk.cloud.cfg.databaseURL.replace(/\/+$/, ''));
   check(bp().lat === 58.7215 && bp().acc === 6 && bp().name === 'Bob Test' && btr().length === 1 && puts.length && puts[0].startsWith(`${dbUrl}/groups/${gid}/huntPos/${hid}/bob.json?auth=`), 'positionen och spåret skickas till Firebase REST med telefonens egen HTTP');
-  check((await BN.evaluate(() => window.__od)) === 0, 'i appen tas positionen inte bort när anslutningen bryts (ingen onDisconnect)');
+  check((await BN.evaluate(() => window.__od)) === 0 && !(await BN.isVisible('.share-warn')) && !(await BN.locator('[data-j="pocket"]').count()), 'i appen tas positionen inte bort när anslutningen bryts, och appen behöver varken varning eller fickläge');
   check(await A.locator('.pos-icon').count() === 2, 'Alice ser Bobs position från appen');
   // Skärmen släckt och ID-token nästan slut: den förnyas med telefonens egen HTTP
   await BN.evaluate(() => { Object.defineProperty(document, 'hidden', {configurable:true, get:() => true}); window.__tokLife = 60; __fk.natTok.exp = 0; __fk.cloud.lastSent = 0; window.__natEmit(58.7225, 14.6125, 5); }); await W(BN, 700);
@@ -899,6 +956,21 @@ async function inviteRevokeAll(){
   { const x = PLN().drives[dM].pass[pB]; check(x && x.uid === 'alice' && x.ok === true && (await B.innerText('#planBody')).includes('Godkänd avvikelse'), 'Placera ändå: Alice står på passet, och avvikelsen syns som godkänd'); }
   await B.selectOption(`#planBody [data-pl="dwho"][data-d="${dM}"][data-p="${pA}"]`, 'u:anon-carl'); await W(B, 700);
   check(PLN().drives[dM].pass[pA].uid === 'anon-carl' && !(await B.isVisible('#pwOk')), 'Carl placeras utan varning (ingen utrustning angiven)');
+  // Placera på kartan i en såt: såten väljs nederst, varningen kommer som i listan, och andra såtar påverkas inte
+  await B.evaluate(d => { const x = document.querySelector(`details.drive-box[data-d="${d}"]`); if(x) x.open = true; }, d2); await W(B, 100);
+  await B.click(`#planBody [data-pl="pmap"][data-d="${d2}"]`); await W(B, 500);
+  { const icon = k => `.pm-icon[title^="${data.groups[gid].pins[aid][k].name}:"]`, dp = d => (PLN().drives[d].pass || {});
+    check(await B.inputValue('#pmScope') === d2 && (await B.innerText('#planMapBar')).includes('0 av 2 pass'), 'i en såt väljs såten nederst, och kartan visar såtens pass');
+    await B.click(icon(pB)); await W(B, 200); await B.click('.modal [data-pm="u:alice"]'); await W(B, 300);
+    const warn = await B.isVisible('#pwOk') && (await B.innerText('.modal')).includes('lättillgängligt');
+    await B.click('#pwOk'); await W(B, 600);
+    check(warn && (dp(d2)[pB] || {}).uid === 'alice' && dp(d2)[pB].ok === true && dp(dM)[pB].uid === 'alice' && dp(dM)[pA].uid === 'anon-carl', 'från kartan kommer samma varning, Placera ändå sparar i den valda såten, och den andra såten är oförändrad');
+    await B.selectOption('#pmScope', dM); await W(B, 300);
+    check((await B.innerText('#planMapBar')).includes('2 av 2 pass') && (await B.innerText(icon(pA))).includes('Carl Gäst'), 'byter man såt visar kartan den såtens pass');
+    await B.selectOption('#pmScope', d2); await W(B, 300);
+    await B.click(icon(pB)); await W(B, 200); await B.click('.modal [data-pm=""]'); await W(B, 600);
+    check(!(dp(d2)[pB] || {}).uid, 'passet i såt 2 är ledigt igen');
+    await B.click('#pmDone'); await W(B, 300); }
   // lotta pass i såt 2
   check(JSON.stringify(await B.evaluate(() => { const g = {gear:{u1:{name:'U1', gun:'both', easy:true}, u2:{name:'U2', gun:'kula'}}}, ps = [{id:'p1', name:'P1'}, {id:'p2', name:'P2', easy:true}, {id:'p3', name:'P3', ammo:'hagel'}], us = [{uid:'u2', name:'U2'}, {uid:'u1', name:'U1'}, {uid:'u3', name:'U3'}];
     const ok = []; for(let i = 0; i < 40; i++){ const r = __fk.lottery(g, ps, us).out; ok.push(r.p2.uid === 'u1' && r.p3.uid === 'u3' && r.p1.uid === 'u2'); } return [...new Set(ok)]; })) === '[true]', 'lottningen ger alltid den som behöver lättillgängligt pass ett sådant, och kula-skytten inte hagelpasset');

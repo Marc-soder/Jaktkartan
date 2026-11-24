@@ -293,7 +293,7 @@ function onOrient(e){
   else if(e.absolute && typeof e.alpha === 'number') hd = 360 - e.alpha;                                            // Android: moturs från norr
   if(hd == null) return;
   compass.heading = ((hd + screenAngle()) % 360 + 360) % 360;
-  if(compass.raf) return;
+  if(compass.raf || (typeof pocket !== 'undefined' && pocket.on)) return;
   // Kompassen ritas om högst 20 gånger i sekunden, i sparläget högst tio
   const wait = Math.max(0, (power.on ? POWER_FRAME_MS : COMPASS_FRAME_MS) - (Date.now() - compass.last));
   const draw = () => { compass.raf = 0; compass.last = Date.now(); const was = compass.bad; renderHeading(); if(compass.bad !== was) powerUpdate(); };
