@@ -29,11 +29,11 @@ function planHunts(){
   }
   return out;
 }
-/* Passen i jaktens områden. Har jakten inga valda områden används lagets alla delade områden. */
+/* Passen i jaktens områden: pass och jakttorn (isStandType). Har jakten inga valda områden används lagets alla delade områden. */
 function planAreaIds(g, hunt){ const a = Object.keys(hunt.areas || {}).filter(k => hunt.areas[k] === true); return a.length ? a : Object.keys(g.areas || {}); }
 function planPasses(g, hunt){
   const ids = new Set(planAreaIds(g, hunt));
-  return state.pins.filter(p => ids.has(p.areaId) && isPassType(typeById(p.typeId)))
+  return state.pins.filter(p => ids.has(p.areaId) && isStandType(typeById(p.typeId)))
     .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'sv', {numeric:true}));
 }
 /* Deltagare att välja bland: lagets medlemmar och jaktens gäster. */
@@ -410,8 +410,8 @@ function planBodyRender(force){
   const now = Date.now(), upcoming = !live && hunt.expires > now;
   let h = `<p class="note" style="margin-top:0"><b>${esc(hunt.name)}</b> · ${upcoming ? (hunt.manual ? 'planerad' : 'startar ' + esc(fmtTime(hunt.starts))) : 'pågår'}. Planen syns för alla i jakten, även gästerna, och tas bort när jakten avslutas.</p>`;
   // Pass: egenskaper, förbjudna riktningar, och vem som står var när jakten inte är uppdelad i såtar
-  h += `<h3 class="sec">Pass</h3><p class="note" style="margin-top:0">${ds.length ? 'Vem som står var väljs för varje såt längre ned.' : 'Vem som står var gäller hela jakten. Rita såtar längre ned för att dela upp jakten.'} Lättillgängligt och hagel eller kula sparas på passet och gäller i alla jakter.</p>`;
-  if(!passes.length) h += `<p class="note" style="margin-top:0">Det finns inga pass i jaktens områden. Lägg ut nålar av typen Pass i ett område som delas med laget.</p>`;
+  h += `<h3 class="sec">Pass och jakttorn</h3><p class="note" style="margin-top:0">${ds.length ? 'Vem som står var väljs för varje såt längre ned.' : 'Vem som står var gäller hela jakten. Rita såtar längre ned för att dela upp jakten.'} Lättillgängligt och hagel eller kula sparas på passet och gäller i alla jakter.</p>`;
+  if(!passes.length) h += `<p class="note" style="margin-top:0">Det finns inga pass eller jakttorn i jaktens områden. Lägg ut nålar av typen Pass eller Jakttorn i ett område som delas med laget.</p>`;
   else h += `<div class="btnrow"><button class="btn sm primary" type="button" data-pl="pmap">Placera skyttar på kartan</button></div>`;
   for(const p of passes){
     const s = (plan.stands || {})[p.id] || {}, no = maskDirs(s.no), ed = canEditPin(p) ? '' : ' disabled';

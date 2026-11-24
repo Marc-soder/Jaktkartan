@@ -330,9 +330,24 @@ async function inviteRevokeAll(){
   // ---- Jaktplan ----
   await B.evaluate(([g, a]) => firebase.database().ref('groups/' + g + '/pins/' + a + '/pass1').set({name:'Pass 1 – bäcken', note:'', typeId:'t-pass', lat:58.7228, lng:14.6045, created:1, updated:1, by:'bob'}), [gid, aid]); await W(B, 500);
   const passIds = Object.entries(data.groups[gid].pins[aid]).filter(([, p]) => p.typeId === 't-pass').map(([k]) => k);
+  const plan2 = () => ((data.groups[gid].huntPlan || {})[hid] || {});
   await team(B, 'jakt'); await team(C, 'jakt');
   check(await B.locator('[data-j="plan"]').count() === 1 && await A.locator('[data-j="plan"]').count() === 1 && await C.locator('[data-j="plan"]').count() === 0, 'jaktledare och admin kan planera jakten, gästen kan inte');
   await B.click('[data-j="plan"]'); await W(B, 300);
+  // Jakttorn är också platser för en skytt: de finns i planen och kan få en skytt, i listan och på kartan
+  { const towers = Object.entries(data.groups[gid].pins[aid]).filter(([, p]) => p.typeId === 't-torn').map(([k, p]) => ({id:k, name:p.name}));
+    const body = await B.innerText('#planBody'), st = k => ((plan2().stands || {})[k] || {});
+    check(towers.length === 2 && await B.locator('#planBody select[data-pl="who"]').count() === passIds.length + towers.length && towers.every(t => body.includes(t.name)) && body.toUpperCase().includes('PASS OCH JAKTTORN'),
+      `planen listar jaktens pass och jakttorn (${towers.map(t => t.name)})`);
+    await B.selectOption(`select[data-pl="who"][data-p="${towers[0].id}"]`, 'u:alice'); await W(B, 500);
+    check(st(towers[0].id).uid === 'alice', 'en skytt kan placeras i ett jakttorn från listan');
+    await B.click('#planBody [data-pl="pmap"]'); await W(B, 500);
+    await B.click(`.pm-icon[title^="${towers[1].name}:"]`); await W(B, 200); await B.click('.modal [data-pm="u:alice"]'); await W(B, 500);
+    check(st(towers[1].id).uid === 'alice' && !st(towers[0].id).uid && (await B.innerText('#planMapBar')).includes('av 4 pass'), 'och på kartan, där hon flyttas från det andra tornet');
+    // Rensa, och gör om tornen till vanliga nålar: resten av planeringstesterna räknar med jaktens två pass
+    await B.evaluate(([g, h, ts]) => firebase.database().ref(`groups/${g}/huntPlan/${h}`).remove(), [gid, hid, towers.map(t => t.id)]);
+    await B.evaluate(([g, a, ts]) => Promise.all(ts.map(t => firebase.database().ref(`groups/${g}/pins/${a}/${t}/typeId`).set('t-kamera'))), [gid, aid, towers.map(t => t.id)]); await W(B, 600);
+    await B.click('#pmDone'); await W(B, 400); }
   check(await B.locator('#planBody select[data-pl="who"]').count() === passIds.length && passIds.length === 2, `planen listar jaktens ${passIds.length} pass`);
   const pA = passIds.find(k => k === 'pass1'), pB = passIds.find(k => k !== 'pass1');
   const opts = await B.locator(`select[data-pl="who"][data-p="${pA}"] option`).allInnerTexts();
