@@ -681,7 +681,7 @@ function planMapRender(){
   for(const p of c.passes){
     const s = c.sets[p.id] || {}, who = s.who || '', warn = s.uid && passIssues(c.g, p, s.uid, s.who).length && !s.ok;
     if(who) set++;
-    L.marker([p.lat, p.lng], {icon:L.divIcon({className:'pm-icon' + (who ? ' set' : '') + (warn ? ' warn' : ''), html:`<span class="pm-ring"></span><span class="pm-lbl"><b>${esc(p.name || 'Pass')}</b><span>${esc(who || 'Ledigt')}${warn ? ' ⚠' : ''}</span></span>`, iconSize:[44, 44], iconAnchor:[22, 22]}), zIndexOffset:3000, keyboard:true, title:`${p.name || 'Pass'}: ${who || 'ledigt'}`})
+    L.marker([p.lat, p.lng], {icon:L.divIcon({className:'pm-icon' + (who ? ' set' : '') + (warn ? ' warn' : ''), html:`<span class="pm-ring"></span><span class="pm-lbl">${esc(who || 'Ledigt')}${warn ? ' ⚠' : ''}</span>`, iconSize:[44, 44], iconAnchor:[22, 47]}), zIndexOffset:3000, keyboard:true, title:`${p.name || 'Pass'}: ${who || 'ledigt'}`})
       .on('click', () => planMapPick(p.id)).addTo(planMap.layer);
   }
   if(!bar) return;

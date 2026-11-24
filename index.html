@@ -890,12 +890,12 @@ a{color:var(--accent)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .rose-nbl .warn{color:#fbbf24}}
 :root[data-theme="dark"] .rose-nbl .warn{color:#fbbf24}
 .plan-lbl{width:0;height:0}
-/* Placera skyttar på kartan: en ring runt varje pass, med passets namn och vem som står där */
+/* Placera skyttar på kartan: en ring runt nålens huvud (nålens namn syns under den) och vem som står där ovanför */
 .pm-icon{cursor:pointer}
 .pm-ring{position:absolute;inset:0;border-radius:50%;border:3px solid #ea580c;background:rgba(234,88,12,.14);box-shadow:0 0 0 2px rgba(255,255,255,.85)}
 .pm-icon.set .pm-ring{border-color:#15803d;background:rgba(21,128,61,.16)}.pm-icon.warn .pm-ring{border-color:#b45309;border-style:dashed}
-.pm-lbl{position:absolute;top:47px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;white-space:nowrap;background:var(--surface);color:var(--fg);border-radius:8px;padding:3px 8px;font:500 12px/1.25 var(--font-body);box-shadow:0 1px 4px rgba(0,0,0,.35)}
-.pm-lbl b{font-size:12px}.pm-icon:not(.set) .pm-lbl span{color:#c2410c;font-weight:600}
+.pm-lbl{position:absolute;bottom:48px;left:50%;transform:translateX(-50%);white-space:nowrap;background:#15803d;color:#fff;border-radius:8px;padding:3px 9px;font:700 12.5px/1.25 var(--font-body);box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.pm-icon:not(.set) .pm-lbl{background:var(--surface);color:#c2410c;border:1px solid #ea580c}.pm-icon.warn .pm-lbl{background:#b45309}
 .pmbar .pm-head{display:flex;flex-direction:column;gap:2px}.pmbar .actions{margin:0}
 .pick-list{display:grid;gap:6px}
 .pick-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;width:100%;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--fg);padding:9px 12px;font:inherit;cursor:pointer}
@@ -6361,7 +6361,7 @@ function planMapRender(){
   for(const p of c.passes){
     const s = c.sets[p.id] || {}, who = s.who || '', warn = s.uid && passIssues(c.g, p, s.uid, s.who).length && !s.ok;
     if(who) set++;
-    L.marker([p.lat, p.lng], {icon:L.divIcon({className:'pm-icon' + (who ? ' set' : '') + (warn ? ' warn' : ''), html:`<span class="pm-ring"></span><span class="pm-lbl"><b>${esc(p.name || 'Pass')}</b><span>${esc(who || 'Ledigt')}${warn ? ' ⚠' : ''}</span></span>`, iconSize:[44, 44], iconAnchor:[22, 22]}), zIndexOffset:3000, keyboard:true, title:`${p.name || 'Pass'}: ${who || 'ledigt'}`})
+    L.marker([p.lat, p.lng], {icon:L.divIcon({className:'pm-icon' + (who ? ' set' : '') + (warn ? ' warn' : ''), html:`<span class="pm-ring"></span><span class="pm-lbl">${esc(who || 'Ledigt')}${warn ? ' ⚠' : ''}</span>`, iconSize:[44, 44], iconAnchor:[22, 47]}), zIndexOffset:3000, keyboard:true, title:`${p.name || 'Pass'}: ${who || 'ledigt'}`})
       .on('click', () => planMapPick(p.id)).addTo(planMap.layer);
   }
   if(!bar) return;
