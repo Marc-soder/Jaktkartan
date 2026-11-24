@@ -669,14 +669,19 @@ async function inviteRevokeAll(){
   await B.click('#followChip'); await W(B, 200);
   check(!(await B.isVisible('#followChip')) && (await B.evaluate(() => __fk.follow.uid)) === null, 'Sluta i etiketten slutar följa');
   await B.evaluate(v => { __fk.map.closePopup(); __fk.map.setView([v[0], v[1]], v[2], {animate:false}); }, viewB); await W(B, 200);
-  // Inte hörd av på 5 minuter: markeras på kartan, i listan och i rutan
-  { const carlT = await B.evaluate(([g, h]) => { const G = __fk.cloud.groups[g], t = G.huntPos[h]['anon-carl'].t; G.huntPos[h]['anon-carl'] = Object.assign({}, G.huntPos[h]['anon-carl'], {t:Date.now() - 7 * 60000}); __fk.renderPositions(); return t; }, [gid, hid]); await W(B, 200);
-    const lost = await B.locator('.pos-icon.lost').count(), name = await B.innerText('.pos-icon.lost .pos-name'), chip = await B.innerText('#posChips .pos-chip.lost'), cnt = await B.innerText('#posCount');
-    await B.evaluate(() => __fk.posFocus('anon-carl', true)); await W(B, 700);
-    const pop = await B.innerText('.leaflet-popup');
-    check(lost === 1 && name.includes('7 min') && chip.includes('inte hörd på 7 min') && cnt.includes('En har inte hörts av') && pop.includes('Inte hörd av på 7 min') && await B.locator('.pos-icon:not(.lost)').count() === 1,
-      `den som inte hörts av på 5 minuter markeras på kartan, i listan och i rutan (${name} | ${chip} | ${cnt})`);
-    await B.evaluate(([g, h, t, v]) => { __fk.map.closePopup(); __fk.map.setView([v[0], v[1]], v[2], {animate:false}); const G = __fk.cloud.groups[g]; G.huntPos[h]['anon-carl'] = Object.assign({}, G.huntPos[h]['anon-carl'], {t}); __fk.renderPositions(); }, [gid, hid, carlT, viewB]); await W(B, 200); }
+  // Inte hörd av på 5 minuter: markeras på kartan, i listan och i rutan. Allt i ett synkront steg, så att en ny position
+  // från servern (som ritar om kartan) inte hinner emellan.
+  { const r = await B.evaluate(([g, h]) => {
+      const G = __fk.cloud.groups[g], old = G.huntPos[h]['anon-carl'];
+      G.huntPos[h]['anon-carl'] = Object.assign({}, old, {t:Date.now() - 7 * 60000}); __fk.renderPositions();
+      const q = s => { const e = document.querySelector(s); return e ? e.innerText : ''; };
+      const out = {lost:document.querySelectorAll('.pos-icon.lost').length, ok:document.querySelectorAll('.pos-icon:not(.lost)').length, name:q('.pos-icon.lost .pos-name'), chip:q('#posChips .pos-chip.lost'), cnt:q('#posCount')};
+      const m = __fk.posMarkers()['anon-carl']; m.openPopup(); out.pop = q('.leaflet-popup'); m.closePopup();
+      G.huntPos[h]['anon-carl'] = old; __fk.renderPositions();
+      return out; }, [gid, hid]);
+    check(r.lost === 1 && r.ok === 1 && r.name.includes('7 min') && r.chip.includes('inte hörd på 7 min') && r.cnt.includes('En har inte hörts av') && r.pop.includes('Inte hörd av på 7 min'),
+      `den som inte hörts av på 5 minuter markeras på kartan, i listan och i rutan (${r.name} | ${r.chip.replace('\n', ' ')} | ${r.cnt})`); }
+  await B.evaluate(v => { __fk.map.closePopup(); __fk.map.setView([v[0], v[1]], v[2], {animate:false}); }, viewB); await W(B, 200);
   // ---- Spår ----
   const tr = () => (((data.groups[gid].huntTrail || {})[hid] || {}).alice || {});
   check(Object.keys(tr()).length >= 1, 'Alices spårpunkt sparas i jakten');
