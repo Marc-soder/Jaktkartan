@@ -69,6 +69,16 @@ with sync_playwright() as p:
     check('8 nålar' in pg.inner_text('#pStat'), 'statusrad visar 8 nålar')
     pg.screenshot(path=f'{SHOTS}/d1_start.png')
 
+    # Sidomenyn: bakgrunden tonas in med menyn (ingen blinkning), utan animation om man valt minskade animationer
+    pg.click('#btnMenu'); pg.wait_for_timeout(30)
+    an = pg.evaluate("() => { const b = document.getElementById('drawerBack'), d = document.getElementById('drawer'); return {back:getComputedStyle(b).animationName, drawer:getComputedStyle(d).animationName, op:+getComputedStyle(b).opacity}; }")
+    check(an['back'] == 'scrimin' and an['drawer'] == 'drawerin' and an['op'] < 1, f'menyns bakgrund tonas in samtidigt som menyn glider in ({an})')
+    pg.click('#drawerClose'); pg.wait_for_timeout(100)
+    pg.emulate_media(reduced_motion='reduce'); pg.click('#btnMenu'); pg.wait_for_timeout(30)
+    an = pg.evaluate("() => getComputedStyle(document.getElementById('drawerBack')).animationName + ',' + getComputedStyle(document.getElementById('drawer')).animationName")
+    check(an == 'none,none', f'med minskade animationer öppnas menyn utan animation ({an})')
+    pg.click('#drawerClose'); pg.wait_for_timeout(100); pg.emulate_media(reduced_motion='no-preference')
+
     # Namn på nålarna
     lab = lambda: pg.evaluate("[...document.querySelectorAll('.pin-label')].filter(e => e.offsetParent !== null).map(e => e.textContent)")
     pg.evaluate('__fk.map.setView([58.7205, 14.61], 15, {animate:false})'); pg.wait_for_timeout(400)
