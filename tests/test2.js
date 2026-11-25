@@ -996,7 +996,17 @@ async function inviteRevokeAll(){
   await B.click('#lotOk'); await W(B, 800);
   await openBox(d2); await B.evaluate(d => document.querySelector(`details.drive-box[data-d="${d}"]`).scrollIntoView(), d2); await B.screenshot({path:shot('b_plan_drives.png')});
   { const ps = PLN().drives[d2].pass || {}; check(ps[pA] && ps[pA].uid === 'alice' && ps[pB] && lotPeople.includes(ps[pB].uid) && ps[pB].uid !== 'alice', `passen i såt 2 är lottade, och Alice fick det lättillgängliga passet (${JSON.stringify(ps)})`); }
+  // Passöversikt: vilket pass varje deltagare har i varje såt
+  { const pn = k => data.groups[gid].pins[aid][k].name, ps2 = PLN().drives[d2].pass;
+    const r = await B.evaluate(() => { const t = document.querySelector('#planBody .pmx'); if(!t) return null;
+      return {head:[...t.querySelectorAll('thead th')].map(x => x.innerText.replace(/\s+/g, ' ').trim()), rows:[...t.querySelectorAll('tbody tr')].map(tr => [...tr.children].map(x => x.innerText.trim())), free:[...t.querySelectorAll('tfoot td')].map(x => x.innerText.trim())}; });
+    const alice = r && r.rows.find(x => x[0] === 'Alice Test'), carl = r && r.rows.find(x => x[0] === 'Carl Gäst');
+    const carl2 = Object.entries(ps2).find(([, v]) => v.uid === 'anon-carl');
+    check(r && r.head.length === 3 && r.head[1].includes('Mossen') && r.head[2].includes('Såt 2') && alice && alice[1] === pn(pB) && alice[2] === pn(pA) && carl && carl[1] === pn(pA) && carl[2] === (carl2 ? pn(carl2[0]) : '–') && r.free.join() === '0,0',
+      `passöversikten visar vilket pass varje deltagare har i varje såt (${JSON.stringify(r)})`); }
   await B.click('#plClose'); await W(B, 300);
+  await team(B, 'jakt'); await W(B, 300);
+  check(await B.locator(`#hc-${gid}-${hid} .pmx-box .pmx`).count() === 1 && await C.locator('.pmx').count() === 0, 'jaktledaren ser passöversikten i jaktkortet, gästen gör det inte');
   // under jakten: Carl ser sitt pass i nästa såt, jaktledaren startar såten
   await W(C, 400); await team(C, 'jakt');
   check((await C.innerText('#paneJakt')).includes('Ditt pass i nästa såt, Mossen: Pass 1 – bäcken'), 'Carl ser sitt pass i nästa såt');
@@ -1005,8 +1015,12 @@ async function inviteRevokeAll(){
   check(PLN().cur && PLN().cur.did === dM && PLN().cur.on === true && (await C.innerText('#driveBar')).includes('Mossen har startat') && (await C.innerText('#driveBar')).includes('Ditt pass: Pass 1 – bäcken'), `Mossen startar: Carl får besked överst med sitt pass (${await C.innerText('#driveBar')})`);
   await team(C, 'chat'); check((await C.innerText('#paneJakt')).includes('Mossen har startat. Gå till era pass.'), 'starten skickas i chatten'); await team(C, 'jakt');
   await C.screenshot({path:shot('c_drive_start.png')});
+  { const f = await C.evaluate(() => { const c = document.getElementById('map'), out = document.querySelector('.pin-icon:not(.pin-in)');
+      return {cls:c.classList.contains('drive-focus'), emph:document.querySelectorAll('.leaflet-planTop-pane .plan-drive.emph').length, mask:document.querySelectorAll('.leaflet-planMask-pane .plan-mask').length, lbl:(document.querySelector('.plan-lbl.drive.emph') || {}).innerText || '', dim:out ? +getComputedStyle(out).opacity : 1}; });
+    check(f.cls && f.emph === 1 && f.mask === 1 && f.lbl.includes('Mossen') && f.lbl.includes('pågår') && f.dim < 0.5, `medan såten pågår är den tydlig, kartan utanför mörkare och nålar utanför blekare (${JSON.stringify(f)})`); }
   await B.click(`[data-j="drive-stop"][data-h="${hid}"]`); await W(B, 100); await B.click(`[data-j="drive-stop"][data-h="${hid}"]`); await W(B, 1200); await W(C, 600); await W(A, 400);
   check(PLN().cur.on === false && PLN().drives[dM].done > 0 && (await C.innerText('#driveBar')).includes('Såten är bruten, patron ur.'), 'jaktledaren bryter såten efter en bekräftelse: alla får besked överst');
+  check(!(await C.evaluate(() => document.getElementById('map').classList.contains('drive-focus'))) && await C.locator('.plan-mask').count() === 0 && await C.locator('.plan-drive.emph').count() === 0, 'när såten är bruten ritas kartan som vanligt igen');
   check((await C.innerText('#paneJakt')).includes('Såten är bruten, patron ur.') && (await A.innerText('#paneJakt')).includes('Såten är bruten, patron ur.'), 'Såten är bruten, patron ur. skickas i chatten till alla');
   // samlingsplats och återsamling
   await B.click(`[data-j="plan"][data-h="${hid}"]`); await W(B, 300);
@@ -1134,6 +1148,15 @@ async function inviteRevokeAll(){
   check(await B.isChecked('input[name=hfInv][value=some]') && await B.isChecked('#hfMembers [data-mem="alice"]') && !(await B.isChecked('#hfMembers [data-mem="bob"]')), 'Ändra jakt visar de inbjudna');
   await B.check('input[name=hfInv][value=all]', {force:true}); await B.click('#hfOk'); await W(B, 800);
   check(!H3().invited, 'Hela laget tar bort urvalet');
+  // Fliken Planera: den kommande jaktens såtar är tydliga och resten av kartan nedtonad; i fliken Jakt som vanligt
+  await B.evaluate(([g, h, ring]) => firebase.database().ref(`groups/${g}/huntPlan/${h}/drives/dp1`).set({name:'Planerad såt', ring, ord:0}), [gid, h3, PLN().drives[dM].ring]); await W(B, 600);
+  const focusB = () => B.evaluate(() => ({on:document.getElementById('map').classList.contains('drive-focus'), emph:document.querySelectorAll('.plan-drive.emph').length, lbl:(document.querySelector('.plan-lbl.drive.emph') || {}).innerText || ''}));
+  await team(B, 'plan'); await W(B, 400);
+  { const f = await focusB(); check(f.on && f.emph === 1 && f.lbl.includes('Planerad såt'), `i fliken Planera är den kommande jaktens såt tydlig (${JSON.stringify(f)})`); }
+  await team(B, 'jakt'); await W(B, 400);
+  { const f = await focusB(); check(!f.on && f.emph === 0, `i fliken Jakt ritas såtarna som vanligt när ingen såt pågår (${JSON.stringify(f)})`); }
+  await B.evaluate(([g, h]) => firebase.database().ref(`groups/${g}/huntPlan/${h}`).remove(), [gid, h3]); await W(B, 400);
+  await team(B, 'plan'); await W(B, 300);
   // automatisk start
   await B.click(`[data-j="hunt-edit"][data-h="${h3}"]`); await W(B, 300);
   check(await B.isChecked('input[name=hfMode][value=manual]') && !(await B.isDisabled('#hfDay')), 'en planerad jakt går att ändra, även datum och start');
