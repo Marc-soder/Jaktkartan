@@ -360,6 +360,8 @@ async function inviteRevokeAll(){
   check(plan().stands[pB] && plan().stands[pB].who === 'Kalle utan app' && !plan().stands[pB].uid, 'ett pass kan få ett eget namn för någon utan appen');
   // Placera skyttar på kartan: tryck på ett pass och välj vem som står där
   { const pn = k => data.groups[gid].pins[aid][k].name, icon = k => `.pm-icon[title^="${pn(k)}:"]`, st = k => (plan().stands || {})[k] || {};
+    // Ett ledigt pass ser ut som en vanlig nål: ingen ring och ingen etikett, bara en osynlig tryckyta
+    const isFree = k => B.evaluate(sel => { const e = document.querySelector(sel); return !!e && e.classList.contains('free') && !e.querySelector('.pm-ring') && !e.querySelector('.pm-lbl') && e.getBoundingClientRect().width >= 40; }, icon(k));
     const pick = async (k, sel) => { await B.click(icon(k)); await W(B, 200); await B.click(`.modal ${sel}`); await W(B, 500); };
     await B.click('#planBody [data-pl="pmap"]'); await W(B, 500);
     const bar = await B.innerText('#planMapBar');
@@ -373,9 +375,9 @@ async function inviteRevokeAll(){
     await B.click('.modal [data-pm="u:alice"]'); await W(B, 500);
     check(st(pB).who === 'Alice Test' && st(pB).uid === 'alice' && (await B.innerText(icon(pB))).includes('Alice Test') && (await B.innerText('#toast')).includes('Alice Test står på'), 'Alice placeras på passet från kartan');
     await pick(pA, '[data-pm="u:alice"]');
-    check(st(pA).uid === 'alice' && !st(pB).who && !st(pB).uid && (await B.innerText(icon(pB))).includes('Ledigt') && (await B.innerText('#planMapBar')).includes('1 av 2 pass'), 'placeras samma person på ett annat pass flyttas hen, och det gamla passet blir ledigt');
+    check(st(pA).uid === 'alice' && !st(pB).who && !st(pB).uid && await isFree(pB) && (await B.innerText('#planMapBar')).includes('1 av 2 pass'), 'placeras samma person på ett annat pass flyttas hen, och det gamla passet blir ledigt');
     await pick(pA, '[data-pm=""]');
-    check(!st(pA).who && !st(pA).uid && (await B.innerText(icon(pA))).includes('Ledigt'), 'Ingen gör passet ledigt');
+    check(!st(pA).who && !st(pA).uid && await isFree(pA) && await isFree(pB) && (await B.innerText('#planMapBar')).includes('0 av 2 pass'), 'Ingen gör passet ledigt, och ett ledigt pass ser ut som en vanlig nål');
     await pick(pA, '[data-pm="u:anon-carl"]');
     await B.click(icon(pB)); await W(B, 200); await B.fill('#pmName', 'Kalle utan app'); await B.click('#pmForm button'); await W(B, 500);
     check(st(pA).uid === 'anon-carl' && st(pB).who === 'Kalle utan app' && !st(pB).uid, 'Carl och ett eget namn placeras från kartan');

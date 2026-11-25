@@ -715,7 +715,8 @@ function meetPlace(g, hid, mid){
 }
 
 /* ---------- Placera skyttar på kartan ----------
-   Från planeringen: dialogen stängs och kartan visar jaktens pass, vart och ett med vem som står där eller Ledigt.
+   Från planeringen: dialogen stängs och kartan visar jaktens pass. Upptagna pass och torn har en grön ring med namnet på
+   den som står där, lediga ser ut som vanliga nålar.
    Ett tryck på ett pass öppnar listan över deltagarna (de som deltar först). Den man väljer flyttas dit; stod hen på ett
    annat pass blir det passet ledigt. Har jakten såtar väljs såten i raden nederst. Passar passet inte personen
    (lättillgängligt, hagel eller kula) frågar appen först, som i listan i planeringen. Klar går tillbaka till planeringen. */
@@ -754,7 +755,8 @@ function planMapRender(){
   for(const p of c.passes){
     const s = c.sets[p.id] || {}, who = s.who || '', warn = s.uid && passIssues(c.g, p, s.uid, s.who).length && !s.ok;
     if(who) set++;
-    L.marker([p.lat, p.lng], {icon:L.divIcon({className:'pm-icon' + (who ? ' set' : '') + (warn ? ' warn' : ''), html:`<span class="pm-ring"></span><span class="pm-lbl">${esc(who || 'Ledigt')}${warn ? ' ⚠' : ''}</span>`, iconSize:[44, 44], iconAnchor:[22, 47]}), zIndexOffset:3000, keyboard:true, title:`${p.name || 'Pass'}: ${who || 'ledigt'}`})
+    // Upptagna pass och torn får en grön ring och namnet ovanför. Lediga ser ut som vanliga nålar, med en osynlig tryckyta.
+    L.marker([p.lat, p.lng], {icon:L.divIcon({className:'pm-icon' + (who ? ' set' : ' free') + (warn ? ' warn' : ''), html:who ? `<span class="pm-ring"></span><span class="pm-lbl">${esc(who)}${warn ? ' ⚠' : ''}</span>` : '<span class="pm-hit"></span>', iconSize:[44, 44], iconAnchor:[22, 47]}), zIndexOffset:3000, keyboard:true, title:`${p.name || 'Pass'}: ${who || 'ledigt'}`})
       .on('click', () => planMapPick(p.id)).addTo(planMap.layer);
   }
   if(!bar) return;

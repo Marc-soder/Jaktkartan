@@ -905,10 +905,11 @@ a{color:var(--accent)}
 .pmx .dn{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:#15803d;color:#fff;font-size:11px;margin-right:2px}
 /* Placera skyttar på kartan: en ring runt nålens huvud (nålens namn syns under den) och vem som står där ovanför */
 .pm-icon{cursor:pointer}
-.pm-ring{position:absolute;inset:0;border-radius:50%;border:3px solid #ea580c;background:rgba(234,88,12,.14);box-shadow:0 0 0 2px rgba(255,255,255,.85)}
-.pm-icon.set .pm-ring{border-color:#15803d;background:rgba(21,128,61,.16)}.pm-icon.warn .pm-ring{border-color:#b45309;border-style:dashed}
+.pm-ring{position:absolute;inset:0;border-radius:50%;border:3px solid #15803d;background:rgba(21,128,61,.16);box-shadow:0 0 0 2px rgba(255,255,255,.85)}
+.pm-icon.warn .pm-ring{border-color:#b45309;border-style:dashed}
+.pm-hit{position:absolute;inset:0;border-radius:50%}
 .pm-lbl{position:absolute;bottom:48px;left:50%;transform:translateX(-50%);white-space:nowrap;background:#15803d;color:#fff;border-radius:8px;padding:3px 9px;font:700 12.5px/1.25 var(--font-body);box-shadow:0 1px 4px rgba(0,0,0,.35)}
-.pm-icon:not(.set) .pm-lbl{background:var(--surface);color:#c2410c;border:1px solid #ea580c}.pm-icon.warn .pm-lbl{background:#b45309}
+.pm-icon.warn .pm-lbl{background:#b45309}
 .pmbar .pm-head{display:flex;flex-direction:column;gap:2px}.pmbar .actions{margin:0}
 .pick-list{display:grid;gap:6px}
 .pick-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;width:100%;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--fg);padding:9px 12px;font:inherit;cursor:pointer}
@@ -6418,7 +6419,8 @@ function meetPlace(g, hid, mid){
 }
 
 /* ---------- Placera skyttar på kartan ----------
-   Från planeringen: dialogen stängs och kartan visar jaktens pass, vart och ett med vem som står där eller Ledigt.
+   Från planeringen: dialogen stängs och kartan visar jaktens pass. Upptagna pass och torn har en grön ring med namnet på
+   den som står där, lediga ser ut som vanliga nålar.
    Ett tryck på ett pass öppnar listan över deltagarna (de som deltar först). Den man väljer flyttas dit; stod hen på ett
    annat pass blir det passet ledigt. Har jakten såtar väljs såten i raden nederst. Passar passet inte personen
    (lättillgängligt, hagel eller kula) frågar appen först, som i listan i planeringen. Klar går tillbaka till planeringen. */
@@ -6457,7 +6459,8 @@ function planMapRender(){
   for(const p of c.passes){
     const s = c.sets[p.id] || {}, who = s.who || '', warn = s.uid && passIssues(c.g, p, s.uid, s.who).length && !s.ok;
     if(who) set++;
-    L.marker([p.lat, p.lng], {icon:L.divIcon({className:'pm-icon' + (who ? ' set' : '') + (warn ? ' warn' : ''), html:`<span class="pm-ring"></span><span class="pm-lbl">${esc(who || 'Ledigt')}${warn ? ' ⚠' : ''}</span>`, iconSize:[44, 44], iconAnchor:[22, 47]}), zIndexOffset:3000, keyboard:true, title:`${p.name || 'Pass'}: ${who || 'ledigt'}`})
+    // Upptagna pass och torn får en grön ring och namnet ovanför. Lediga ser ut som vanliga nålar, med en osynlig tryckyta.
+    L.marker([p.lat, p.lng], {icon:L.divIcon({className:'pm-icon' + (who ? ' set' : ' free') + (warn ? ' warn' : ''), html:who ? `<span class="pm-ring"></span><span class="pm-lbl">${esc(who)}${warn ? ' ⚠' : ''}</span>` : '<span class="pm-hit"></span>', iconSize:[44, 44], iconAnchor:[22, 47]}), zIndexOffset:3000, keyboard:true, title:`${p.name || 'Pass'}: ${who || 'ledigt'}`})
       .on('click', () => planMapPick(p.id)).addTo(planMap.layer);
   }
   if(!bar) return;
