@@ -244,10 +244,11 @@ a{color:var(--accent)}
 .pmx .dn{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:#15803d;color:#fff;font-size:11px;margin-right:2px}
 /* Placera skyttar på kartan: en ring runt nålens huvud (nålens namn syns under den) och vem som står där ovanför */
 .pm-icon{cursor:pointer}
-.pm-ring{position:absolute;inset:0;border-radius:50%;border:3px solid #ea580c;background:rgba(234,88,12,.14);box-shadow:0 0 0 2px rgba(255,255,255,.85)}
-.pm-icon.set .pm-ring{border-color:#15803d;background:rgba(21,128,61,.16)}.pm-icon.warn .pm-ring{border-color:#b45309;border-style:dashed}
+.pm-ring{position:absolute;inset:0;border-radius:50%;border:3px solid #15803d;background:rgba(21,128,61,.16);box-shadow:0 0 0 2px rgba(255,255,255,.85)}
+.pm-icon.warn .pm-ring{border-color:#b45309;border-style:dashed}
+.pm-hit{position:absolute;inset:0;border-radius:50%}
 .pm-lbl{position:absolute;bottom:48px;left:50%;transform:translateX(-50%);white-space:nowrap;background:#15803d;color:#fff;border-radius:8px;padding:3px 9px;font:700 12.5px/1.25 var(--font-body);box-shadow:0 1px 4px rgba(0,0,0,.35)}
-.pm-icon:not(.set) .pm-lbl{background:var(--surface);color:#c2410c;border:1px solid #ea580c}.pm-icon.warn .pm-lbl{background:#b45309}
+.pm-icon.warn .pm-lbl{background:#b45309}
 .pmbar .pm-head{display:flex;flex-direction:column;gap:2px}.pmbar .actions{margin:0}
 .pick-list{display:grid;gap:6px}
 .pick-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;width:100%;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--fg);padding:9px 12px;font:inherit;cursor:pointer}
@@ -386,10 +387,14 @@ a{color:var(--accent)}
 .stab{flex:1;border:0;background:none;padding:10px 2px 9px;font:600 13px/1 var(--font-display);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-1px;cursor:pointer;white-space:nowrap}
 .stab[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
 /* Sidomenyn */
-.drawer-back{position:fixed;inset:0;z-index:1480;background:var(--scrim)}
+/* Bakgrunden tonas in lika mjukt som menyn glider in. Utan det slogs den mörka bakgrunden på direkt, och skärmen blinkade. */
+.drawer-back{position:fixed;inset:0;z-index:1480;background:var(--scrim);animation:scrimin .18s ease-out}
+@keyframes scrimin{from{opacity:0}to{opacity:1}}
 .drawer-back[hidden],.drawer[hidden]{display:none}
 .drawer{position:fixed;z-index:1490;top:0;bottom:0;left:0;width:min(300px,84vw);background:var(--surface);box-shadow:var(--shadow);display:flex;flex-direction:column;padding:var(--sat) 0 var(--sab) var(--sal);overflow:auto;animation:drawerin .18s ease-out}
 @keyframes drawerin{from{transform:translateX(-100%)}to{transform:none}}
+.drawer{will-change:transform;contain:layout paint}
+@media (prefers-reduced-motion:reduce){.drawer,.drawer-back{animation:none}}
 .dr-head{display:flex;align-items:center;justify-content:space-between;padding:14px 10px 10px 18px;border-bottom:1px solid var(--line)}
 .dr-head .iconbtn{font-size:24px;width:44px;height:44px}
 .dr-list{display:flex;flex-direction:column;padding:8px 0}
