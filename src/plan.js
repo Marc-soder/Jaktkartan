@@ -243,26 +243,38 @@ function renderPlan(){
   planMine = findMyNoFire();
   if(typeof renderCompass === 'function') renderCompass();
   renderDriveBar();
-  if(!planOn()) return;
+  const foc = planOn() ? driveFocusTargets() : [];
+  driveFocus.key = focusKey(foc); driveFocus.rings = [];
+  map.getContainer().classList.toggle('drive-focus', foc.length > 0);
+  if(!planOn()){ planFocusPins(); return; }
+  if(foc.length) focusPanes();
   const pins = new Map(state.pins.map(p => [p.id, p]));
   for(const {g, hid, hunt} of planHunts()){
     const plan = planOf(g, hid), f = planFocus(plan), live = huntLive(hunt);
+    const ft = foc.find(x => x.g === g && x.hid === hid), top = ft ? {pane:'planTop'} : {};
     driveList(plan).forEach(([did, d], i) => {
       const ring = parseBorder(d.ring); if(ring.length < 3) return;
+      const emph = !!ft && ft.dids.has(did);
+      if(emph){
+        driveFocus.rings.push(ring);
+        L.polygon(ring, {pane:'planTop', interactive:false, className:'plan-drive emph', color:'#15803d', weight:4, opacity:1, fillColor:'#22c55e', fillOpacity:.16}).addTo(planLayer);
+        planLabel(L.latLngBounds(ring).getCenter(), 'drive emph', `${i + 1}. ${driveName(d)}${f && f.did === did && f.on ? ' · pågår' : ''}`).addTo(planLayer);
+        return;
+      }
       const focus = f && f.did === did, style = focus ? Object.assign({}, DRIVE_STYLE, {weight:3.5, fillOpacity:.14}) : d.done ? {color:'#64748b', weight:1.5, dashArray:'4 6', fillColor:'#94a3b8', fillOpacity:.04} : Object.assign({}, DRIVE_STYLE, {weight:2, fillOpacity:.05});
       L.polygon(ring, Object.assign({interactive:false, className:'plan-drive' + (focus ? ' focus' : d.done ? ' done' : '')}, style)).addTo(planLayer);
       planLabel(L.latLngBounds(ring).getCenter(), 'drive' + (focus ? ' focus' : d.done ? ' done' : ''), `${i + 1}. ${driveName(d)}${focus && f.on ? ' · pågår' : d.done ? ' · bruten' : ''}`).addTo(planLayer);
     });
     for(const [, r] of focusRoutes(plan)){
       const pts = parseBorder(r.pts), k = ROUTE_KIND[r.kind]; if(pts.length < 2) continue;
-      routeStyle(r.kind, pts).forEach(l => l.addTo(planLayer));
+      routeStyle(r.kind, pts).forEach(l => { if(ft) l.options.pane = 'planTop'; l.addTo(planLayer); });
       planLabel(pts[0], 'route ' + r.kind + (r.uid && r.uid === myUid() ? ' me' : ''), k.name + (r.who ? ': ' + r.who : '')).addTo(planLayer);
     }
     for(const [pid, s] of Object.entries(planStands(plan))){
       const p = pins.get(pid); if(!p) continue;
       for(const [i, n] of maskRuns(s.no)){
         const from = i * 22.5 - 11.25;
-        L.polygon(sectorPts(p, from, from + n * 22.5, PLAN_R), {color:'#dc2626', weight:1, opacity:.8, fillColor:'#dc2626', fillOpacity:.28, interactive:false, className:'plan-nofire'}).addTo(planLayer);
+        L.polygon(sectorPts(p, from, from + n * 22.5, PLAN_R), Object.assign({color:'#dc2626', weight:1, opacity:.8, fillColor:'#dc2626', fillOpacity:.28, interactive:false, className:'plan-nofire'}, top)).addTo(planLayer);
       }
       const cin = s.uid && checkOf(g, hid, s.uid), isIn = !!(cin && cin.in && cin.pid === pid);
       if(s.who && !(planMap.on && planMap.gid === g.id && planMap.hid === hid)) planLabel([p.lat, p.lng], 'who' + (s.uid && s.uid === myUid() ? ' me' : '') + (isIn ? ' in' : ''), s.who).addTo(planLayer);
@@ -276,7 +288,64 @@ function renderPlan(){
         .on('click', () => openMeet(m.name, m.lat, m.lng, on)).addTo(planLayer);
     }
   }
+  // Mörkare utanför såten (en stor yta med såtarna som hål), i ett lager under såtarna men över kartan och områdena
+  if(driveFocus.rings.length) L.polygon([[[-85, -179.9], [85, -179.9], [85, 179.9], [-85, 179.9]], ...driveFocus.rings], {pane:'planMask', stroke:false, fillColor:'#0b1410', fillOpacity:.4, interactive:false, className:'plan-mask'}).addTo(planLayer);
+  planFocusPins();
   planMapRender();
+}
+/* ---------- Såten i fokus ----------
+   Såtarna ritas tydligt (grön kant, ljusare yta) och resten av kartan tonas ned: utanför såten blir kartan mörkare och
+   nålarna blekare. Det gäller bara
+   - i jaktlagets flik Planera: de kommande jakternas såtar som inte är brutna,
+   - i Placera skyttar på kartan: den valda såten,
+   - under en pågående jakt: den såt som pågår (för alla i jakten).
+   Annars ritas såtarna som vanligt. */
+const driveFocus = {key:'', rings:[]};
+function driveFocusTargets(){
+  const out = [], planTab = nav.tab === 'jakt' && !!nav.team && nav.sub === 'plan';
+  for(const {g, hid, hunt} of planHunts()){
+    const plan = planOf(g, hid), ds = driveList(plan); if(!ds.length) continue;
+    if(planMap.on && planMap.gid === g.id && planMap.hid === hid){ if(planMap.did) out.push({g, hid, dids:new Set([planMap.did])}); continue; }
+    if(huntLive(hunt)){ const f = planFocus(plan); if(f && f.on) out.push({g, hid, dids:new Set([f.did])}); continue; }
+    const open = ds.filter(([, d]) => !d.done).map(([k]) => k);
+    if(planTab && nav.team === g.id && open.length) out.push({g, hid, dids:new Set(open)});
+  }
+  return out;
+}
+const focusKey = foc => foc.map(x => x.g.id + '/' + x.hid + ':' + [...x.dids].join(',')).join('|');
+function focusPanes(){
+  if(map.getPane('planMask')) return;
+  const a = map.createPane('planMask'); a.style.zIndex = 450; a.style.pointerEvents = 'none';
+  const b = map.createPane('planTop'); b.style.zIndex = 460; b.style.pointerEvents = 'none';
+}
+/* Nålar inuti en såt i fokus behåller full styrka (klassen pin-in). Körs också när nålarna ritas om. */
+function planFocusPins(){
+  if(typeof pinMarkers === 'undefined') return;
+  const rings = driveFocus.rings;
+  for(const [, c] of pinMarkers){ const el = c.m.getElement(); if(el) el.classList.toggle('pin-in', rings.some(r => inRing(c.m.getLatLng(), r))); }
+}
+/* Navigering (flikar, jaktlag): rita om när såten i fokus ändras. */
+function planFocusSync(){ if(focusKey(planOn() ? driveFocusTargets() : []) !== driveFocus.key) renderPlan(); }
+window.__planReady = true;
+
+/* Passöversikt för jaktledaren: vilket pass varje deltagare har i varje såt som inte är bruten. En rad per person
+   (deltagare som har svarat Jag deltar men saknar pass finns också med), en kolumn per såt och en rad med lediga pass. */
+function passMatrixHtml(g, hid, plan){
+  const all = driveList(plan), ds = all.filter(([, d]) => !d.done), hunt = (g.hunts || {})[hid];
+  if(!ds.length || !perDrive(plan) || !hunt) return '';
+  const passes = planPasses(g, hunt), ids = new Set(passes.map(p => p.id)), f = planFocus(plan), rows = new Map();
+  const row = (key, name) => { if(!rows.has(key)) rows.set(key, {name, cells:{}}); return rows.get(key); };
+  for(const [did, d] of ds) for(const p of passes){
+    const s = (d.pass || {})[p.id]; if(!s || !(s.who || s.uid)) continue;
+    const r = row(s.uid || 'n:' + s.who, s.who || 'Okänd'); (r.cells[did] = r.cells[did] || []).push(p.name || 'Pass');
+  }
+  for(const u of planPeople(g, hid)) if(u.going) row(u.uid, u.name);
+  const list = [...rows.values()].sort((a, b) => a.name.localeCompare(b.name, 'sv'));
+  const num = did => all.findIndex(([k]) => k === did) + 1;
+  const head = ds.map(([did, d]) => `<th class="${f && f.did === did ? 'cur' : ''}" scope="col"><span class="dn">${num(did)}</span> ${esc(driveName(d))}${f && f.did === did ? `<br><span class="small muted">${f.on ? 'pågår' : 'nästa'}</span>` : ''}</th>`).join('');
+  const body = list.map(r => `<tr><th scope="row">${esc(r.name)}</th>${ds.map(([did]) => { const c = r.cells[did]; return c ? `<td class="${f && f.did === did ? 'cur' : ''}">${esc(c.join(', '))}</td>` : `<td class="none${f && f.did === did ? ' cur' : ''}">–</td>`; }).join('')}</tr>`).join('');
+  const free = ds.map(([did, d]) => { const n = passes.filter(p => !((d.pass || {})[p.id] && ((d.pass || {})[p.id].who || (d.pass || {})[p.id].uid))).length; return `<td class="${f && f.did === did ? 'cur' : ''}">${n}</td>`; }).join('');
+  return `<div class="pmx" role="region" aria-label="Passöversikt" tabindex="0"><table><thead><tr><th scope="col">Deltagare</th>${head}</tr></thead><tbody>${body || `<tr><td colspan="${ds.length + 1}" class="none">Ingen har ett pass ännu.</td></tr>`}</tbody><tfoot><tr><th scope="row">Lediga pass</th>${free}</tr></tfoot></table></div>`;
 }
 function openMeet(name, lat, lng, called){
   openModal(`<h2>${called ? 'Återsamling vid ' : 'Samlingsplats: '}${esc(name)}</h2>
@@ -363,6 +432,8 @@ function planCardHtml(g, hid, hunt, lead){
   const inDrive = ds.length && perDrive(plan) && f ? (f.on ? ` i ${esc(driveName(f.d))}` : ` i nästa såt, ${esc(driveName(f.d))}`) : '';
   let h = `<div class="lbl">Jaktplan</div>`;
   if(ds.length) h += driveCardHtml(g, hid, plan, ds, f, live, lead);
+  const pmx = lead ? passMatrixHtml(g, hid, plan) : '';
+  if(pmx) h += `<details class="pmx-box" open><summary>Passöversikt</summary>${pmx}</details>`;
   if(mine.length){
     const c = checkOf(g, hid), isIn = !!(c && c.in && mine.some(p => p.id === c.pid));
     h += `<div class="plan-mine">Ditt pass${inDrive}: <b>${mine.map(p => esc(p.name || 'Pass')).join(', ')}</b>${maskDirs(stands[mine[0].id].no).length ? `. Skjut inte mot ${maskDirs(stands[mine[0].id].no).join(', ')}.` : ''} <button class="linkbtn" type="button" data-j="plan-go" data-g="${esc(g.id)}" data-p="${esc(mine[0].id)}">Visa</button>
@@ -435,6 +506,8 @@ function planBodyRender(force){
   h += `<h3 class="sec">Såtar</h3>`;
   if(!ds.length) h += `<p class="note" style="margin-top:0">Ingen såt är ritad. Med såtar drivs jakten såt för såt, med egna pass och vägar i varje såt. Du startar och bryter såtarna under jakten.</p>`;
   else if(!perDrive(plan) && Object.values(plan.stands || {}).some(s => s && s.who)) h += `<p class="note" style="margin-top:0">Passen är tilldelade för hela jakten. Tilldelar du pass i en såt gäller såtarnas pass i stället.</p>`;
+  const pmx = passMatrixHtml(g, hid, plan);
+  if(pmx) h += `<div class="lbl">Passöversikt</div>${pmx}`;
   ds.forEach(([did, d], i) => {
     const st = f && f.did === did ? (f.on ? 'on' : 'next') : d.done ? 'done' : '', pass = d.pass || {};
     const set = passes.filter(p => pass[p.id] && (pass[p.id].who || pass[p.id].uid)).length;
@@ -690,7 +763,7 @@ function planMapRender(){
     ${c.ds.length ? `<select class="input" id="pmScope" aria-label="Såt">${c.ds.map(([k, d], i) => `<option value="${esc(k)}"${k === c.did ? ' selected' : ''}>${i + 1}. ${esc(driveName(d))}</option>`).join('')}</select>` : ''}
     <div class="actions"><button class="btn primary grow" type="button" id="pmDone">Klar</button></div>`;
   bar.querySelector('#pmDone').addEventListener('click', () => planMapStop(true));
-  const sc = bar.querySelector('#pmScope'); if(sc) sc.addEventListener('change', () => { planMap.did = sc.value; planMapRender(); });
+  const sc = bar.querySelector('#pmScope'); if(sc) sc.addEventListener('change', () => { planMap.did = sc.value; renderPlan(); });
 }
 function planMapPick(pid){
   const c = planMapCtx(), p = pinById(pid); if(!c || !p) return;

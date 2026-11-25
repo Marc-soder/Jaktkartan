@@ -229,6 +229,19 @@ a{color:var(--accent)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .rose-nbl .warn{color:#fbbf24}}
 :root[data-theme="dark"] .rose-nbl .warn{color:#fbbf24}
 .plan-lbl{width:0;height:0}
+/* Såten i fokus: grön, tydlig etikett; nålar utanför såten blekare (kartan utanför är mörkare, se renderPlan) */
+.plan-lbl.drive.emph span{background:#15803d;color:#fff;border:0;font-size:14px;padding:4px 10px;border-radius:8px}
+.drive-focus .pin-icon:not(.pin-in){opacity:.4;filter:grayscale(.6)}
+/* Passöversikt: en rad per deltagare, en kolumn per såt */
+.pmx-box>summary{cursor:pointer;font:700 12px/1.6 var(--font-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted,#6b7280);margin-top:8px}
+.pmx{overflow-x:auto;margin:4px 0 8px;border:1px solid var(--line);border-radius:10px;-webkit-overflow-scrolling:touch}
+.pmx table{border-collapse:collapse;font-size:12.5px;min-width:100%}
+.pmx th,.pmx td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;vertical-align:top}
+.pmx thead th{background:var(--surface-2);font-size:12px;font-weight:700}
+.pmx tbody th,.pmx tfoot th{position:sticky;left:0;background:var(--surface);font-weight:600;z-index:1}
+.pmx tfoot th,.pmx tfoot td{border-bottom:0;font-size:12px;opacity:.8}
+.pmx .cur{background:var(--accent-soft)}.pmx td.none{opacity:.45}
+.pmx .dn{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:#15803d;color:#fff;font-size:11px;margin-right:2px}
 /* Placera skyttar på kartan: en ring runt nålens huvud (nålens namn syns under den) och vem som står där ovanför */
 .pm-icon{cursor:pointer}
 .pm-ring{position:absolute;inset:0;border-radius:50%;border:3px solid #ea580c;background:rgba(234,88,12,.14);box-shadow:0 0 0 2px rgba(255,255,255,.85)}
@@ -1019,6 +1032,7 @@ function renderMarkers(){
     pinMarkers.set(p.id, {m, sig});
   }
   for(const [id, cur] of pinMarkers) if(!seen.has(id)){ pinLayer.removeLayer(cur.m); pinMarkers.delete(id); }
+  if(window.__planReady) planFocusPins();
 }
 /* Namn under nålarna: påslaget från början, och syns bara när man zoomat in så att kartan inte blir rörig. */
 const PIN_LABEL_ZOOM = 14;
@@ -1268,6 +1282,7 @@ function navBack(){
   if(nav.tab === 'jakt' && nav.team){ setTab('jakt'); return; }
 }
 function renderNav(){
+  if(window.__planReady) planFocusSync();   // plan.js läggs in längre ned i filen
   const g = nav.team && typeof cloud !== 'undefined' ? cloud.groups[nav.team] : null, a = nav.area ? areaById(nav.area) : null;
   $('#pTitle').textContent = nav.tab === 'jakt' && g ? gname(g) : nav.tab === 'area' ? (a ? a.name : 'Område') : NAV_TITLE[nav.tab] || '';
   $('#pBack').hidden = !((nav.tab === 'jakt' && g) || nav.tab === 'area');
@@ -2093,7 +2108,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {planMap, planMapStart, planMapStop, pocket, pocketOn, pocketOff, posLost, gpsPos, webHide, posMarkers:() => posMarkers, calIcs, icsFold, calGcalUrl, natQ, natUpdAsk, NAT, natTok, natId, natGpsStart, checkedIn, huntInvitesCheck, calInvites, joinByCode, renderPositions, follow, posFocus, pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {driveFocus, passMatrixHtml, planMap, planMapStart, planMapStop, pocket, pocketOn, pocketOff, posLost, gpsPos, webHide, posMarkers:() => posMarkers, calIcs, icsFold, calGcalUrl, natQ, natUpdAsk, NAT, natTok, natId, natGpsStart, checkedIn, huntInvitesCheck, calInvites, joinByCode, renderPositions, follow, posFocus, pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>
