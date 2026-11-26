@@ -1130,6 +1130,24 @@ async function inviteRevokeAll(){
     check(new URL(t).searchParams.get('dates') === '20270103T073000Z/20270103T140000Z', 'en jakt med starttid får start- och sluttid i Google Kalender'); }
   await A.click(`#calBox [data-c="go"][data-h="${h3}"]`); await W(A, 500);
   check(!(await A.isVisible('#calBox')) && await A.isVisible(`#hc-${gid}-${h3}`) && (await A.getAttribute('#sub-plan', 'aria-selected')) === 'true', 'Visa jakten visar jaktkortet under jaktlagets flik Planera');
+  // En gäst går med i den planerade jakten före start: ser jaktmarken, nålarna, planen och vilka som deltar, men inga positioner
+  { const G = await mkPage(browser, 'gast', '#j-' + H3().code);
+    await G.fill('#gName', 'Greta Gäst'); await G.click('[data-j="login-guest"]'); await W(G, 1200); await team(G, 'jakt'); await W(G, 400);
+    const sg = await st(G), areaPins = Object.keys(data.groups[gid].pins[aid]).length, txt = await G.innerText('#paneJakt');
+    check(data.groups[gid].guests['anon-gast'] && data.groups[gid].guests['anon-gast'].hid === h3 && H3().starts > Date.now(), 'gästen går med i jakten med jaktkoden innan den har startat');
+    check(sg.areas.some(a => a.id === aid && a.border) && sg.pins.filter(p => p.areaId === aid).length === areaPins, `före start ser gästen jaktmarkens gräns och alla ${areaPins} nålar i den`);
+    check(txt.toLowerCase().includes('deltar från laget (1)') && txt.includes('Alice Test') && txt.includes(H3().name), `före start ser gästen jakten och vilka i laget som deltar (${txt.split('\n').find(l => /deltar från/i.test(l)) || ''})`);
+    const view0 = await G.evaluate(() => __fk.map.getBounds().toBBoxString());
+    await G.click('[data-j="guest-zoom"]'); await W(G, 700);
+    const inView = await G.evaluate(a => { const b = __fk.map.getBounds(), s = __fk.state(); return s.pins.filter(p => p.areaId === a).every(p => b.contains([p.lat, p.lng])) && b.toBBoxString(); }, aid);
+    check(inView && inView !== view0, 'Visa jaktmarken på kartan zoomar till jaktmarken så att alla dess nålar syns');
+    const rd = await G.evaluate(([g, h]) => Promise.all(['huntPos', 'huntTrail', 'huntObs', 'huntMsg'].map(k => firebase.database().ref(`groups/${g}/${k}/${h}`).get().then(() => 'ok', () => 'denied'))), [gid, h3]);
+    check(rd.every(x => x === 'denied') && await G.isDisabled('#shareToggle'), `före start ser gästen inga positioner, spår, observationer eller meddelanden, och kan inte dela sin position (${rd})`);
+    check(!G.errs.length, `inga JS-fel för gästen före start: ${G.errs.slice(0, 2)}`);
+    await G.click('[data-j="guest-leave"]'); await W(G, 600);
+    for(let i = subs.length - 1; i >= 0; i--) if(subs[i].page === G) subs.splice(i, 1);
+    await G.context().close();
+    check(!(data.groups[gid].guests || {})['anon-gast'], 'gästen lämnar jakten'); }
   // Inbjudna: bara utvalda medlemmar
   await team(B, 'plan'); await B.click(`[data-j="hunt-edit"][data-h="${h3}"]`); await W(B, 300);
   check(await B.isChecked('input[name=hfInv][value=all]') && !(await B.isVisible('#hfMembers')), 'en jakt bjuder från början in hela laget');
@@ -1334,7 +1352,8 @@ async function inviteRevokeAll(){
   check(!D('e').write('/groups/g/gear/e', {name:'E', gun:'kula'}).allowed && !D('e').read('/groups/g/gear').allowed && !D('gu').read('/groups/g/gear').allowed && D('a2').read('/groups/g/gear').allowed, 'regel: bara jaktledare och admin läser och skriver utrustningen');
   const bad = [{stands:{p:{who:'O', note:'x'}}}, {stands:{p:{no:70000}}}, {stands:{p:{no:1.5}}}, {stands:{p:{who:'x'.repeat(61)}}}, {routes:{r:{kind:'bil', pts:'1,1;1,2'}}}, {routes:{r:{kind:'hund'}}}, {drives:{d:{ring:'1,1;1,2;2,2'}}}, {drives:{d:{name:'S', ring:'1,1;1,2;2,2', by:'x'}}}, {foo:1}];
   check(bad.every(b => !D('a2').write('/groups/g/huntPlan/h2', b).allowed), 'regel: planen tar bara emot kända fält med rätt typ');
-  check(D('e').write('/groups/g/huntRsvp/h2/e', {name:'E', t:t0}).allowed && D('gu').read('/groups/g/huntRsvp').allowed === false && D('v').read('/groups/g/huntRsvp').allowed, 'regel: medlemmar svarar Jag deltar, laget ser svaren, gäster ser dem inte');
+  check(D('e').write('/groups/g/huntRsvp/h2/e', {name:'E', t:t0}).allowed && D('gu').read('/groups/g/huntRsvp').allowed === false && D('v').read('/groups/g/huntRsvp').allowed, 'regel: medlemmar svarar Jag deltar, och laget ser alla svar');
+  check(D('gu').read('/groups/g/huntRsvp/h').allowed && !D('gu').read('/groups/g/huntRsvp/h2').allowed && !D('x').read('/groups/g/huntRsvp/h').allowed && !D('gu', t0 + 2000).read('/groups/g/huntRsvp/h').allowed, 'regel: en gäst ser vilka som deltar i sin egen jakt (även före start), inte i andra jakter, och inte när gäståtkomsten har gått ut');
   check(!D('e').write('/groups/g/huntRsvp/h2/v', {name:'V', t:t0}).allowed && !D('x').write('/groups/g/huntRsvp/h2/x', {name:'X', t:t0}).allowed && !D('e').write('/groups/g/huntRsvp/nojakt/e', {name:'E', t:t0}).allowed && !D('e').write('/groups/g/huntRsvp/h2/e', {name:'E', t:t0, extra:1}).allowed, 'regel: man svarar bara för sig själv, för en jakt som finns, utan extra fält');
   check(D('e').write('/groups/g/huntRsvp/h2/e', {name:'E', t:t0, no:true}).allowed && !D('e').write('/groups/g/huntRsvp/h2/e', {name:'E', t:t0, no:'ja'}).allowed, 'regel: man kan avböja en jakt (no:true)');
   check(D('a2').write('/groups/g/huntRsvp/h2', null).allowed && !D('e').write('/groups/g/huntRsvp/h2', null).allowed, 'regel: bara jaktledare och admin raderar alla svar för en jakt');

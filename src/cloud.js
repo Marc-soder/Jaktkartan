@@ -135,6 +135,8 @@ function subGroup(gid, kind){
       if(g.huntRef) return;
       on('sos', sv => { const prev = g.sosLoaded ? g.sos : undefined; g.sos = sv || {}; g.sosLoaded = true; sosOnData(g, prev); natGpsMode(); });
       on('huntPlan/' + v.hid, pv => { const prev = g.planLoaded ? g.huntPlan : undefined; g.huntPlan = pv ? {[v.hid]: pv} : {}; g.planLoaded = true; planOnData(g, prev); scheduleRender(); });
+      // Vilka som deltar (nekas läsningen, till exempel med äldre regler, visas bara ingen lista)
+      on('huntRsvp/' + v.hid, (rv, err) => { if(err) return; g.huntRsvp = rv ? {[v.hid]: rv} : {}; scheduleRender(); });
       // Nekas en läsning (t.ex. om den hinner före gästposten i databasen) försöker vi igen efter en stund,
       // annars skulle gästen sakna jaktens områden och nålar tills sidan laddas om.
       const alive = () => cloud.groups[gid] === g && g.guest && g.guest.hid === v.hid;
@@ -673,6 +675,17 @@ const pocketKnob = x => { const k = $('#pkKnob'); if(k) k.style.transform = `tra
   ['click', 'dblclick', 'contextmenu', 'touchstart', 'wheel'].forEach(t => el.addEventListener(t, e => { if(e.target !== k) e.preventDefault(); }, {passive:false}));
 })();
 
+/* Gästen: zooma kartan till jaktens områden (gränser) och nålarna i dem, så att man kan orientera sig före jakten. */
+function guestZoom(g){
+  if(!g) return;
+  const areas = state.areas.filter(a => a.gid === g.id), ids = new Set(areas.map(a => a.id)), pts = [];
+  for(const a of areas) for(const r of areaRings(a)) pts.push(...r);
+  for(const p of state.pins) if(ids.has(p.areaId)) pts.push([p.lat, p.lng]);
+  if(!pts.length){ toast('Jaktmarken är inte laddad än. Försök igen om en stund.'); return; }
+  if(!isDesktop()) setSheet('peek');
+  map.fitBounds(L.latLngBounds(pts).pad(0.08), {maxZoom:16});
+}
+
 /* Åtgärder */
 const fail = msg => () => toast(msg || 'Det gick inte. Kontrollera nätverket och dina rättigheter.', 5000);
 function createGroup(name){
@@ -838,10 +851,14 @@ function huntPlace(g, hunt){
 }
 function rsvpHtml(g, hid){
   const auto = 'Din position delas automatiskt med jaktlaget medan jakten pågår och appen är öppen.';
-  if(g.kind !== 'member') return `<p class="note">${auto}</p>`;
   const ph = (g.huntPhone || {})[hid] || {}, rs = (g.huntRsvp || {})[hid] || {}, h = (g.hunts || {})[hid] || {};
   const person = (pu, name) => esc(name) + (ph[pu] && ph[pu].phone ? ` <a class="tel" href="${esc(telHref(ph[pu].phone))}">${esc(ph[pu].phone)}</a>` : '');
   const byName = (a, b) => a[0].localeCompare(b[0], 'sv');
+  // Gäst: vilka i laget som har svarat Jag deltar, även före start
+  if(g.kind !== 'member'){
+    const gn = Object.entries(rs).filter(([, r]) => going(r)).map(([u, r]) => [r.name || 'Deltagare', person(u, r.name || 'Deltagare')]).sort(byName).map(x => x[1]);
+    return `${gn.length ? `<div class="lbl">Deltar från laget (${gn.length})</div><div class="small rsvp-list">${gn.join(', ')}</div>` : ''}<p class="note">${auto}</p>`;
+  }
   // De inbjudna: hela laget, eller de utvalda. Svaren visas för varje inbjuden: deltar, avböjt eller inte svarat.
   const mem = Object.entries(g.members || {}).filter(([, v]) => v), invited = mem.filter(([mu]) => invitedTo(g, hid, mu));
   const nameOf = mu => ((g.members || {})[mu] || {}).name || (rs[mu] || {}).name || 'Medlem';
@@ -989,7 +1006,7 @@ function teamHtml(g){
   if(g.kind === 'guest'){
     if(nav.sub === 'chat' && teamTabs(g).chat) return chatHtml(g);
     const hid = g.guest && g.guest.hid, hunt = hid && g.hunts[hid];
-    return shareHtml() + (hunt ? huntCard(g, hid, hunt, false) : '<div class="empty">Jakten laddas eller är avslutad.</div>')
+    return shareHtml() + (hunt ? `<div class="btnrow" style="margin-top:0"><button class="btn sm primary" type="button" data-j="guest-zoom" data-g="${esc(g.id)}">Visa jaktmarken på kartan</button></div>` + huntCard(g, hid, hunt, false) : '<div class="empty">Jakten laddas eller är avslutad.</div>')
       + `<div class="btnrow"><button class="btn sm" type="button" data-j="guest-leave" data-g="${esc(g.id)}">Lämna jakten</button></div>`;
   }
   const lead = canLeadGroup(g), adm = isAdminGroup(g), sub = teamTabs(g)[nav.sub] ? nav.sub : 'jakt';
@@ -1211,6 +1228,7 @@ function jaktClick(e){
   const act = b.dataset.j, g = cloud.groups[b.dataset.g], u = b.dataset.u, hid = b.dataset.h;
   if(act === 'go-konto') setTab('konto');
   else if(act === 'pocket') pocketOn();
+  else if(act === 'guest-zoom') guestZoom(g);
   else if(act === 'team') openTeam(b.dataset.g);
   else if(act === 'team-up' || act === 'team-down') teamMove(b.dataset.g, act === 'team-up' ? -1 : 1);
   else if(act === 'team-sub'){ nav.sub = b.dataset.s; renderJakt(); $('#pBody').scrollTop = 0; }
