@@ -286,6 +286,8 @@ const rules = { rules: {
     huntRsvp: {
       '.read': isMember,
       '$hid': {
+        // Jaktens gäster ser vilka som deltar, även före start, så att de vet vilka de ska träffa
+        '.read': `${isGuest} && ${guest}.child('hid').val() === $hid`,
         '.write': `${canLead} && !newData.exists()`,
         '$uid': {
           '.write': `${signed} && (($uid === auth.uid && ${me}.exists() && ((${hunt}.exists() && ${invitedOk}) || !newData.exists())) || (${canLead} && !newData.exists()))`,
