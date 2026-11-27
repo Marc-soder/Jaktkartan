@@ -26,6 +26,9 @@ jobs:
           python-version: '3.12'
       - name: Installera verktyg
         run: |
+          # Maskinens paketkälla hos Microsoft behövs inte för testerna. När den inte svarar (403, osignerad)
+          # stoppar den apt-get update i playwright install --with-deps, och därmed hela bygget. Ta bort den först.
+          grep -l 'packages.microsoft.com' /etc/apt/sources.list.d/* 2>/dev/null | xargs -r sudo rm -f
           npm ci
           pip install -r tests/requirements.txt
           npx playwright install --with-deps chromium

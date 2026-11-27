@@ -248,6 +248,15 @@ async function inviteRevokeAll(){
   check(Object.values(data.groups[gid].pins[aid]).some(p => p.name === 'Bobs pass' && p.by === 'bob'), 'Bobs nya nål sparades i laget');
   check((await st(A)).pins.some(p => p.name === 'Bobs pass'), 'Alice ser Bobs nål direkt');
   check(await A.locator('.pin-icon').count() === 9, 'Alice har 9 nålar på kartan');
+  // En ny nål i jaktmarken hamnar i lagets område av sig själv (förut valdes senaste området, först Utan område, och nålen blev privat)
+  { const c = await B.evaluate(a => { const r = __fk.parseBorder(__fk.state().areas.find(x => x.id === a).border); return [r.reduce((s, p) => s + p[0], 0) / r.length, r.reduce((s, p) => s + p[1], 0) / r.length]; }, aid);
+    await B.evaluate(() => __fk.setLastArea(null));   // som första gången: inget senast använt område
+    await B.evaluate(c => __fk.openPinForm({lat:c[0], lng:c[1]}), c); await W(B, 300);
+    check(await B.inputValue('#pfArea') === aid && !(await B.isVisible('#pfPriv')), `en ny nål inom lagets område får det området av sig själv, även första gången (${await B.inputValue('#pfArea')})`);
+    await B.selectOption('#pfArea', ''); await W(B, 100);
+    check(await B.isVisible('#pfPriv') && (await B.innerText('#pfPriv')).includes('bara du ser den'), 'väljer man Utan område varnar formuläret att nålen blir privat');
+    await B.click('#pfCancel'); await W(B, 150);
+    await B.evaluate(a => __fk.setLastArea(a), aid); }
   // Alice ändrar en nål, Bob ser det
   const pid = Object.keys(data.groups[gid].pins[aid]).find(k => data.groups[gid].pins[aid][k].name === 'Jaktstugan');
   await A.evaluate(id => __fk.openPinForm({id}), pid); await W(A, 200); await A.fill('#pfName', 'Jaktstugan (ny)'); await A.click('#pinForm button[type=submit]'); await W(A, 500);

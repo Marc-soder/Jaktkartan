@@ -1571,6 +1571,18 @@ function resolveArea(m, selId, inputId){
   const a = {id:uid(), name, visible:true}; state.areas.push(a); return a.id;
 }
 
+/* Området som en ny nål hamnar i: ett område man får ändra och vars gräns omsluter punkten. Lagets delade områden går
+   före privata, och det minsta vinner om flera överlappar. Utan träff: null. (Förut valdes det senast använda området,
+   och första gången Utan område, så en nål i jaktmarken blev privat och syntes inte för laget.) */
+function areaAt(lat, lng){
+  const pt = {lat, lng}; let best = null, bestKey = Infinity;
+  for(const a of state.areas){
+    if(!canEditArea(a)) continue;
+    for(const r of areaRings(a)){ if(r.length < 3 || !inRing(pt, r)) continue;
+      const key = (a.gid ? 0 : 1e12) + areaHa(r); if(key < bestKey){ best = a.id; bestKey = key; } }
+  }
+  return best;
+}
 /* Nålformulär. opts: {id} för att redigera, annars {lat,lng,name,note,typeId,areaId} */
 let lastTypeId = null, lastAreaId = null;
 function openPinForm(opts){
@@ -1581,7 +1593,7 @@ function openPinForm(opts){
   const lat = editing ? p.lat : opts.lat, lng = editing ? p.lng : opts.lng;
   let typeId = opts.typeId || (editing ? p.typeId : null) || (state.settings.svampMode ? (state.types.find(t => t.svamp) || {}).id : null) || lastTypeId || state.types[0].id;
   if(!typeById(typeId)) typeId = state.types[0].id;
-  let areaId = fromPin ? p.areaId : (opts.areaId !== undefined ? opts.areaId : lastAreaId);
+  let areaId = fromPin ? p.areaId : (opts.areaId !== undefined ? opts.areaId : (areaAt(lat, lng) || lastAreaId));
   if(areaId && !areaById(areaId)) areaId = null;
   const nameVal = fromPin ? p.name : (opts.name || ''), noteVal = fromPin ? p.note : (opts.note || '');
   openModal(`<h2>${editing ? 'Ändra nål' : 'Ny nål'}</h2>
@@ -1591,6 +1603,7 @@ function openPinForm(opts){
         <label class="field"><span>Typ</span><select class="input" id="pfType">${typeOptions(typeId)}<option value="__new">+ Ny typ …</option></select></label>
         <label class="field"><span>Område</span><select class="input" id="pfArea">${areaOptions(areaId)}</select><input class="input" id="pfAreaNew" placeholder="Namn på nytt område" hidden maxlength="60"></label>
       </div>
+      <p class="pwarn" id="pfPriv" hidden>Utan område är nålen privat: bara du ser den. Välj ett område märkt ”delat” för att jaktlaget ska se den.</p>
       <label class="field"><span>Anteckning</span><textarea class="input" id="pfNote" maxlength="2000" placeholder="Vindriktning, bästa tid, nyckel …">${esc(noteVal)}</textarea></label>
       <div class="coordbox"><b>WGS 84</b>${fmtLatLng(lat,lng)}<br><b>SWEREF 99 TM</b>${fmtSweref(lat,lng)}</div>
       <div class="actions">
@@ -1600,6 +1613,9 @@ function openPinForm(opts){
       </div>
     </form>`, m => {
     wireNewArea(m, 'pfArea', 'pfAreaNew');
+    // Varning när nålen blir privat fast man är med i ett lag med delade områden
+    const priv = () => { m.querySelector('#pfPriv').hidden = m.querySelector('#pfArea').value !== '' || !state.areas.some(a => a.gid && canEditArea(a)); };
+    m.querySelector('#pfArea').addEventListener('change', priv); priv();
     const collect = () => ({lat, lng, name:m.querySelector('#pfName').value.trim(), note:m.querySelector('#pfNote').value, typeId:typeId, areaId:m.querySelector('#pfArea').value === '__new' ? areaId : (m.querySelector('#pfArea').value || null)});
     m.querySelector('#pfType').addEventListener('change', e => {
       if(e.target.value !== '__new'){ typeId = e.target.value; return; }
@@ -2113,7 +2129,7 @@ document.addEventListener('focusout', () => setTimeout(unscroll, 50));
 window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { setSheet(sheet, true); map.invalidateSize(); }, 120); });
 
 /* Testkrok */
-window.__fk = {driveFocus, passMatrixHtml, planMap, planMapStart, planMapStop, pocket, pocketOn, pocketOff, posLost, gpsPos, webHide, posMarkers:() => posMarkers, calIcs, icsFold, calGcalUrl, natQ, natUpdAsk, NAT, natTok, natId, natGpsStart, checkedIn, huntInvitesCheck, calInvites, joinByCode, renderPositions, follow, posFocus, pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
+window.__fk = {areaAt, setLastArea:v => { lastAreaId = v; }, driveFocus, passMatrixHtml, planMap, planMapStart, planMapStop, pocket, pocketOn, pocketOff, posLost, gpsPos, webHide, posMarkers:() => posMarkers, calIcs, icsFold, calGcalUrl, natQ, natUpdAsk, NAT, natTok, natId, natGpsStart, checkedIn, huntInvitesCheck, calInvites, joinByCode, renderPositions, follow, posFocus, pinVisible, renderAreaView, nav, setTab, openTeam, navBack, drawerOpen, docsPdf, docs, openDocs, docsLock, docsRemind, planStands, planFocus, driveList, lottery, passIssues, renderDriveBar, driveBarHide:() => driveBar.hide, swUpd, openCal, calHunts, startHunt, isoWeek, huntState, passNeighbors, pinById, roseSvg, neighborList, sosOthers, renderSos, power, powerUpdate, gpsMode:() => ({watch:cloud.watchId != null, timer:!!cloud.gpsTimer}), checkPass, sunTimes, msgPlain:() => msgPlain, msgPeopleFor:(gid, hid) => msgPeople(cloud.groups[gid], hid), compassState:() => ({heading:compass.heading, rot:compass.rot}), planHunts, maskRuns, maskDirs, openPlan, planLayer:() => planLayer, meRings:() => meRings.radii.slice(), meRingRadii, setMeRings, forgetMe, fmtDist, panLine:() => pan.line, renumberPlan, passRest, openRenumber, undoRenumber, heat, heatPoints, zoomToArea, startCompass, compass, renderObs, wind, pan, measure:() => measure, distM, bearingDeg, crossLatLng, crossPoint, panToCross, setSheet, sheet:() => sheet, renderAll, drawingPts:() => drawing && drawing.pts, shots:() => shots, shotImgToLatLng, loupe, trail, showMe, personColor, areaHa, parseBorder, parseRing, startDrawing, openAreaForm, roads, cloud, VILT, viltLawful, viltRows, parseCfg, state:() => state, toSweref99TM, parseKML, parseGPX, parseCSV, parseGeoJSON, map, gbif, setSvampMode, loadGbifInView, fitAll, startPlacing, openPinForm};
 })();
 </script>
 </body>
