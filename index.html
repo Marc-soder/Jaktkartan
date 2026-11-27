@@ -2239,11 +2239,12 @@ function resolveArea(m, selId, inputId){
 
 /* Området som en ny nål hamnar i: ett område man får ändra och vars gräns omsluter punkten. Lagets delade områden går
    före privata, och det minsta vinner om flera överlappar. Utan träff: null. (Förut valdes det senast använda området,
-   och första gången Utan område, så en nål i jaktmarken blev privat och syntes inte för laget.) */
-function areaAt(lat, lng){
+   och första gången Utan område, så en nål i jaktmarken blev privat och syntes inte för laget.)
+   onlyPrivate: bara egna, privata områden (för svampnålar, som aldrig ska delas av sig själva). */
+function areaAt(lat, lng, onlyPrivate){
   const pt = {lat, lng}; let best = null, bestKey = Infinity;
   for(const a of state.areas){
-    if(!canEditArea(a)) continue;
+    if(!canEditArea(a) || (onlyPrivate && a.gid)) continue;
     for(const r of areaRings(a)){ if(r.length < 3 || !inRing(pt, r)) continue;
       const key = (a.gid ? 0 : 1e12) + areaHa(r); if(key < bestKey){ best = a.id; bestKey = key; } }
   }
@@ -2259,7 +2260,12 @@ function openPinForm(opts){
   const lat = editing ? p.lat : opts.lat, lng = editing ? p.lng : opts.lng;
   let typeId = opts.typeId || (editing ? p.typeId : null) || (state.settings.svampMode ? (state.types.find(t => t.svamp) || {}).id : null) || lastTypeId || state.types[0].id;
   if(!typeById(typeId)) typeId = state.types[0].id;
-  let areaId = fromPin ? p.areaId : (opts.areaId !== undefined ? opts.areaId : (areaAt(lat, lng) || lastAreaId));
+  // Ny nål: området väljs efter var nålen ligger. Svampnålar hamnar aldrig av sig själva i ett delat område:
+  // de får ett eget privat område där nålen ligger, annars det senast använda om det är privat, annars Utan område.
+  const isSvamp = tid => !!(typeById(tid) || {}).svamp, isShared = aid => !!(aid && (areaById(aid) || {}).gid);
+  const autoArea = tid => isSvamp(tid) ? (areaAt(lat, lng, true) || (isShared(lastAreaId) ? null : lastAreaId)) : (areaAt(lat, lng) || lastAreaId);
+  const autoPick = !fromPin && opts.areaId === undefined;
+  let areaId = fromPin ? p.areaId : (opts.areaId !== undefined ? opts.areaId : autoArea(typeId));
   if(areaId && !areaById(areaId)) areaId = null;
   const nameVal = fromPin ? p.name : (opts.name || ''), noteVal = fromPin ? p.note : (opts.note || '');
   openModal(`<h2>${editing ? 'Ändra nål' : 'Ny nål'}</h2>
@@ -2270,6 +2276,7 @@ function openPinForm(opts){
         <label class="field"><span>Område</span><select class="input" id="pfArea">${areaOptions(areaId)}</select><input class="input" id="pfAreaNew" placeholder="Namn på nytt område" hidden maxlength="60"></label>
       </div>
       <p class="pwarn" id="pfPriv" hidden>Utan område är nålen privat: bara du ser den. Välj ett område märkt ”delat” för att jaktlaget ska se den.</p>
+      <p class="pwarn" id="pfShare" hidden>Svampnålen delas med jaktlaget i det här området. Välj Utan område eller ett eget område för att bara du ska se den.</p>
       <label class="field"><span>Anteckning</span><textarea class="input" id="pfNote" maxlength="2000" placeholder="Vindriktning, bästa tid, nyckel …">${esc(noteVal)}</textarea></label>
       <div class="coordbox"><b>WGS 84</b>${fmtLatLng(lat,lng)}<br><b>SWEREF 99 TM</b>${fmtSweref(lat,lng)}</div>
       <div class="actions">
@@ -2280,11 +2287,20 @@ function openPinForm(opts){
     </form>`, m => {
     wireNewArea(m, 'pfArea', 'pfAreaNew');
     // Varning när nålen blir privat fast man är med i ett lag med delade områden
-    const priv = () => { m.querySelector('#pfPriv').hidden = m.querySelector('#pfArea').value !== '' || !state.areas.some(a => a.gid && canEditArea(a)); };
-    m.querySelector('#pfArea').addEventListener('change', priv); priv();
+    // Varningar: en jaktnål som blir privat, och en svampnål som delas med laget
+    const priv = () => { const v = m.querySelector('#pfArea').value, sv = isSvamp(typeId);
+      m.querySelector('#pfPriv').hidden = sv || v !== '' || !state.areas.some(a => a.gid && canEditArea(a));
+      m.querySelector('#pfShare').hidden = !sv || !isShared(v); };
+    let areaTouched = false;
+    m.querySelector('#pfArea').addEventListener('change', () => { areaTouched = true; priv(); }); priv();
     const collect = () => ({lat, lng, name:m.querySelector('#pfName').value.trim(), note:m.querySelector('#pfNote').value, typeId:typeId, areaId:m.querySelector('#pfArea').value === '__new' ? areaId : (m.querySelector('#pfArea').value || null)});
     m.querySelector('#pfType').addEventListener('change', e => {
-      if(e.target.value !== '__new'){ typeId = e.target.value; return; }
+      if(e.target.value !== '__new'){
+        typeId = e.target.value;
+        // Har man inte valt område själv följer det med typen: svamp privat, jaktnålar i lagets område
+        if(autoPick && !areaTouched){ const a = autoArea(typeId) || '', sel = m.querySelector('#pfArea'); if([...sel.options].some(o => o.value === a)) sel.value = a; }
+        priv(); return;
+      }
       const draft = collect(); closeModal();
       openTypeForm(null, newType => openPinForm(Object.assign(editing ? {id:opts.id, draft:true} : {}, draft, {typeId:newType ? newType.id : draft.typeId})));
     });
