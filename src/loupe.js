@@ -1,12 +1,12 @@
 /* ---------- Förstoringsglas ----------
-   En liten karta som visar det som ligger under en punkt, 3 gånger större än huvudkartan.
-   Visas ovanför punkten när man placerar en nål med korset, passar in en skärmdump,
-   lägger till en punkt i en gräns eller drar en punkt. */
-const LOUPE_ZOOM = Math.log2(3), LOUPE_SIZE = 150;
+   En liten fyrkantig karta uppe i vänstra hörnet som visar det som ligger under en punkt, 2 gånger större än
+   huvudkartan. Visas när man lägger till eller drar en punkt i en gräns eller väg, och när man passar in en
+   skärmdump. Inte när man sätter ut nålar. Ligger punkten under förstoringsglaset flyttas det till höger. */
+const LOUPE_ZOOM = 1;   // log2(2): två gånger större
 const loupe = {el:null, map:null, base:null, baseKey:null, vec:null, shots:null, timer:null, on:false};
 function loupeInit(){
   if(loupe.map) return;
-  loupe.el = h(`<div class="loupe" aria-hidden="true" hidden><div class="loupe-map"></div><svg class="loupe-cross" viewBox="0 0 40 40" fill="none" stroke-linecap="round"><path d="M20 4v11M20 25v11M4 20h11M25 20h11" stroke="#fff" stroke-width="5"/><path d="M20 4v11M20 25v11M4 20h11M25 20h11" stroke="#d9520e" stroke-width="2.5"/><circle cx="20" cy="20" r="2" fill="#d9520e"/></svg><span class="loupe-tag">3×</span></div>`);
+  loupe.el = h(`<div class="loupe" aria-hidden="true" hidden><div class="loupe-map"></div><svg class="loupe-cross" viewBox="0 0 40 40" fill="none" stroke-linecap="round"><path d="M20 4v11M20 25v11M4 20h11M25 20h11" stroke="#fff" stroke-width="5"/><path d="M20 4v11M20 25v11M4 20h11M25 20h11" stroke="#d9520e" stroke-width="2.5"/><circle cx="20" cy="20" r="2" fill="#d9520e"/></svg><span class="loupe-tag">2×</span></div>`);
   map.getContainer().appendChild(loupe.el);
   loupe.el.hidden = false; // Leaflet behöver en synlig behållare när kartan skapas
   loupe.map = L.map(loupe.el.firstElementChild, {zoomControl:false, attributionControl:false, zoomSnap:0, zoomAnimation:false, fadeAnimation:false,
@@ -39,17 +39,16 @@ function loupeLayers(){
 /* Visar förstoringsglaset för latlng. at = punktens läge i kartbehållaren (pixlar). */
 function loupeShow(latlng, at){
   loupeInit();
-  const c = map.getContainer(), W = c.clientWidth, H = c.clientHeight, s = LOUPE_SIZE;
-  let x = at.x - s / 2, y = at.y - s - 34;
-  if(y < 8) y = Math.min(at.y + 34, H - s - 8);                       // för nära kanten upptill: visa under punkten
-  x = Math.max(8, Math.min(W - s - 8, x));
-  loupe.el.style.left = x + 'px'; loupe.el.style.top = y + 'px';
-  const wasHidden = loupe.el.hidden; loupe.el.hidden = false;
+  const wasHidden = loupe.el.hidden; loupe.el.hidden = false; document.body.classList.add('loupe-on');
+  // Uppe till vänster, eller till höger om punkten ligger under förstoringsglaset
+  loupe.el.classList.remove('right');
+  const r = loupe.el.getBoundingClientRect(), c = map.getContainer().getBoundingClientRect(), x = at.x + c.left, y = at.y + c.top;
+  if(x > r.left - 24 && x < r.right + 24 && y > r.top - 24 && y < r.bottom + 24) loupe.el.classList.add('right');
   if(wasHidden){ loupe.map.invalidateSize(false); loupeBase(); loupeLayers(); }
   loupe.map.setView(latlng, map.getZoom() + LOUPE_ZOOM, {animate:false});
   loupe.on = true;
 }
-function loupeHide(){ if(loupe.el) loupe.el.hidden = true; loupe.on = false; clearTimeout(loupe.timer); }
+function loupeHide(){ if(loupe.el) loupe.el.hidden = true; document.body.classList.remove('loupe-on'); loupe.on = false; clearTimeout(loupe.timer); }
 /* Visar förstoringsglaset en kort stund, till exempel efter att en punkt lagts till med ett tryck. */
 function loupeFlash(latlng, ms){
   loupeShow(latlng, map.latLngToContainerPoint(latlng)); loupeLayers();

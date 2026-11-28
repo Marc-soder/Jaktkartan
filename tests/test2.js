@@ -1155,6 +1155,8 @@ async function inviteRevokeAll(){
   // En gäst går med i den planerade jakten före start: ser jaktmarken, nålarna, planen och vilka som deltar, men inga positioner
   { const G = await mkPage(browser, 'gast', '#j-' + H3().code);
     await G.fill('#gName', 'Greta Gäst'); await G.click('[data-j="login-guest"]'); await W(G, 1200); await team(G, 'jakt'); await W(G, 400);
+    // vänta tills gästen är inloggad och jaktens vy med deltagarna är ritad
+    for(let i = 0; i < 30 && !(await G.isVisible('[data-j="guest-zoom"]') && /deltar från laget/i.test(await G.innerText('#paneJakt'))); i++){ await W(G, 200); if(i === 10) await team(G, 'jakt'); }
     const sg = await st(G), areaPins = Object.keys(data.groups[gid].pins[aid]).length, txt = await G.innerText('#paneJakt');
     check(data.groups[gid].guests['anon-gast'] && data.groups[gid].guests['anon-gast'].hid === h3 && H3().starts > Date.now(), 'gästen går med i jakten med jaktkoden innan den har startat');
     check(sg.areas.some(a => a.id === aid && a.border) && sg.pins.filter(p => p.areaId === aid).length === areaPins, `före start ser gästen jaktmarkens gräns och alla ${areaPins} nålar i den`);
@@ -1193,7 +1195,15 @@ async function inviteRevokeAll(){
   // Fliken Planera: den kommande jaktens såtar är tydliga och resten av kartan nedtonad; i fliken Jakt som vanligt
   await B.evaluate(([g, h, ring]) => firebase.database().ref(`groups/${g}/huntPlan/${h}/drives/dp1`).set({name:'Planerad såt', ring, ord:0}), [gid, h3, PLN().drives[dM].ring]); await W(B, 600);
   const focusB = () => B.evaluate(() => ({on:document.getElementById('map').classList.contains('drive-focus'), emph:document.querySelectorAll('.plan-drive.emph').length, lbl:(document.querySelector('.plan-lbl.drive.emph') || {}).innerText || ''}));
+  // Den kommande jaktens skyttar syns på kartan först när man planerar: inte i listan över jaktlag, inte i fliken Jakt
+  await B.evaluate(([g, h, p]) => firebase.database().ref(`groups/${g}/huntPlan/${h}/stands/${p}`).set({who:'Planerad skytt'}), [gid, h3, pA]); await W(B, 500);
+  const plannedLbl = () => B.evaluate(() => [...document.querySelectorAll('.plan-lbl.who')].some(e => e.innerText.includes('Planerad skytt')));
+  await go(B, 'jakt'); await W(B, 300);
+  const lblList = await plannedLbl();
+  await team(B, 'jakt'); await W(B, 300);
+  const lblJakt = await plannedLbl();
   await team(B, 'plan'); await W(B, 400);
+  check(!lblList && !lblJakt && await plannedLbl(), `en kommande jakts skyttar syns på kartan bara i fliken Planera (lista ${lblList}, Jakt ${lblJakt})`);
   { const f = await focusB(); check(f.on && f.emph === 1 && f.lbl.includes('Planerad såt'), `i fliken Planera är den kommande jaktens såt tydlig (${JSON.stringify(f)})`); }
   await team(B, 'jakt'); await W(B, 400);
   { const f = await focusB(); check(!f.on && f.emph === 0, `i fliken Jakt ritas såtarna som vanligt när ingen såt pågår (${JSON.stringify(f)})`); }

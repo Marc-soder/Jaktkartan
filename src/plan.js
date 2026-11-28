@@ -244,12 +244,13 @@ function renderPlan(){
   if(typeof renderCompass === 'function') renderCompass();
   renderDriveBar();
   const foc = planOn() ? driveFocusTargets() : [];
-  driveFocus.key = focusKey(foc); driveFocus.rings = [];
+  driveFocus.key = planViewKey(foc); driveFocus.rings = [];
   map.getContainer().classList.toggle('drive-focus', foc.length > 0);
   if(!planOn()){ planFocusPins(); return; }
   if(foc.length) focusPanes();
   const pins = new Map(state.pins.map(p => [p.id, p]));
   for(const {g, hid, hunt} of planHunts()){
+    if(!planShown(g, hid, hunt)) continue;
     const plan = planOf(g, hid), f = planFocus(plan), live = huntLive(hunt);
     const ft = foc.find(x => x.g === g && x.hid === hid), top = ft ? {pane:'planTop'} : {};
     driveList(plan).forEach(([did, d], i) => {
@@ -324,8 +325,16 @@ function planFocusPins(){
   const rings = driveFocus.rings;
   for(const [, c] of pinMarkers){ const el = c.m.getElement(); if(el) el.classList.toggle('pin-in', rings.some(r => inRing(c.m.getLatLng(), r))); }
 }
-/* Navigering (flikar, jaktlag): rita om när såten i fokus ändras. */
-function planFocusSync(){ if(focusKey(planOn() ? driveFocusTargets() : []) !== driveFocus.key) renderPlan(); }
+/* En kommande jakts plan (vem som står var, såtar, vägar, samlingsplatser) visas på kartan först när man planerar den:
+   i jaktlagets flik Planera, i Placera skyttar på kartan och (för gästen) i jaktens vy. Pågående jakter visas alltid. */
+function planShown(g, hid, hunt){
+  if(huntLive(hunt)) return true;
+  if(planMap.on && planMap.gid === g.id && planMap.hid === hid) return true;
+  return nav.tab === 'jakt' && nav.team === g.id && (g.kind !== 'member' || nav.sub === 'plan');
+}
+const planViewKey = foc => focusKey(foc) + '#' + planHunts().filter(x => !huntLive(x.hunt) && planShown(x.g, x.hid, x.hunt)).map(x => x.g.id + '/' + x.hid).join(',');
+/* Navigering (flikar, jaktlag): rita om när såten i fokus eller vilka planer som visas ändras. */
+function planFocusSync(){ if(planViewKey(planOn() ? driveFocusTargets() : []) !== driveFocus.key) renderPlan(); }
 window.__planReady = true;
 
 /* Passöversikt för jaktledaren: vilket pass varje deltagare har i varje såt som inte är bruten. En rad per person
