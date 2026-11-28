@@ -202,7 +202,7 @@ with sync_playwright() as p:
         pg.evaluate('__fk.map.fire("contextmenu", {latlng: __fk.map.getCenter()})'); pg.wait_for_timeout(300)
         check(not pg.is_visible('#pinForm'), f'{name}: långt tryck i kartan under inpassningen öppnar inte nålformuläret')
         lz=pg.evaluate('__fk.loupe.map.getZoom() - __fk.map.getZoom()')
-        check(abs(lz - 1.585) < 0.01, f'{name}: förstoringsglaset visar 3 gånger större (zoom +{lz:.3f})')
+        check(abs(lz - 1.0) < 0.01, f'{name}: förstoringsglaset visar 2 gånger större (zoom +{lz:.3f})')
         A=(box['x']+W*0.3, box['y']+H*0.25); Bp=(box['x']+W*0.65, box['y']+H*0.4)
         cl=lambda P: pg.evaluate(f"(() => {{ const r=__fk.map.getContainer().getBoundingClientRect(); const ll=__fk.map.containerPointToLatLng([{P[0]}-r.left, {P[1]}-r.top]); return {{lat:ll.lat, lng:ll.lng}}; }})()")
         llA=cl(A); llB=cl(Bp)
@@ -240,6 +240,9 @@ with sync_playwright() as p:
         check(pg.is_visible('#drawbar') and pg.is_hidden('#ovbar') and shotn()==1, f'{name}: ritläge med bilden kvar under')
         for fx,fy in ((0.3,0.25),(0.65,0.25),(0.65,0.4)): tap(box['x']+W*fx, box['y']+H*fy); pg.wait_for_timeout(250)
         check(pg.locator('.drag-handle.border').count()==3 and pg.is_visible('.loupe'), f'{name}: tre dragbara hörn, förstoringsglaset visas när en punkt läggs till')
+        lb=pg.evaluate("(() => { const e=document.querySelector('.loupe'), r=e.getBoundingClientRect(), s=getComputedStyle(e); return {x:r.left, y:r.top, w:r.width, h:r.height, rad:s.borderTopLeftRadius, right:e.classList.contains('right'), vw:innerWidth, comp:getComputedStyle(document.querySelector('.compass')).visibility, tag:e.querySelector('.loupe-tag').textContent}; })()")
+        corner = (lb['x'] < 400 and lb['y'] < 80) if not lb['right'] else (lb['x'] + lb['w'] > lb['vw'] - 140 and lb['y'] < 80)
+        check(abs(lb['w'] - lb['h']) < 1 and lb['rad'] != '50%' and corner and lb['tag'] == '2×' and lb['comp'] == 'hidden', f'{name}: förstoringsglaset är fyrkantigt, uppe i hörnet, 2×, och kompassen döljs ({lb})')
         # dra ett hörn: punkten flyttas och förstoringsglaset visas under dragningen
         hb=pg.locator('.drag-handle.border').nth(1).bounding_box(); hx, hy = hb['x']+hb['width']/2, hb['y']+hb['height']/2
         before=pg.evaluate('__fk.drawingPts()[1]')
@@ -253,7 +256,7 @@ with sync_playwright() as p:
         check(len((ar.get('border') or '').split(';'))==3 and shotn()==1 and pg.is_visible('#btnAdd'), f'{name}: gränsen sparad, bilden ligger kvar och + syns')
         # lägga ut pass med bilden kvar, med förstoringsglas över korset
         pg.click('#btnAdd'); pg.wait_for_timeout(400)
-        check(pg.is_visible('#placebar') and pg.is_visible('.loupe') and shotn()==1, f'{name}: lägga ut pass med bilden kvar och förstoringsglas över korset')
+        check(pg.is_visible('#placebar') and not pg.is_visible('.loupe') and shotn()==1 and pg.evaluate("getComputedStyle(document.querySelector('.compass')).visibility") != 'hidden', f'{name}: lägga ut pass med bilden kvar, utan förstoringsglas')
         pg.click('#placeCancel'); pg.wait_for_timeout(200)
         check(not pg.is_visible('.loupe'), f'{name}: förstoringsglaset försvinner när man avbryter')
         # lista, släck och tänd

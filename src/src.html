@@ -128,7 +128,10 @@ a{color:var(--accent)}
 .shot-mark.first{background:#1a73e8}
 .shot-hint{display:flex;gap:10px;align-items:center}
 .shot-hint canvas{flex:none;border-radius:8px;border:1px solid var(--line)}
-.loupe{position:absolute;z-index:850;width:150px;height:150px;border-radius:50%;overflow:hidden;border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35),0 6px 18px rgba(0,0,0,.35);pointer-events:none;background:var(--bg)}
+/* Förstoringsglaset: fyrkantigt, uppe i vänstra hörnet (till höger om punkten ligger där). Kompassen döljs så länge. */
+.loupe{position:absolute;z-index:850;left:calc(12px + var(--sal));top:calc(12px + var(--sat));width:160px;height:160px;border-radius:12px;overflow:hidden;border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35),0 6px 18px rgba(0,0,0,.35);pointer-events:none;background:var(--bg)}
+.loupe.right{left:auto;right:calc(70px + var(--sar))}
+body.loupe-on .compass,body.loupe-on .mode-chip,body.loupe-on .powerchip{visibility:hidden}
 .loupe-map{position:absolute;inset:0}
 .loupe-cross{position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px 0 0 -20px;z-index:1000}
 .loupe-tag{position:absolute;right:18px;bottom:12px;z-index:1000;font:700 11px/1 var(--font-body);background:rgba(0,0,0,.55);color:#fff;padding:3px 5px;border-radius:6px}
@@ -1819,7 +1822,7 @@ function panToCross(ll, animate){ map.panBy(map.latLngToContainerPoint(L.latLng(
 function syncCross(){
   const y = crossPoint().y + 'px';
   for(const el of [crossEl, typeof calCrossEl !== 'undefined' ? calCrossEl : null]) if(el && !el.hidden) el.style.top = y;
-  if(placing || (typeof cal !== 'undefined' && cal && cal.step === 'map')) loupeAtCenter();
+  if(typeof cal !== 'undefined' && cal && cal.step === 'map') loupeAtCenter();   // inte när man sätter ut nålar
 }
 map.on('resize', () => setTimeout(syncCross, 50));
 function startPlacing(opts){

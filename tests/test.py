@@ -409,7 +409,7 @@ with sync_playwright() as p:
             pg.locator('#handle').tap(); pg.wait_for_timeout(400)
             check(pg.evaluate('__fk.sheet()') == 'peek', 'tryck på handtaget tar fram flikarna igen')
             pg.click('#btnAdd'); pg.wait_for_timeout(500)
-            check(pg.evaluate('__fk.sheet()') == 'min' and pg.is_visible('.loupe'), 'vid placering går lådan ned till handtaget och förstoringsglaset visas')
+            check(pg.evaluate('__fk.sheet()') == 'min' and not pg.is_visible('.loupe'), 'vid placering går lådan ned till handtaget, utan förstoringsglas (det behövs inte för nålar)')
             pg.click('#placeCancel'); pg.wait_for_timeout(400)
             check(pg.evaluate('__fk.sheet()') == 'peek' and not pg.is_visible('.loupe'), 'efter placering kommer flikarna tillbaka')
             # sidan ska aldrig gå att scrolla på telefon, i något lådläge
