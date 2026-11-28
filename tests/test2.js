@@ -256,6 +256,19 @@ async function inviteRevokeAll(){
     await B.selectOption('#pfArea', ''); await W(B, 100);
     check(await B.isVisible('#pfPriv') && (await B.innerText('#pfPriv')).includes('bara du ser den'), 'väljer man Utan område varnar formuläret att nålen blir privat');
     await B.click('#pfCancel'); await W(B, 150);
+    // Svampnålar delas aldrig av sig själva: samma punkt i jaktmarken, men typen Kantarell
+    await B.evaluate(c => __fk.openPinForm({lat:c[0], lng:c[1], typeId:'t-kantarell'}), c); await W(B, 300);
+    const a1 = await B.inputValue('#pfArea'), sh1 = await B.isVisible('#pfShare'), pv1 = await B.isVisible('#pfPriv');
+    await B.selectOption('#pfType', 't-pass'); await W(B, 100);
+    const a2 = await B.inputValue('#pfArea');
+    await B.selectOption('#pfType', 't-kantarell'); await W(B, 100);
+    const a3 = await B.inputValue('#pfArea');
+    check(a1 !== aid && !sh1 && !pv1 && a2 === aid && a3 !== aid, `en svampnål i jaktmarken blir privat, och området följer med när typen byts (${a1 || 'utan'} → ${a2} → ${a3 || 'utan'})`);
+    await B.selectOption('#pfArea', aid); await W(B, 100);
+    check(await B.isVisible('#pfShare') && (await B.innerText('#pfShare')).includes('delas med jaktlaget'), 'väljer man själv lagets område för en svampnål varnar formuläret att den delas');
+    await B.selectOption('#pfType', 't-pass'); await W(B, 100);
+    check(await B.inputValue('#pfArea') === aid && !(await B.isVisible('#pfShare')), 'har man valt område själv ändras det inte när typen byts');
+    await B.click('#pfCancel'); await W(B, 150);
     await B.evaluate(a => __fk.setLastArea(a), aid); }
   // Alice ändrar en nål, Bob ser det
   const pid = Object.keys(data.groups[gid].pins[aid]).find(k => data.groups[gid].pins[aid][k].name === 'Jaktstugan');
